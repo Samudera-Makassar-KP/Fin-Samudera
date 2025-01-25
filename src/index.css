@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-100;
+}
+
+/* Untuk elemen yang mendukung scrollbar */
+.scrollbar::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+
+.scrollbar::-webkit-scrollbar-thumb {
+  background-color: #d1d5db; /* Warna scrollbar */
+  border-radius: 4px; /* Membuat scrollbar melengkung */
+}
+
+.scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af; /* Warna scrollbar saat hover */
+}
+
+.scrollbar::-webkit-scrollbar-track {
+  background-color: #f3f4f6; /* Warna track scrollbar */
+  border-radius: 4px;
+}
