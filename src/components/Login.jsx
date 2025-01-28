@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { db } from '../firebaseConfig'
 import { getDocs, where, query, collection } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
-import LogoHero from '../assets/images/login-hero.jpg'
+import LogoHero from '../assets/images/login-hero.webp'
 import Logo from '../assets/images/logo-samudera.png'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEye, faEyeSlash, faSpinner } from '@fortawesome/free-solid-svg-icons'
@@ -129,7 +129,7 @@ const LoginPage = () => {
                                     Email
                                 </label>
                                 <input
-                                    id="email"
+                                    id="email-desktop"
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
@@ -147,7 +147,7 @@ const LoginPage = () => {
                                 </label>
                                 <div className="relative">
                                     <input
-                                        id="password"
+                                        id="password-desktop"
                                         type={showPassword ? 'text' : 'password'}
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
@@ -195,6 +195,7 @@ const LoginPage = () => {
                 </div>
             </div>
 
+            {/* Mobile */}
             <div className="hidden lg:flex lg:w-[35%] bg-white flex-col justify-center px-16">
                 <div className="mb-8">
                     <img src={Logo} alt="Logo" className="w-8/12 h-full" />
@@ -211,7 +212,7 @@ const LoginPage = () => {
                             Email
                         </label>
                         <input
-                            id="email"
+                            id="email-mobile"
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
@@ -226,7 +227,7 @@ const LoginPage = () => {
                         </label>
                         <div className="relative">
                             <input
-                                id="password"
+                                id="password-mobile"
                                 type={showPassword ? 'text' : 'password'}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}

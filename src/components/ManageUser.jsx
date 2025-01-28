@@ -3,8 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { db } from '../firebaseConfig'
 import { collection, getDocs } from 'firebase/firestore'
 import Select from 'react-select'
-import { ToastContainer } from 'react-toastify'
-import 'react-toastify/dist/ReactToastify.css'
 
 const ManageUser = () => {
     const [users, setUsers] = useState([])

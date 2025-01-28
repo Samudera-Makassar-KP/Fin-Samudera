@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { db } from '../firebaseConfig'
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
 import Select from 'react-select'
-import { toast, ToastContainer } from 'react-toastify'
+import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
 const EditUserForm = () => {
