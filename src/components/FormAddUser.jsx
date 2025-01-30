@@ -211,9 +211,9 @@ const AddUserForm = () => {
                 setFormData({
                     nama: '',
                     email: '',
-                    posisi: '',
-                    unit: '',
-                    role: '',
+                    posisi: null,
+                    unit: null,
+                    role: null,
                     department: [],
                     bankName: '',
                     accountNumber: '',
@@ -399,6 +399,7 @@ const AddUserForm = () => {
                                         <Select
                                             name="unit"
                                             options={unitOptions}
+                                            value={formData.unit ? unitOptions.find(option => option.value === formData.unit) : null}
                                             className="basic-single-select mt-1 hover:border-blue-400"
                                             classNamePrefix="select"
                                             onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
@@ -415,6 +416,7 @@ const AddUserForm = () => {
                                             isMulti
                                             name="department"
                                             options={departmentOptions}
+                                            value={formData.department.length > 0 ? departmentOptions.filter(option => formData.department.includes(option.value)) : []}
                                             className="basic-multi-select mt-1"
                                             classNamePrefix="select"
                                             styles={selectStyles}
@@ -431,6 +433,7 @@ const AddUserForm = () => {
                                             isMulti
                                             name="validator"
                                             options={validatorOptions}
+                                            value={formData.validator.length > 0 ? validatorOptions.filter(option => formData.validator.includes(option.uid)) : []}
                                             className="basic-multi-select mt-1"
                                             classNamePrefix="select"
                                             styles={selectStyles}
@@ -439,12 +442,13 @@ const AddUserForm = () => {
                                     </div>
                                     <div className="mb-2">
                                         <label className="block font-medium text-gray-700">
-                                            Reviewer 1
+                                            Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                         </label>
                                         <Select
                                             isMulti
                                             name="reviewer1"
                                             options={reviewerOptions}
+                                            value={formData.reviewer1.length > 0 ? reviewerOptions.filter(option => formData.reviewer1.includes(option.uid)) : []}
                                             className="basic-multi-select mt-1"
                                             classNamePrefix="select"
                                             styles={selectStyles}
@@ -464,6 +468,7 @@ const AddUserForm = () => {
                                         <Select
                                             name="posisi"
                                             options={posisiOptions}
+                                            value={formData.posisi ? posisiOptions.find(option => option.value === formData.posisi) : null}
                                             className="basic-single-select mt-1 hover:border-blue-400"
                                             classNamePrefix="select"
                                             onChange={(selectedOption) => handleSelectChange(selectedOption, 'posisi')}
@@ -480,6 +485,7 @@ const AddUserForm = () => {
                                     <Select
                                         name="role"
                                         options={roleOptions}
+                                        value={formData.role ? roleOptions.find(option => option.value === formData.role) : null}
                                         className="basic-single-select mt-1 hover:border-blue-400"
                                         classNamePrefix="select"
                                         onChange={(selectedOption) => handleSelectChange(selectedOption, 'role')}
@@ -494,12 +500,13 @@ const AddUserForm = () => {
                                 {formData.role !== 'Super Admin' && (
                                     <div className="mb-2">
                                         <label className="block font-medium text-gray-700">
-                                            Reviewer 2
+                                            Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                         </label>
                                         <Select
                                             isMulti
                                             name="reviewer2"
                                             options={reviewerOptions}
+                                            value={formData.reviewer2.length > 0 ? reviewerOptions.filter(option => formData.reviewer2.includes(option.uid)) : []}
                                             className="basic-multi-select mt-1"
                                             classNamePrefix="select"
                                             styles={selectStyles}
@@ -544,6 +551,7 @@ const AddUserForm = () => {
                             <Select
                                 name="role"
                                 options={roleOptions}
+                                value={formData.role ? roleOptions.find(option => option.value === formData.role) : null}
                                 className="basic-single-select mt-1 hover:border-blue-400"
                                 classNamePrefix="select"
                                 onChange={(selectedOption) => handleSelectChange(selectedOption, 'role')}
@@ -562,7 +570,7 @@ const AddUserForm = () => {
                                     <Select
                                         name="posisi"
                                         options={posisiOptions}
-                                        value={posisiOptions.find(option => option.value === formData.posisi)}
+                                        value={formData.posisi ? posisiOptions.find(option => option.value === formData.posisi) : null}
                                         onChange={(selectedOption) => handleSelectChange(selectedOption, 'posisi')}
                                         className="basic-single-select mt-1 hover:border-blue-400"
                                         classNamePrefix="select"
@@ -578,7 +586,7 @@ const AddUserForm = () => {
                                         isMulti
                                         name="department"
                                         options={departmentOptions}
-                                        value={departmentOptions.filter(option => formData.department.includes(option.value))}
+                                        value={formData.department.length > 0 ? departmentOptions.filter(option => formData.department.includes(option.value)) : []}
                                         onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'department')}
                                         className="basic-multi-select mt-1"
                                         classNamePrefix="select"
@@ -592,7 +600,7 @@ const AddUserForm = () => {
                                     <Select
                                         name="unit"
                                         options={unitOptions}
-                                        value={unitOptions.find(option => option.value === formData.unit)}
+                                        value={formData.unit ? unitOptions.find(option => option.value === formData.unit) : null}
                                         onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
                                         className="basic-single-select mt-1 hover:border-blue-400"
                                         classNamePrefix="select"
@@ -632,6 +640,7 @@ const AddUserForm = () => {
                                         isMulti
                                         name="validator"
                                         options={validatorOptions}
+                                        value={formData.validator.length > 0 ? validatorOptions.filter(option => formData.validator.includes(option.uid)) : []}
                                         className="basic-multi-select mt-1"
                                         classNamePrefix="select"
                                         styles={selectStyles}
@@ -640,12 +649,13 @@ const AddUserForm = () => {
                                 </div>
                                 <div className="mb-2">
                                     <label className="block font-medium text-gray-700">
-                                        Reviewer 1
+                                        Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                     </label>
                                     <Select
                                         isMulti
                                         name="reviewer1"
                                         options={reviewerOptions}
+                                        value={formData.reviewer1.length > 0 ? reviewerOptions.filter(option => formData.reviewer1.includes(option.uid)) : []}
                                         className="basic-multi-select mt-1"
                                         classNamePrefix="select"
                                         styles={selectStyles}
@@ -654,12 +664,13 @@ const AddUserForm = () => {
                                 </div>
                                 <div className="mb-2">
                                     <label className="block font-medium text-gray-700">
-                                        Reviewer 2
+                                        Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                     </label>
                                     <Select
                                         isMulti
                                         name="reviewer2"
                                         options={reviewerOptions}
+                                        value={formData.reviewer2.length > 0 ? reviewerOptions.filter(option => formData.reviewer2.includes(option.uid)) : []}
                                         className="basic-multi-select mt-1"
                                         classNamePrefix="select"
                                         styles={selectStyles}

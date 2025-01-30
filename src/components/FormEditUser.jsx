@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { db } from '../firebaseConfig'
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
 import Select from 'react-select'
-import { toast, ToastContainer } from 'react-toastify'
+import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
 const EditUserForm = () => {
@@ -12,8 +12,7 @@ const EditUserForm = () => {
 
     const [formData, setFormData] = useState({
         nama: '',
-        email: '',
-        password: '',
+        email: '',        
         posisi: '',
         validator: [],
         reviewer1: [],
@@ -270,16 +269,14 @@ const EditUserForm = () => {
                 // For Super Admin, only validate these fields
                 fieldsToValidate = [
                     { name: 'nama', label: 'Nama' },
-                    { name: 'email', label: 'Email' },
-                    { name: 'password', label: 'Password' },
+                    { name: 'email', label: 'Email' },                    
                     { name: 'role', label: 'Role' }
                 ]
             } else if (formData.role === 'Reviewer') {
                 // For Reviewer, exclude reviewer1 validation
                 fieldsToValidate = [
                     { name: 'nama', label: 'Nama' },
-                    { name: 'email', label: 'Email' },
-                    { name: 'password', label: 'Password' },
+                    { name: 'email', label: 'Email' },                    
                     { name: 'posisi', label: 'Posisi' },
                     { name: 'unit', label: 'Unit Bisnis' },
                     { name: 'role', label: 'Role' },
@@ -291,8 +288,7 @@ const EditUserForm = () => {
                 // For other roles, validate all fields
                 fieldsToValidate = [
                     { name: 'nama', label: 'Nama' },
-                    { name: 'email', label: 'Email' },
-                    { name: 'password', label: 'Password' },
+                    { name: 'email', label: 'Email' },                    
                     { name: 'posisi', label: 'Posisi' },
                     { name: 'unit', label: 'Unit Bisnis' },
                     { name: 'role', label: 'Role' },
@@ -511,7 +507,7 @@ const EditUserForm = () => {
                                 </div>
                                 <div className="mb-2">
                                     <label className="block font-medium text-gray-700">
-                                        Reviewer 1
+                                        Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                     </label>
                                     <Select
                                         isMulti
@@ -570,7 +566,7 @@ const EditUserForm = () => {
                             {formData.role !== 'Super Admin' && (
                                 <div className="mb-2">
                                     <label className="block font-medium text-gray-700">
-                                        Reviewer 2
+                                        Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                     </label>
                                     <Select
                                         isMulti
@@ -718,7 +714,7 @@ const EditUserForm = () => {
                             </div>
                             <div className="mb-2">
                                 <label className="block font-medium text-gray-700">
-                                    Reviewer 1
+                                    Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                 </label>
                                 <Select
                                     isMulti
@@ -734,7 +730,7 @@ const EditUserForm = () => {
                             </div>
                             <div className="mb-2">
                                 <label className="block font-medium text-gray-700">
-                                    Reviewer 2
+                                    Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
                                 </label>
                                 <Select
                                     isMulti

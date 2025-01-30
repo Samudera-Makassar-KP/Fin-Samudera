@@ -46,6 +46,24 @@ function Navbar({ toggleSidebar }) {
     }, [])
     
     useEffect(() => {
+        const body = document.body;
+        if (isDropdownOpen) {
+            // Simpan posisi scroll sekarang
+            const scrollY = window.scrollY;
+            body.style.position = 'fixed';
+            body.style.top = `-${scrollY}px`;
+            body.style.width = '100%';
+        } else {
+            // Kembalikan posisi scroll
+            const scrollY = body.style.top;
+            body.style.position = '';
+            body.style.top = '';
+            body.style.width = '';
+            window.scrollTo(0, parseInt(scrollY || '0') * -1);
+        }
+    }, [isDropdownOpen]);
+    
+    useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setIsDropdownOpen(false)
