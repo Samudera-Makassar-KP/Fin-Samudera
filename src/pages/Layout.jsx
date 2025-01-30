@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
@@ -12,7 +12,17 @@ const Layout = ({ children }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [ isMobile, setIsMobile] = useState(window.innerWidth <= 640);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth <= 640);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const toggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen);
@@ -72,8 +82,8 @@ const Layout = ({ children }) => {
                 closeOnClick
                 pauseOnHover
                 style={{
-                    padding: window.innerWidth <= 640 ? '0 48px' : 0,
-                    margin: window.innerWidth <= 640 ? '48px 0 0 36px' : 0
+                    padding: isMobile ? '0 48px' : 0,
+                    margin: isMobile ? '48px 0 0 36px' : 0
                 }}
                 toastClassName="toast-item mt-2 xl:mt-0"
             />

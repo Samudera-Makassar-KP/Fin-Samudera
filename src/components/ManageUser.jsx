@@ -15,7 +15,7 @@ const ManageUser = () => {
         department: ''
     })
     const itemsPerPage = 10 // Jumlah item per halaman
-    const navigate = useNavigate()   
+    const navigate = useNavigate()
 
     const filterOptions = {
         posisi: [
@@ -59,7 +59,10 @@ const ManageUser = () => {
                 ...doc.data()
             }))
 
-            setUsers(usersData) // Set data yang ada di Firestore
+            const sortedUsers = usersData.sort((a, b) => {
+                return (a.nama || '').localeCompare(b.nama || '')
+            })
+            setUsers(sortedUsers)
         }
 
         fetchUsers()
@@ -348,8 +351,8 @@ const ManageUser = () => {
                         onClick={prevPage}
                         disabled={currentPage === 1}
                         className={`flex items-center gap-2 p-2 rounded-full ${currentPage === 1
-                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                            : 'border border-red-600 text-red-600 hover:bg-red-100'
                             }`}
                     >
                         <svg
@@ -370,8 +373,8 @@ const ManageUser = () => {
                             key={page}
                             onClick={() => setCurrentPage(page)}
                             className={`px-3 py-2 rounded-full ${currentPage === page
-                                    ? 'bg-red-600 text-white'
-                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                ? 'bg-red-600 text-white'
+                                : 'border border-red-600 text-red-600 hover:bg-red-100'
                                 }`}
                         >
                             {page}
@@ -383,8 +386,8 @@ const ManageUser = () => {
                         onClick={nextPage}
                         disabled={currentPage === totalPages}
                         className={`flex items-center gap-2 px-2 py-2 rounded-full ${currentPage === totalPages
-                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                            : 'border border-red-600 text-red-600 hover:bg-red-100'
                             }`}
                     >
                         <svg
@@ -399,7 +402,7 @@ const ManageUser = () => {
                         </svg>
                     </button>
                 </div>
-            </div>            
+            </div>
         </div>
     )
 }
