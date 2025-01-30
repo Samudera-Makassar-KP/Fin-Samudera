@@ -43,7 +43,7 @@ const ManageUser = () => {
             { value: 'HC', label: 'HC' },
             { value: 'QHSE', label: 'QHSE' },
             { value: 'VMS', label: 'VMS' },
-            { value: 'IT', label: 'IT' },
+            { value: 'IT', label: 'IT' }
         ],
         role: [
             { value: 'Employee', label: 'Employee' },
@@ -83,7 +83,7 @@ const ManageUser = () => {
     }
 
     const handleFilterChange = (field, selectedOption) => {
-        setFilters(prev => ({
+        setFilters((prev) => ({
             ...prev,
             [field]: selectedOption
         }))
@@ -104,7 +104,8 @@ const ManageUser = () => {
     // Filter data pengguna berdasarkan nilai pencarian dan filter
     const filteredUsers = users.filter((user) => {
         const searchTermLower = searchTerm.toLowerCase()
-        const matchesSearch = user.nama?.toLowerCase().includes(searchTermLower) || user.email?.toLowerCase().includes(searchTermLower)
+        const matchesSearch =
+            user.nama?.toLowerCase().includes(searchTermLower) || user.email?.toLowerCase().includes(searchTermLower)
 
         const matchesFilters = Object.entries(filters).every(([field, selectedOption]) => {
             if (!selectedOption) return true
@@ -164,6 +165,16 @@ const ManageUser = () => {
         menu: (base) => ({
             ...base,
             zIndex: 100
+        }),
+        option: (base) => ({
+            ...base,
+            fontSize: '14px',
+            padding: '6px 12px',
+            cursor: 'pointer'
+        }),
+        menuList: (base) => ({
+            ...base,
+            maxHeight: '170px'
         }),
         multiValue: (base) => ({
             ...base,
@@ -262,7 +273,7 @@ const ManageUser = () => {
                             placeholder="Cari pengguna..."
                             value={searchTerm}
                             onChange={handleSearch}
-                            className="w-full px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                            className="w-full px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-xs"
                         />
 
                         <div className="flex flex-col gap-4">
@@ -348,64 +359,249 @@ const ManageUser = () => {
                     </div>
                 </div>
 
-                {/* Pagination Controls */}
-                <div className="flex items-center justify-center gap-2 mt-6 text-xs">
-                    {/* Tombol Previous */}
-                    <button
-                        onClick={prevPage}
-                        disabled={currentPage === 1}
-                        className={`flex items-center gap-2 p-2 rounded-full ${currentPage === 1
-                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                            : 'border border-red-600 text-red-600 hover:bg-red-100'
-                            }`}
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                            className="size-4"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                        </svg>
-                    </button>
-
-                    {/* Tombol Halaman */}
-                    {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                {/* Pagination Controls dengan Ellipsis - Mobile Friendly */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-1 mt-6 text-xs">
+                        {/* Tombol Previous */}
                         <button
-                            key={page}
-                            onClick={() => setCurrentPage(page)}
-                            className={`px-3 py-2 rounded-full ${currentPage === page
-                                ? 'bg-red-600 text-white'
-                                : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                }`}
-                        >
-                            {page}
-                        </button>
-                    ))}
-
-                    {/* Tombol Next */}
-                    <button
-                        onClick={nextPage}
-                        disabled={currentPage === totalPages}
-                        className={`flex items-center gap-2 px-2 py-2 rounded-full ${currentPage === totalPages
-                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                            onClick={prevPage}
+                            disabled={currentPage === 1}
+                            className={`flex items-center px-2 h-9 rounded-full ${
+                                currentPage === 1
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
                             }`}
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                            className="size-4"
                         >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                        </svg>
-                    </button>
-                </div>
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={1.5}
+                                stroke="currentColor"
+                                className="size-4"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                            </svg>
+                        </button>
+
+                        {/* Tombol Halaman dengan Ellipsis */}
+                        {(() => {
+                            let pages = []
+                            // Mengurangi jumlah halaman yang ditampilkan di mobile
+                            const visiblePages = window.innerWidth < 640 ? 1 : 3
+
+                            // Selalu tampilkan halaman pertama
+                            pages.push(
+                                <button
+                                    key={1}
+                                    onClick={() => setCurrentPage(1)}
+                                    className={`min-w-[36px] h-9 rounded-full ${
+                                        currentPage === 1
+                                            ? 'bg-red-600 text-white'
+                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                    }`}
+                                >
+                                    1
+                                </button>
+                            )
+
+                            if (totalPages <= visiblePages + 2) {
+                                // Jika total halaman sedikit, tampilkan semua
+                                for (let i = 2; i <= totalPages; i++) {
+                                    pages.push(
+                                        <button
+                                            key={i}
+                                            onClick={() => setCurrentPage(i)}
+                                            className={`min-w-[36px] h-9 rounded-full ${
+                                                currentPage === i
+                                                    ? 'bg-red-600 text-white'
+                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                            }`}
+                                        >
+                                            {i}
+                                        </button>
+                                    )
+                                }
+                            } else {
+                                // Logika untuk mobile view
+                                if (window.innerWidth < 640) {
+                                    // Jika current page bukan di awal atau akhir, tampilkan ellipsis di kedua sisi
+                                    if (currentPage > 2 && currentPage < totalPages - 1) {
+                                        pages.push(
+                                            <span key="ellipsis1" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                        pages.push(
+                                            <button
+                                                key={currentPage}
+                                                onClick={() => setCurrentPage(currentPage)}
+                                                className="min-w-[36px] h-9 rounded-full bg-red-600 text-white"
+                                            >
+                                                {currentPage}
+                                            </button>
+                                        )
+                                        pages.push(
+                                            <span key="ellipsis2" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                    } else if (currentPage <= 2) {
+                                        // Tampilkan halaman 2 jika current page di awal
+                                        if (currentPage === 2) {
+                                            pages.push(
+                                                <button
+                                                    key={2}
+                                                    onClick={() => setCurrentPage(2)}
+                                                    className="min-w-[36px] h-9 rounded-full bg-red-600 text-white"
+                                                >
+                                                    2
+                                                </button>
+                                            )
+                                        }
+                                        pages.push(
+                                            <span key="ellipsis1" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                    } else {
+                                        // Tampilkan ellipsis dan halaman sebelum terakhir jika di akhir
+                                        pages.push(
+                                            <span key="ellipsis1" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                        if (currentPage === totalPages - 1) {
+                                            pages.push(
+                                                <button
+                                                    key={totalPages - 1}
+                                                    onClick={() => setCurrentPage(totalPages - 1)}
+                                                    className="min-w-[36px] h-9 rounded-full bg-red-600 text-white"
+                                                >
+                                                    {totalPages - 1}
+                                                </button>
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    // Desktop view logic
+                                    if (currentPage <= visiblePages) {
+                                        for (let i = 2; i <= visiblePages; i++) {
+                                            pages.push(
+                                                <button
+                                                    key={i}
+                                                    onClick={() => setCurrentPage(i)}
+                                                    className={`min-w-[36px] h-9 rounded-full ${
+                                                        currentPage === i
+                                                            ? 'bg-red-600 text-white'
+                                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                    }`}
+                                                >
+                                                    {i}
+                                                </button>
+                                            )
+                                        }
+                                        pages.push(
+                                            <span key="ellipsis1" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                    } else if (currentPage > totalPages - visiblePages) {
+                                        pages.push(
+                                            <span key="ellipsis1" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                        for (let i = totalPages - visiblePages + 1; i < totalPages; i++) {
+                                            pages.push(
+                                                <button
+                                                    key={i}
+                                                    onClick={() => setCurrentPage(i)}
+                                                    className={`min-w-[36px] h-9 rounded-full ${
+                                                        currentPage === i
+                                                            ? 'bg-red-600 text-white'
+                                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                    }`}
+                                                >
+                                                    {i}
+                                                </button>
+                                            )
+                                        }
+                                    } else {
+                                        pages.push(
+                                            <span key="ellipsis1" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                                            if (i > 1 && i < totalPages) {
+                                                pages.push(
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setCurrentPage(i)}
+                                                        className={`min-w-[36px] h-9 rounded-full ${
+                                                            currentPage === i
+                                                                ? 'bg-red-600 text-white'
+                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                        }`}
+                                                    >
+                                                        {i}
+                                                    </button>
+                                                )
+                                            }
+                                        }
+                                        pages.push(
+                                            <span key="ellipsis2" className="px-1">
+                                                ...
+                                            </span>
+                                        )
+                                    }
+                                }
+
+                                // Selalu tampilkan halaman terakhir
+                                if (totalPages > 1) {
+                                    pages.push(
+                                        <button
+                                            key={totalPages}
+                                            onClick={() => setCurrentPage(totalPages)}
+                                            className={`min-w-[36px] h-9 rounded-full ${
+                                                currentPage === totalPages
+                                                    ? 'bg-red-600 text-white'
+                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                            }`}
+                                        >
+                                            {totalPages}
+                                        </button>
+                                    )
+                                }
+                            }
+
+                            return pages
+                        })()}
+
+                        {/* Tombol Next */}
+                        <button
+                            onClick={nextPage}
+                            disabled={currentPage === totalPages}
+                            className={`flex items-center px-2 h-9 rounded-full ${
+                                currentPage === totalPages
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                            }`}
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                strokeWidth={1.5}
+                                stroke="currentColor"
+                                className="size-4"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     )

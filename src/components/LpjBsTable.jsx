@@ -390,11 +390,12 @@ const LpjBsTable = () => {
 
                     {/* Pagination tetap sama */}
                     {totalPages > 1 && (
-                        <div className="flex items-center justify-center gap-2 mt-6 text-xs">
+                        <div className="flex items-center justify-center gap-1 mt-6 text-xs">
+                            {/* Tombol Previous */}
                             <button
                                 onClick={prevPage}
                                 disabled={currentPage === 1}
-                                className={`flex items-center gap-2 p-2 rounded-full ${
+                                className={`flex items-center px-2 h-9 rounded-full ${
                                     currentPage === 1
                                         ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                         : 'border border-red-600 text-red-600 hover:bg-red-100'
@@ -416,24 +417,206 @@ const LpjBsTable = () => {
                                 </svg>
                             </button>
 
-                            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
-                                <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`px-3 py-2 rounded-full ${
-                                        currentPage === page
-                                            ? 'bg-red-600 text-white'
-                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                    }`}
-                                >
-                                    {page}
-                                </button>
-                            ))}
+                            {/* Tombol Halaman dengan Ellipsis */}
+                            {(() => {
+                                let pages = []
+                                // Mengurangi jumlah halaman yang ditampilkan di mobile
+                                const visiblePages = window.innerWidth < 640 ? 1 : 3
 
+                                // Selalu tampilkan halaman pertama
+                                pages.push(
+                                    <button
+                                        key={1}
+                                        onClick={() => setCurrentPage(1)}
+                                        className={`min-w-[36px] h-9 rounded-full ${
+                                            currentPage === 1
+                                                ? 'bg-red-600 text-white'
+                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                        }`}
+                                    >
+                                        1
+                                    </button>
+                                )
+
+                                if (totalPages <= visiblePages + 2) {
+                                    // Jika total halaman sedikit, tampilkan semua
+                                    for (let i = 2; i <= totalPages; i++) {
+                                        pages.push(
+                                            <button
+                                                key={i}
+                                                onClick={() => setCurrentPage(i)}
+                                                className={`min-w-[36px] h-9 rounded-full ${
+                                                    currentPage === i
+                                                        ? 'bg-red-600 text-white'
+                                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                }`}
+                                            >
+                                                {i}
+                                            </button>
+                                        )
+                                    }
+                                } else {
+                                    // Logika untuk mobile view
+                                    if (window.innerWidth < 640) {
+                                        // Jika current page bukan di awal atau akhir, tampilkan ellipsis di kedua sisi
+                                        if (currentPage > 2 && currentPage < totalPages - 1) {
+                                            pages.push(
+                                                <span key="ellipsis1" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                            pages.push(
+                                                <button
+                                                    key={currentPage}
+                                                    onClick={() => setCurrentPage(currentPage)}
+                                                    className="min-w-[36px] h-9 rounded-full bg-red-600 text-white"
+                                                >
+                                                    {currentPage}
+                                                </button>
+                                            )
+                                            pages.push(
+                                                <span key="ellipsis2" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                        } else if (currentPage <= 2) {
+                                            // Tampilkan halaman 2 jika current page di awal
+                                            if (currentPage === 2) {
+                                                pages.push(
+                                                    <button
+                                                        key={2}
+                                                        onClick={() => setCurrentPage(2)}
+                                                        className="min-w-[36px] h-9 rounded-full bg-red-600 text-white"
+                                                    >
+                                                        2
+                                                    </button>
+                                                )
+                                            }
+                                            pages.push(
+                                                <span key="ellipsis1" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                        } else {
+                                            // Tampilkan ellipsis dan halaman sebelum terakhir jika di akhir
+                                            pages.push(
+                                                <span key="ellipsis1" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                            if (currentPage === totalPages - 1) {
+                                                pages.push(
+                                                    <button
+                                                        key={totalPages - 1}
+                                                        onClick={() => setCurrentPage(totalPages - 1)}
+                                                        className="min-w-[36px] h-9 rounded-full bg-red-600 text-white"
+                                                    >
+                                                        {totalPages - 1}
+                                                    </button>
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        // Desktop view logic
+                                        if (currentPage <= visiblePages) {
+                                            for (let i = 2; i <= visiblePages; i++) {
+                                                pages.push(
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setCurrentPage(i)}
+                                                        className={`min-w-[36px] h-9 rounded-full ${
+                                                            currentPage === i
+                                                                ? 'bg-red-600 text-white'
+                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                        }`}
+                                                    >
+                                                        {i}
+                                                    </button>
+                                                )
+                                            }
+                                            pages.push(
+                                                <span key="ellipsis1" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                        } else if (currentPage > totalPages - visiblePages) {
+                                            pages.push(
+                                                <span key="ellipsis1" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                            for (let i = totalPages - visiblePages + 1; i < totalPages; i++) {
+                                                pages.push(
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setCurrentPage(i)}
+                                                        className={`min-w-[36px] h-9 rounded-full ${
+                                                            currentPage === i
+                                                                ? 'bg-red-600 text-white'
+                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                        }`}
+                                                    >
+                                                        {i}
+                                                    </button>
+                                                )
+                                            }
+                                        } else {
+                                            pages.push(
+                                                <span key="ellipsis1" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                            for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                                                if (i > 1 && i < totalPages) {
+                                                    pages.push(
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => setCurrentPage(i)}
+                                                            className={`min-w-[36px] h-9 rounded-full ${
+                                                                currentPage === i
+                                                                    ? 'bg-red-600 text-white'
+                                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                            }`}
+                                                        >
+                                                            {i}
+                                                        </button>
+                                                    )
+                                                }
+                                            }
+                                            pages.push(
+                                                <span key="ellipsis2" className="px-1">
+                                                    ...
+                                                </span>
+                                            )
+                                        }
+                                    }
+
+                                    // Selalu tampilkan halaman terakhir
+                                    if (totalPages > 1) {
+                                        pages.push(
+                                            <button
+                                                key={totalPages}
+                                                onClick={() => setCurrentPage(totalPages)}
+                                                className={`min-w-[36px] h-9 rounded-full ${
+                                                    currentPage === totalPages
+                                                        ? 'bg-red-600 text-white'
+                                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                }`}
+                                            >
+                                                {totalPages}
+                                            </button>
+                                        )
+                                    }
+                                }
+
+                                return pages
+                            })()}
+
+                            {/* Tombol Next */}
                             <button
                                 onClick={nextPage}
                                 disabled={currentPage === totalPages}
-                                className={`flex items-center gap-2 px-2 py-2 rounded-full ${
+                                className={`flex items-center px-2 h-9 rounded-full ${
                                     currentPage === totalPages
                                         ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                         : 'border border-red-600 text-red-600 hover:bg-red-100'
@@ -467,7 +650,6 @@ const LpjBsTable = () => {
                 confirmText="Ya, Batalkan"
                 showCancelReason={true}
             />
-
         </div>
     )
 }
