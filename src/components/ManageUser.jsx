@@ -39,7 +39,11 @@ const ManageUser = () => {
             { value: 'Operation', label: 'Operation' },
             { value: 'Marketing', label: 'Marketing' },
             { value: 'Finance', label: 'Finance' },
-            { value: 'GA/Umum', label: 'GA/Umum' }
+            { value: 'GA/Umum', label: 'GA/Umum' },
+            { value: 'HC', label: 'HC' },
+            { value: 'QHSE', label: 'QHSE' },
+            { value: 'VMS', label: 'VMS' },
+            { value: 'IT', label: 'IT' },
         ],
         role: [
             { value: 'Employee', label: 'Employee' },
