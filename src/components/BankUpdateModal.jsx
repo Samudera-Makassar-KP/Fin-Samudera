@@ -8,8 +8,8 @@ import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 const BankUpdateModal = ({ isOpen, onClose }) => {
     const [bankName, setBankName] = useState('');
     const [accountNumber, setAccountNumber] = useState('');
-    const [initialBankName, setInitialBankName] = useState(''); 
-    const [initialAccountNumber, setInitialAccountNumber] = useState(''); 
+    const [initialBankName, setInitialBankName] = useState('');
+    const [initialAccountNumber, setInitialAccountNumber] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [isLoading, setIsLoading] = useState(false)
@@ -22,7 +22,7 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
             setAccountNumber('');
         }
     }, [isOpen]);
-    
+
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = 'hidden';
@@ -34,7 +34,7 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
             document.body.style.overflow = 'unset';
         };
     }, [isOpen]);
-    
+
     useEffect(() => {
         const fetchAccountInfo = async () => {
             if (isOpen) {
@@ -48,7 +48,7 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
                             const userData = userDoc.data();
                             setBankName(userData.bankName || '');
                             setAccountNumber(userData.accountNumber || '');
-                            setInitialBankName(userData.bankName || ''); 
+                            setInitialBankName(userData.bankName || '');
                             setInitialAccountNumber(userData.accountNumber || '');
                         }
                     }
@@ -77,7 +77,7 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
                 setIsLoading(false);
                 return;
             }
-            
+
             if (!bankName.trim()) {
                 setError('Nama bank harus diisi');
                 setIsLoading(false);
@@ -94,26 +94,26 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
                 setIsLoading(false);
                 return;
             }
-            
+
             if (accountNumber.trim() === initialAccountNumber) {
                 setError('Tidak ada perubahan pada nomor rekening Anda');
                 setIsLoading(false);
                 return;
             }
-            
+
             const userRef = doc(db, 'users', uid);
             await updateDoc(userRef, {
                 bankName: bankName.trim(),
                 accountNumber: accountNumber.trim()
             });
 
-            setSuccess('Informasi rekening berhasil diperbarui');        
+            setSuccess('Informasi rekening berhasil diperbarui');
             setTimeout(onClose, 3000);
         } catch (error) {
             console.error('Error updating account info:', error);
             setError('Gagal memperbarui informasi rekening');
         } finally {
-            setIsLoading(false); 
+            setIsLoading(false);
         }
     };
 
@@ -129,7 +129,7 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
             className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
             onClick={handleModalClick}
         >
-            <div className="bg-white px-6 py-4 rounded-lg w-96 relative">
+            <div className="bg-white rounded-lg p-4 lg:p-6 max-w-md w-full mx-4 relative sm:landscape:scale-[0.85] sm:landscape:transform">
                 <div className="flex items-center justify-between w-full mb-2">
                     <h2 className="text-lg md:text-xl font-semibold">
                         Perbarui Informasi Rekening
@@ -146,27 +146,31 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
                 {success && <div className="bg-green-100 text-green-700 p-2 rounded mb-4">{success}</div>}
 
                 <form onSubmit={handleAccountUpdate}>
-                    <div className="mb-4">
+                    <div className="mb-4 relative">
                         <label className="block text-sm text-gray-700 font-medium mb-2">Nama Bank</label>
-                        <input
-                            type="text"
-                            value={bankName}
-                            onChange={(e) => setBankName(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                            placeholder="Masukkan nama bank"
-                            required
-                        />
+                        <div className='relative'>
+                            <input
+                                type="text"
+                                value={bankName}
+                                onChange={(e) => setBankName(e.target.value)}
+                                className="w-full px-3 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                placeholder="Masukkan nama bank"
+                                required
+                            />
+                        </div>
                     </div>
-                    <div className="mb-4">
+                    <div className="mb-4 relative">
                         <label className="block text-sm text-gray-700 font-medium mb-2">Nomor Rekening</label>
-                        <input
-                            type="text"
-                            value={accountNumber}
-                            onChange={(e) => setAccountNumber(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                            placeholder="Masukkan nomor rekening"
-                            required
-                        />
+                        <div className='relative'>
+                            <input
+                                type="text"
+                                value={accountNumber}
+                                onChange={(e) => setAccountNumber(e.target.value)}
+                                className="w-full px-3 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                placeholder="Masukkan nomor rekening"
+                                required
+                            />
+                        </div>
                     </div>
                     <div className="flex justify-end">
                         <button
