@@ -25,7 +25,7 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
         if (!isOpen) {
             setError('');
             setSuccess('');
-            
+
             setOldPassword('');
             setNewPassword('');
             setConfirmPassword('');
@@ -43,6 +43,12 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
             document.body.style.overflow = 'unset';
         };
     }, [isOpen]);
+
+    const hasChanges = () => {
+        return oldPassword.trim() !== '' &&
+            newPassword.trim() !== '' &&
+            confirmPassword.trim() !== '';
+    };
 
     const togglePasswordVisibility = (setter) => () => {
         setter((prev) => !prev);
@@ -95,18 +101,18 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
                 setIsLoading(false);
                 return;
             }
-            
+
             try {
-                await updatePassword(currentUser, newPassword);                
+                await updatePassword(currentUser, newPassword);
             } catch (error) {
                 console.error('Detailed password update error:', error);
             } finally {
-                setIsLoading(false); 
+                setIsLoading(false);
             }
 
             setSuccess('Kata sandi berhasil diperbarui');
             setTimeout(onClose, 3000);
-            
+
             setOldPassword('');
             setNewPassword('');
             setConfirmPassword('');
@@ -134,7 +140,7 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
         } catch (error) {
             setError('Gagal mengirim email reset: ' + error.message);
         } finally {
-            setIsResetLoading(false); 
+            setIsResetLoading(false);
         }
     };
 
@@ -145,7 +151,7 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
     };
 
     const handleInputChange = (setter) => (e) => {
-        setError(''); 
+        setError('');
         setter(e.target.value);
     };
 
@@ -246,8 +252,11 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
                         </button>
                         <button
                             type="submit"
-                            className="bg-red-600 text-white px-6 py-3 rounded-md text-sm md:text-sm hover:bg-red-700 hover:text-gray-200 transition-colors"
-                            disabled={isLoading}
+                            className={`${!hasChanges()
+                                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                    : 'bg-red-600 hover:bg-red-700 text-white hover:text-gray-200'
+                                } px-6 py-3 rounded-md text-sm md:text-sm transition-colors`}
+                            disabled={isLoading || !hasChanges()}
                         >
                             {isLoading ? (
                                 <>
