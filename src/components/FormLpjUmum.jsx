@@ -39,6 +39,7 @@ const FormLpjUmum = () => {
         aktivitas: ''
     }
 
+    const [tanggalPengajuan, setTanggalPengajuan] = useState('')
     const location = useLocation()
     const [lpj, setLpj] = useState([initialLpjState])
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
@@ -56,6 +57,20 @@ const FormLpjUmum = () => {
             setLpj((prevLpj) => prevLpj.map((item) => ({ ...item, tanggalPengajuan: todayDate })))
         }
     }, [todayDate])
+
+    useEffect(() => {
+        const today = new Date()
+        const formattedDate = today.toISOString().split('T')[0]
+
+        setTodayDate(formattedDate)
+        setTanggalPengajuan(formattedDate)
+    }, [])
+
+    useEffect(() => {
+        if (tanggalPengajuan) {
+            setLpj((prevLpj) => prevLpj.map((item) => ({ ...item, tanggalPengajuan })))
+        }
+    }, [tanggalPengajuan])
 
     const [attachmentFile, setAttachmentFile] = useState(null)
     const [attachmentFileName, setAttachmentFileName] = useState('')
@@ -93,16 +108,19 @@ const FormLpjUmum = () => {
         }
     }, [isAdmin])
 
-    const BUSINESS_UNITS = useMemo(() => [
-        { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
-        { value: 'PT Samudera Makassar Logistik', label: 'PT Samudera Makassar Logistik' },
-        { value: 'PT Kendari Jaya Samudera', label: 'PT Kendari Jaya Samudera' },
-        { value: 'PT Samudera Kendari Logistik', label: 'PT Samudera Kendari Logistik' },
-        { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
-        { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
-        { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
-        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
-    ], []);
+    const BUSINESS_UNITS = useMemo(
+        () => [
+            { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
+            { value: 'PT Samudera Makassar Logistik', label: 'PT Samudera Makassar Logistik' },
+            { value: 'PT Kendari Jaya Samudera', label: 'PT Kendari Jaya Samudera' },
+            { value: 'PT Samudera Kendari Logistik', label: 'PT Samudera Kendari Logistik' },
+            { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
+            { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
+            { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
+            { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
+        ],
+        []
+    )
 
     useEffect(() => {
         const today = new Date()
@@ -145,16 +163,6 @@ const FormLpjUmum = () => {
 
         fetchUserData()
     }, [isAdmin])
-
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A'
-        const date = new Date(dateString)
-        return new Intl.DateTimeFormat('id-ID', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        }).format(date)
-    }
 
     const calculateCosts = (lpjItems, jumlahBS) => {
         // Calculate total biaya
@@ -253,7 +261,9 @@ const FormLpjUmum = () => {
         const year = today.getFullYear().toString().slice(-2)
         const month = (today.getMonth() + 1).toString().padStart(2, '0')
         const day = today.getDate().toString().padStart(2, '0')
-        const sequence = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+        const sequence = Math.floor(Math.random() * 10000)
+            .toString()
+            .padStart(4, '0')
         const unitCode = getUnitCode(selectedUnit.value)
 
         return `LPJ.GAU.${unitCode}.${year}${month}${day}.${sequence}`
@@ -351,7 +361,7 @@ const FormLpjUmum = () => {
                     )
                 })
 
-                setIsSubmitting(false);
+                setIsSubmitting(false)
                 return
             }
 
@@ -392,7 +402,7 @@ const FormLpjUmum = () => {
                 nomorBS: nomorBS,
                 jumlahBS: jumlahBS,
                 ...calculatedCosts,
-                tanggalPengajuan: todayDate,
+                tanggalPengajuan: tanggalPengajuan,
                 lampiran: attachmentFileName,
                 lampiranUrl: lampiranUrl,
                 statusHistory: [
@@ -432,7 +442,6 @@ const FormLpjUmum = () => {
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
 
             setIsSubmitting(false)
-
         }
     }
 
@@ -459,13 +468,7 @@ const FormLpjUmum = () => {
     const renderFileUpload = () => {
         return (
             <div className="flex flex-col xl:flex-row items-start xl:items-center">
-                <input
-                    type="file"
-                    id="file-upload"
-                    className="hidden"
-                    accept=".pdf"
-                    onChange={handleFileUpload}
-                />
+                <input type="file" id="file-upload" className="hidden" accept=".pdf" onChange={handleFileUpload} />
                 <label
                     htmlFor="file-upload"
                     className="w-full xl:w-fit text-center h-full xl:h-10 px-4 py-4 xl:py-2 bg-gray-50 xl:bg-gray-200 border rounded-md cursor-pointer hover:bg-gray-300 hover:border-gray-400 transition duration-300 ease-in-out"
@@ -473,9 +476,7 @@ const FormLpjUmum = () => {
                     Upload File
                 </label>
                 <span className="ml-0 xl:ml-4 text-gray-500">
-                    {attachmentFileName
-                        ? `File: ${attachmentFileName}`
-                        : 'Format .pdf Max Size: 250MB'}
+                    {attachmentFileName ? `File: ${attachmentFileName}` : 'Format .pdf Max Size: 250MB'}
                 </span>
             </div>
         )
@@ -493,7 +494,7 @@ const FormLpjUmum = () => {
 
         if (isAdmin && location.state) {
             if (location.state.unit) {
-                const unitOption = BUSINESS_UNITS.find(unit => unit.value === location.state.unit)
+                const unitOption = BUSINESS_UNITS.find((unit) => unit.value === location.state.unit)
                 if (unitOption) {
                     setSelectedUnit(unitOption)
                 }
@@ -501,7 +502,7 @@ const FormLpjUmum = () => {
 
             if (location.state.validator?.[0]) {
                 if (validatorOptions.length > 0) {
-                    const validatorOption = validatorOptions.find(v => v.value === location.state.validator[0])
+                    const validatorOption = validatorOptions.find((v) => v.value === location.state.validator[0])
                     if (validatorOption) {
                         setSelectedValidator(validatorOption)
                     }
@@ -576,7 +577,7 @@ const FormLpjUmum = () => {
                         </div>
 
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div className='block xl:hidden'>
+                            <div className="block xl:hidden">
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Validator <span className="text-red-500">*</span>
                                 </label>
@@ -604,7 +605,7 @@ const FormLpjUmum = () => {
                                     placeholder="Masukkan nomor bon sementara"
                                 />
                             </div>
-                            <div className='hidden xl:block'>
+                            <div className="hidden xl:block">
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Validator <span className="text-red-500">*</span>
                                 </label>
@@ -641,7 +642,7 @@ const FormLpjUmum = () => {
                                     placeholder="Masukkan jumlah bon sementara tanpa Rp"
                                 />
                             </div>
-                            <div className='hidden xl:block'>
+                            <div className="hidden xl:block">
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Lampiran <span className="text-red-500">*</span>
                                 </label>
@@ -653,13 +654,13 @@ const FormLpjUmum = () => {
                             <div>
                                 <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
                                 <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={formatDate(todayDate)}
-                                    disabled
+                                    type="date"
+                                    value={tanggalPengajuan}
+                                    onChange={(e) => setTanggalPengajuan(e.target.value)}
+                                    className="w-full border border-gray-300 text-gray-900 bg-transparent rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
                                 />
                             </div>
-                            <div className='block xl:hidden'>
+                            <div className="block xl:hidden">
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Lampiran <span className="text-red-500">*</span>
                                 </label>
@@ -730,10 +731,10 @@ const FormLpjUmum = () => {
                             <div>
                                 <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
                                 <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={formatDate(todayDate)}
-                                    disabled
+                                    type="date"
+                                    value={tanggalPengajuan}
+                                    onChange={(e) => setTanggalPengajuan(e.target.value)}
+                                    className="w-full border border-gray-300 text-gray-900 bg-transparent rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
                                 />
                             </div>
                             <div>
@@ -750,9 +751,7 @@ const FormLpjUmum = () => {
 
                 {lpj.map((item, index) => (
                     <div key={index}>
-                        {index > 0 && (
-                            <hr className="border-gray-300 my-6 block xl:hidden" />
-                        )}
+                        {index > 0 && <hr className="border-gray-300 my-6 block xl:hidden" />}
 
                         <div className="flex flex-col xl:flex-row justify-stretch gap-2 mb-2">
                             <div className="flex-grow">
@@ -837,10 +836,14 @@ const FormLpjUmum = () => {
 
                             <div>
                                 {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden">Jumlah Biaya</label>
+                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden">
+                                        Jumlah Biaya
+                                    </label>
                                 )}
                                 {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">Jumlah Biaya</label>
+                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">
+                                        Jumlah Biaya
+                                    </label>
                                 )}
                                 <input
                                     type="text"
@@ -875,15 +878,15 @@ const FormLpjUmum = () => {
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-0 xl:gap-4 my-6 xl:flex xl:flex-1">
                     <div className="w-1/2"></div>
                     <div className="text-left flex flex-col xl:block">
-                        <div className='flex flex-col md:flex-row mb-1 md:mb-0'>
+                        <div className="flex flex-col md:flex-row mb-1 md:mb-0">
                             <span>Total Biaya</span>
                             <span className="xl:hidden">: {formatRupiah(calculatedCosts.totalBiaya || 0)}</span>
                         </div>
-                        <div className='flex flex-col md:flex-row mb-1 md:mb-0'>
+                        <div className="flex flex-col md:flex-row mb-1 md:mb-0">
                             <span>Sisa Lebih Bon Sementara</span>
                             <span className="xl:hidden">: {formatRupiah(calculatedCosts.sisaLebih || 0)}</span>
                         </div>
-                        <div className='flex flex-col md:flex-row mb-1 md:mb-0'>
+                        <div className="flex flex-col md:flex-row mb-1 md:mb-0">
                             <span>Sisa Kurang Dibayarkan ke Pegawai</span>
                             <span className="xl:hidden">: {formatRupiah(calculatedCosts.sisaKurang || 0)}</span>
                         </div>
@@ -927,7 +930,6 @@ const FormLpjUmum = () => {
                     </button>
                 </div>
             </div>
-
         </div>
     )
 }

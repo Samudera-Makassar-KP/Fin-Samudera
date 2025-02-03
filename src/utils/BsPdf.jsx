@@ -77,42 +77,6 @@ const styles = StyleSheet.create({
     }
 })
 
-const getApprovedValidatorName = async (bonSementaraDetail) => {
-    if (!bonSementaraDetail || !bonSementaraDetail.statusHistory) {
-        return { validatorName: '' }
-    }
-
-    const { statusHistory } = bonSementaraDetail
-
-    // Find validator approval in status history - check for both regular validator and super admin
-    const validatorApproval = statusHistory.find(
-        (history) =>
-            history.status.toLowerCase().includes('disetujui oleh validator') ||
-            history.status.toLowerCase().includes('disetujui oleh super admin (pengganti validator)')
-    )
-
-    if (validatorApproval) {
-        try {
-            const validatorDocRef = doc(db, 'users', validatorApproval.actor)
-            const validatorSnapshot = await getDoc(validatorDocRef)
-
-            if (validatorSnapshot.exists()) {
-                // If it's super admin validation, return "Super Admin" as the name
-                if (validatorApproval.status.toLowerCase().includes('super admin')) {
-                    return { validatorName: 'Super Admin' }
-                }
-                // Otherwise return the validator's actual name
-                const validatorName = validatorSnapshot.data().nama
-                return { validatorName }
-            }
-        } catch (error) {
-            console.error('Error fetching validator name:', error)
-        }
-    }
-
-    return { validatorName: '' }
-}
-
 const getApprovedReviewerNames = async (bonSementaraDetail) => {
     if (!bonSementaraDetail || !bonSementaraDetail.statusHistory) {
         return { reviewer1Name: '-', reviewer2Name: '-' }
@@ -200,7 +164,7 @@ const getApprovedReviewerNames = async (bonSementaraDetail) => {
     return { reviewer1Name, reviewer2Name }
 }
 
-const BsPDF = ({ bonSementaraDetail, approvedReviewers, approvedValidator }) => {
+const BsPDF = ({ bonSementaraDetail, approvedReviewers }) => {
     if (!bonSementaraDetail || bonSementaraDetail.status !== 'Disetujui') {
         return null
     }
@@ -306,10 +270,10 @@ const BsPDF = ({ bonSementaraDetail, approvedReviewers, approvedValidator }) => 
                             <Text>
                                 {bonSementaraDetail.tanggalPengajuan
                                     ? new Date(bonSementaraDetail.tanggalPengajuan).toLocaleDateString('id-ID', {
-                                          day: '2-digit',
-                                          month: '2-digit',
-                                          year: 'numeric'
-                                      })
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric'
+                                    })
                                     : '-'}
                             </Text>
                         </View>
@@ -408,8 +372,14 @@ const BsPDF = ({ bonSementaraDetail, approvedReviewers, approvedValidator }) => 
                                     justifyContent: 'center'
                                 }}
                             >
-                                <Text> </Text>
-                                <Text>Dokumen Ini Sudah Mendukung Signature Digital</Text>
+                                <Text>Diajukan oleh {bonSementaraDetail.user?.nama || '-'}</Text>
+                                <Text
+                                    style={{
+                                        marginTop: '8px'
+                                    }}
+                                >
+                                    Dokumen Ini Sudah Mendukung Signature Digital
+                                </Text>
                             </View>
                             <View
                                 style={{
@@ -419,16 +389,16 @@ const BsPDF = ({ bonSementaraDetail, approvedReviewers, approvedValidator }) => 
                                     justifyContent: 'center'
                                 }}
                             >
-                                {approvedValidator.validatorName && (
-                                    <Text>Validate By {approvedValidator.validatorName}</Text>
-                                )}
+                                <Text> </Text>
                                 <Text
                                     style={{
-                                        marginTop: approvedValidator.validatorName ? 0 : 'auto'
+                                        marginTop: 'auto'
                                     }}
                                 >
-                                    Approved By {approvedReviewers.reviewer1Name}
-                                    {approvedReviewers.reviewer2Name ? ` & ${approvedReviewers.reviewer2Name}` : ''}
+                                    <Text>
+                                        Approved By {approvedReviewers.reviewer1Name}
+                                        {approvedReviewers.reviewer2Name ? ` & ${approvedReviewers.reviewer2Name}` : ''}
+                                    </Text>
                                 </Text>
                             </View>
                         </View>
@@ -449,14 +419,12 @@ const generateBsPDF = async (bonSementaraDetail) => {
 
         // Ambil nama reviewer sebelum PDF dirender
         const approvedReviewers = await getApprovedReviewerNames(bonSementaraDetail)
-        const approvedValidator = await getApprovedValidatorName(bonSementaraDetail)
 
         // Buat dokumen PDF
         const pdfBlob = await pdf(
             <BsPDF
                 bonSementaraDetail={bonSementaraDetail}
                 approvedReviewers={approvedReviewers}
-                approvedValidator={approvedValidator}
             />
         ).toBlob()
 
@@ -477,6 +445,6 @@ const generateBsPDF = async (bonSementaraDetail) => {
     }
 }
 
-;<ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} closeOnClick pauseOnHover />
+    ; <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} closeOnClick pauseOnHover />
 
 export { BsPDF, generateBsPDF }

@@ -36,8 +36,7 @@ const CreateBsTable = () => {
 
     const filterOptions = {
         status: [
-            { value: 'Diajukan', label: 'Diajukan' },
-            { value: 'Divalidasi', label: 'Divalidasi' },
+            { value: 'Diajukan', label: 'Diajukan' },            
             { value: 'Diproses', label: 'Diproses' },
             { value: 'Disetujui', label: 'Disetujui' },
             { value: 'Ditolak', label: 'Ditolak' },
@@ -347,19 +346,16 @@ const CreateBsTable = () => {
                                                 <td className="px-2 py-2 border text-center">
                                                     <span
                                                         className={`px-4 py-1 rounded-full text-xs font-medium 
-                                            ${
-                                                item.status === 'Diajukan'
-                                                    ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
-                                                    : item.status === 'Disetujui'
-                                                      ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
-                                                      : item.status === 'Diproses'
-                                                        ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
-                                                        : item.status === 'Ditolak'
-                                                          ? 'bg-red-200 text-red-800 border-[1px] border-red-600'
-                                                          : item.status === 'Divalidasi'
-                                                            ? 'bg-purple-200 text-purple-800 border-[1px] border-purple-600'
-                                                            : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
-                                            }`}
+                                            ${item.status === 'Diajukan'
+                                                                ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
+                                                                : item.status === 'Disetujui'
+                                                                    ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
+                                                                    : item.status === 'Diproses'
+                                                                        ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
+                                                                        : item.status === 'Ditolak'
+                                                                            ? 'bg-red-200 text-red-800 border-[1px] border-red-600'
+                                                                            : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
+                                                            }`}
                                                     >
                                                         {item.status || 'Tidak Diketahui'}
                                                     </span>
@@ -388,11 +384,10 @@ const CreateBsTable = () => {
                             <button
                                 onClick={prevPage}
                                 disabled={currentPage === 1}
-                                className={`flex items-center px-2 h-9 rounded-full ${
-                                    currentPage === 1
+                                className={`flex items-center px-2 h-9 rounded-full ${currentPage === 1
                                         ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                         : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                }`}
+                                    }`}
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -421,11 +416,10 @@ const CreateBsTable = () => {
                                     <button
                                         key={1}
                                         onClick={() => setCurrentPage(1)}
-                                        className={`min-w-[36px] h-9 rounded-full ${
-                                            currentPage === 1
+                                        className={`min-w-[36px] h-9 rounded-full ${currentPage === 1
                                                 ? 'bg-red-600 text-white'
                                                 : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                        }`}
+                                            }`}
                                     >
                                         1
                                     </button>
@@ -438,11 +432,10 @@ const CreateBsTable = () => {
                                             <button
                                                 key={i}
                                                 onClick={() => setCurrentPage(i)}
-                                                className={`min-w-[36px] h-9 rounded-full ${
-                                                    currentPage === i
+                                                className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                                         ? 'bg-red-600 text-white'
                                                         : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                                }`}
+                                                    }`}
                                             >
                                                 {i}
                                             </button>
@@ -517,11 +510,10 @@ const CreateBsTable = () => {
                                                     <button
                                                         key={i}
                                                         onClick={() => setCurrentPage(i)}
-                                                        className={`min-w-[36px] h-9 rounded-full ${
-                                                            currentPage === i
+                                                        className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                                                 ? 'bg-red-600 text-white'
                                                                 : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {i}
                                                     </button>
@@ -543,11 +535,10 @@ const CreateBsTable = () => {
                                                     <button
                                                         key={i}
                                                         onClick={() => setCurrentPage(i)}
-                                                        className={`min-w-[36px] h-9 rounded-full ${
-                                                            currentPage === i
+                                                        className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                                                 ? 'bg-red-600 text-white'
                                                                 : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {i}
                                                     </button>
@@ -565,11 +556,10 @@ const CreateBsTable = () => {
                                                         <button
                                                             key={i}
                                                             onClick={() => setCurrentPage(i)}
-                                                            className={`min-w-[36px] h-9 rounded-full ${
-                                                                currentPage === i
+                                                            className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                                                     ? 'bg-red-600 text-white'
                                                                     : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             {i}
                                                         </button>
@@ -590,11 +580,10 @@ const CreateBsTable = () => {
                                             <button
                                                 key={totalPages}
                                                 onClick={() => setCurrentPage(totalPages)}
-                                                className={`min-w-[36px] h-9 rounded-full ${
-                                                    currentPage === totalPages
+                                                className={`min-w-[36px] h-9 rounded-full ${currentPage === totalPages
                                                         ? 'bg-red-600 text-white'
                                                         : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                                }`}
+                                                    }`}
                                             >
                                                 {totalPages}
                                             </button>
@@ -609,11 +598,10 @@ const CreateBsTable = () => {
                             <button
                                 onClick={nextPage}
                                 disabled={currentPage === totalPages}
-                                className={`flex items-center px-2 h-9 rounded-full ${
-                                    currentPage === totalPages
+                                className={`flex items-center px-2 h-9 rounded-full ${currentPage === totalPages
                                         ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                         : 'border border-red-600 text-red-600 hover:bg-red-100'
-                                }`}
+                                    }`}
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"

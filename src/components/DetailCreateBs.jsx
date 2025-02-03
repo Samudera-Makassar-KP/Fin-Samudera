@@ -63,17 +63,15 @@ const DetailCreateBs = () => {
                 }
 
                 // Fetch names for all reviewers in reviewer1 and reviewer2
-                const [reviewer1Names, reviewer2Names, validatorNames] = await Promise.all([
+                const [reviewer1Names, reviewer2Names] = await Promise.all([
                     fetchReviewerNames(bonSementaraData?.user?.reviewer1),
                     fetchReviewerNames(bonSementaraData?.user?.reviewer2),
-                    fetchReviewerNames(bonSementaraData?.user?.validator)
                 ])
 
                 // Combine reviewer names and filter out null values
                 const validReviewerNames = [...reviewer1Names, ...reviewer2Names].filter((name) => name !== null)
                 setReviewers({
-                    reviewerNames: validReviewerNames,
-                    validatorNames: validatorNames.filter((name) => name !== null)
+                    reviewerNames: validReviewerNames,                    
                 })
             } catch (error) {
                 console.error('Error fetching data:', error)
@@ -107,19 +105,9 @@ const DetailCreateBs = () => {
             return '-'
         }
 
-        // Helper function khusus untuk validator
-        const determineValidator = (validatorArray, actor) => {
-            const validatorIndex = validatorArray.findIndex((uid) => uid === actor)
-            if (validatorIndex !== -1 && reviewers.validatorNames && reviewers.validatorNames[validatorIndex]) {
-                return reviewers.validatorNames[validatorIndex]
-            }
-            return 'N/A'
-        }
-
         // Periksa Reviewer 1 dan Reviewer 2
         const reviewer1Array = bonSementara?.user?.reviewer1 || []
         const reviewer2Array = bonSementara?.user?.reviewer2 || []
-        const validatorArray = bonSementara?.user?.validator || []
 
         // Logika untuk kasus reviewer2 kosong
         const reviewer2Exists = Array.isArray(reviewer2Array) && reviewer2Array.some((uid) => uid)
@@ -135,24 +123,11 @@ const DetailCreateBs = () => {
                 if (status.includes('Super Admin')) {
                     return 'Super Admin'
                 }
-                if (status.includes('Validator')) {
-                    return determineValidator(validatorArray, actor)
-                }
                 if (status.includes('Reviewer 1')) {
                     return determineApprover(reviewer1Array, 0)
                 }
                 if (status.includes('Reviewer 2')) {
                     return determineApprover(reviewer2Array, reviewer1Array.length)
-                }
-                break
-            }
-
-            case 'Divalidasi': {
-                if (status.includes('Super Admin')) {
-                    return 'Super Admin'
-                }
-                if (status.includes('Validator')) {
-                    return determineValidator(validatorArray, actor)
                 }
                 break
             }
@@ -233,7 +208,6 @@ const DetailCreateBs = () => {
                     jumlahBS: bonSementara.jumlahBS,
                     aktivitas: bonSementara.aktivitas,
                     unit: userDetail.unit,
-                    validator: userDetail.validator,
                 }
             })
         } else if (bonSementara?.kategori === 'Marketing/Operasional') {
@@ -243,7 +217,6 @@ const DetailCreateBs = () => {
                     jumlahBS: bonSementara.jumlahBS,
                     aktivitas: bonSementara.aktivitas,
                     unit: userDetail.unit,
-                    validator: userDetail.validator,
                 }
             })
         } else {
@@ -381,7 +354,7 @@ const DetailCreateBs = () => {
                                     <p className="break-words">
                                         {' '}
                                         {Array.isArray(bonSementaraDetail?.user?.department) &&
-                                        bonSementaraDetail.user.department.length > 0
+                                            bonSementaraDetail.user.department.length > 0
                                             ? bonSementaraDetail.user.department.join(', ')
                                             : ''}
                                     </p>
@@ -420,9 +393,7 @@ const DetailCreateBs = () => {
                                     <p>
                                         {bonSementaraDetail?.status === 'Ditolak'
                                             ? 'Ditolak Oleh'
-                                            : bonSementaraDetail?.status === 'Divalidasi'
-                                              ? 'Divalidasi Oleh'
-                                              : 'Disetujui Oleh'}
+                                            : 'Disetujui Oleh'}
                                     </p>
                                     <p className="text-left">:</p>
                                     <p className="break-words">
@@ -441,7 +412,7 @@ const DetailCreateBs = () => {
                         <p>
                             :{' '}
                             {Array.isArray(bonSementaraDetail?.user?.department) &&
-                            bonSementaraDetail.user.department.length > 0
+                                bonSementaraDetail.user.department.length > 0
                                 ? bonSementaraDetail.user.department.join(', ')
                                 : ''}
                         </p>
@@ -460,9 +431,7 @@ const DetailCreateBs = () => {
                         <p>
                             {bonSementaraDetail?.status === 'Ditolak'
                                 ? 'Ditolak Oleh'
-                                : bonSementaraDetail?.status === 'Divalidasi'
-                                  ? 'Divalidasi Oleh'
-                                  : 'Disetujui Oleh'}
+                                : 'Disetujui Oleh'}
                         </p>
                         <p>: {getDetailedApprovalStatus(bonSementaraDetail, reviewers)}</p>
                     </div>
@@ -520,11 +489,10 @@ const DetailCreateBs = () => {
                     {userData?.uid === bonSementaraDetail?.user.uid && (
                         <button
                             onClick={handleBuatLaporan}
-                            className={`px-12 py-3 rounded ${
-                                bonSementaraDetail?.status === 'Disetujui'
-                                    ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
-                                    : 'text-gray-300 bg-transparent border border-gray-200 cursor-not-allowed'
-                            }`}
+                            className={`px-12 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui'
+                                ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
+                                : 'text-gray-300 bg-transparent border border-gray-200 cursor-not-allowed'
+                                }`}
                             disabled={bonSementaraDetail?.status !== 'Disetujui'}
                         >
                             Buat Laporan
@@ -533,11 +501,10 @@ const DetailCreateBs = () => {
 
                     {userData?.uid === bonSementaraDetail?.user.uid && (
                         <button
-                            className={`px-16 py-3 rounded ${
-                                bonSementaraDetail?.status === 'Disetujui'
-                                    ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                                    : 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                            }`}
+                            className={`px-16 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui'
+                                ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
+                                : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                }`}
                             onClick={handleGenerateAndPreviewPDF}
                             disabled={bonSementaraDetail?.status !== 'Disetujui' || isLoading}
                         >
