@@ -369,14 +369,36 @@ const BsPDF = ({ bonSementaraDetail, approvedReviewers }) => {
                             <View
                                 style={{
                                     flex: 1,
-                                    flexDirection: 'row',                                    
-                                    justifyContent: 'space-between'
+                                    justifyContent: 'center'
                                 }}
                             >
-                                <Text>Dokumen Ini Sudah Mendukung Signature Digital</Text>
-                                <Text>
-                                    Approved By {approvedReviewers.reviewer1Name}
-                                    {approvedReviewers.reviewer2Name ? ` & ${approvedReviewers.reviewer2Name}` : ''}
+                                <Text>Diajukan oleh {bonSementaraDetail.user?.nama || '-'}</Text>
+                                <Text
+                                    style={{
+                                        marginTop: '8px'
+                                    }}
+                                >
+                                    Dokumen Ini Sudah Mendukung Signature Digital
+                                </Text>
+                            </View>
+                            <View
+                                style={{
+                                    flex: 1,
+                                    flexDirection: 'column',
+                                    alignItems: 'flex-end',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <Text> </Text>
+                                <Text
+                                    style={{
+                                        marginTop: 'auto'
+                                    }}
+                                >
+                                    <Text>
+                                        Approved By {approvedReviewers.reviewer1Name}
+                                        {approvedReviewers.reviewer2Name ? ` & ${approvedReviewers.reviewer2Name}` : ''}
+                                    </Text>
                                 </Text>
                             </View>
                         </View>
