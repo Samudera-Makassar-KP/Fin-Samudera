@@ -39,7 +39,7 @@ const ReportCard = () => {
                 // Query untuk dokumen yang user sebagai reviewer1
                 const r1Query = query(
                     collection(db, collectionName),
-                    where('status', '==', 'Divalidasi'),
+                    where('status', '==', collectionName === 'bonSementara' ? 'Diajukan' : 'Divalidasi'),
                     where('user.reviewer1', 'array-contains', uid)
                 )
                 queries.push(getDocs(r1Query))

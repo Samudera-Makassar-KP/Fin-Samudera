@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, getDocs, runTransaction, query, where } from 'firebase/firestore'
+import { doc, setDoc, getDoc, addDoc, collection, runTransaction } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
@@ -17,7 +17,6 @@ const CreateBonForm = () => {
         accountNumber: '',
         unit: '',
         posisi: '',
-        validator: [],
         reviewer1: [],
         reviewer2: []
     })
@@ -69,7 +68,6 @@ const CreateBonForm = () => {
                         unit: data.unit || '',
                         posisi: data.posisi || '',
                         department: data.department || [],
-                        validator: data.validator || [],
                         reviewer1: data.reviewer1 || [],
                         reviewer2: data.reviewer2 || []
                     });
@@ -107,36 +105,6 @@ const CreateBonForm = () => {
 
     const [selectedUnit, setSelectedUnit] = useState('')
     const [isAdmin, setIsAdmin] = useState(false)
-    const [validatorOptions, setValidatorOptions] = useState([])
-    const [selectedValidator, setSelectedValidator] = useState(null)
-
-    useEffect(() => {
-        const fetchValidators = async () => {
-            try {
-                const usersRef = collection(db, 'users')
-                const q = query(usersRef, where('role', 'in', ['Validator']))
-                const querySnapshot = await getDocs(q)
-
-                const options = querySnapshot.docs.map(doc => {
-                    const userData = doc.data()
-                    return {
-                        value: userData.uid,
-                        label: userData.nama,
-                        role: userData.role
-                    }
-                })
-
-                setValidatorOptions(options)
-            } catch (error) {
-                console.error('Error fetching validators:', error)
-                toast.error('Gagal memuat daftar validator')
-            }
-        }
-
-        if (isAdmin) {
-            fetchValidators()
-        }
-    }, [isAdmin])
 
     const kategoriOptions = [
         { value: 'GA/Umum', label: 'GA/Umum' },
@@ -389,7 +357,6 @@ const CreateBonForm = () => {
             // Validasi data pengguna
             if (!userData.nama) missingFields.push('Nama')
             if (!selectedUnit?.value) missingFields.push('Unit')
-            if (isAdmin && !selectedValidator) missingFields.push('Validator')
 
             // Tentukan apakah ada lebih dari satu item bon sementara
             const multipleItems = bonSementara.length > 1
@@ -440,7 +407,6 @@ const CreateBonForm = () => {
                     unit: selectedUnit.value,
                     posisi: userData.posisi,
                     department: userData.department,
-                    validator: isAdmin ? [selectedValidator.value] : userData.validator,
                     reviewer1: userData.reviewer1,
                     reviewer2: userData.reviewer2
                 },
@@ -504,9 +470,6 @@ const CreateBonForm = () => {
             toast.success('Bon Sementara berhasil diajukan!')
 
             // Reset form setelah berhasil submit
-            if (isAdmin) {
-                setSelectedValidator(null)
-            }
             resetForm()
             setIsSubmitting(false)
             const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '00005');
@@ -526,206 +489,93 @@ const CreateBonForm = () => {
             </h2>
 
             <div className="bg-white p-6 rounded-lg shadow">
-                {isAdmin ? (
-                    // Layout untuk Role Admin
-                    <>
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={userData.nama}
-                                    disabled
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    Unit Bisnis <span className="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    options={BUSINESS_UNITS}
-                                    value={selectedUnit}
-                                    onChange={handleUnitChange}
-                                    placeholder="Pilih Unit Bisnis"
-                                    className="basic-single"
-                                    classNamePrefix="select"
-                                    styles={customStyles}
-                                    isSearchable={false}
-                                />
-                            </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                    <div>
+                        <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
+                        <input
+                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                            type="text"
+                            value={userData.nama}
+                            disabled
+                        />
+                    </div>
+                    {isAdmin ? (
+                        <div>
+                            <label className="block text-gray-700 font-medium mb-2">
+                                Unit Bisnis <span className="text-red-500">*</span>
+                            </label>
+                            <Select
+                                options={BUSINESS_UNITS}
+                                value={selectedUnit}
+                                onChange={handleUnitChange}
+                                placeholder="Pilih Unit Bisnis"
+                                className="basic-single"
+                                classNamePrefix="select"
+                                styles={customStyles}
+                                isSearchable={false}
+                            />
                         </div>
+                    ) : (
+                        <div>
+                            <label className="block text-gray-700 font-medium mb-2">
+                                Unit Bisnis
+                            </label>
+                            <input
+                                className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                type="text"
+                                value={selectedUnit?.label || ''}
+                                disabled
+                            />
+                        </div>
+                    )}
+                </div>
 
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div className='block xl:hidden'>
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    Validator <span className="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    options={validatorOptions}
-                                    value={selectedValidator}
-                                    onChange={setSelectedValidator}
-                                    placeholder="Pilih Validator..."
-                                    className="basic-single"
-                                    classNamePrefix="select"
-                                    styles={customStyles}
-                                    isSearchable={true}
-                                    isClearable={true}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={userData.accountNumber}
-                                    disabled
-                                />
-                            </div>
-                            <div className='hidden xl:block'>
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    Validator <span className="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    options={validatorOptions}
-                                    value={selectedValidator}
-                                    onChange={setSelectedValidator}
-                                    placeholder="Pilih Validator..."
-                                    className="basic-single"
-                                    classNamePrefix="select"
-                                    styles={customStyles}
-                                    isSearchable={true}
-                                    isClearable={true}
-                                />
-                            </div>
-                        </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                    <div>
+                        <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
+                        <input
+                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                            type="text"
+                            value={userData.accountNumber}
+                            disabled
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
+                        <input
+                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                            type="text"
+                            value={userData.bankName}
+                            disabled
+                        />
+                    </div>
+                </div>
 
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={userData.bankName}
-                                    disabled
-                                />
-                            </div>
-                            <div className='hidden xl:block'>
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    Kategori BS <span className="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    options={kategoriOptions}
-                                    value={selectedKategori}
-                                    onChange={handleKategoriChange}
-                                    placeholder="Pilih Kategori..."
-                                    className="w-full"
-                                    styles={customStyles}
-                                    isSearchable={false}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={formatDate(todayDate)}
-                                    disabled
-                                />
-                            </div>
-                            <div className='block xl:hidden'>
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    Kategori BS <span className="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    options={kategoriOptions}
-                                    value={selectedKategori}
-                                    onChange={handleKategoriChange}
-                                    placeholder="Pilih Kategori..."
-                                    className="w-full"
-                                    styles={customStyles}
-                                    isSearchable={false}
-                                />
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    // Layout untuk Role Non-Admin
-                    <>
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={userData.nama}
-                                    disabled
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    Unit Bisnis {isAdmin && <span className="text-red-500">*</span>}
-                                </label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={selectedUnit?.label || ''}
-                                    disabled
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={userData.accountNumber}
-                                    disabled
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={userData.bankName}
-                                    disabled
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                    type="text"
-                                    value={formatDate(todayDate)}
-                                    disabled
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-gray-700 font-medium mb-2">
-                                    Kategori BS <span className="text-red-500">*</span>
-                                </label>
-                                <Select
-                                    options={kategoriOptions}
-                                    value={selectedKategori}
-                                    onChange={handleKategoriChange}
-                                    placeholder="Pilih Kategori..."
-                                    className="w-full"
-                                    styles={customStyles}                                    
-                                    isSearchable={false}
-                                />
-                            </div>
-                        </div>
-                    </>
-                )}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                    <div>
+                        <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
+                        <input
+                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                            type="text"
+                            value={formatDate(todayDate)}
+                            disabled
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-gray-700 font-medium mb-2">
+                            Kategori BS <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                            options={kategoriOptions}
+                            value={selectedKategori}
+                            onChange={handleKategoriChange}
+                            placeholder="Pilih Kategori..."
+                            className="w-full"
+                            styles={customStyles}
+                            isSearchable={false}
+                        />
+                    </div>
+                </div>
 
                 <hr className="border-gray-300 my-6" />
 
@@ -733,8 +583,8 @@ const CreateBonForm = () => {
                     <div
                         key={index}
                         className="flex flex-col xl:flex-row gap-2 mb-2"
-                    >                        
-                        <div className="flex flex-col md:flex-row gap-2 flex-1">                            
+                    >
+                        <div className="flex flex-col md:flex-row gap-2 flex-1">
                             <div className="flex-1">
                                 {index === 0 && (
                                     <label className="block text-gray-700 font-medium mb-2">
@@ -748,7 +598,7 @@ const CreateBonForm = () => {
                                     onChange={(e) => handleInputChange(index, "nomorBS", e.target.value)}
                                 />
                             </div>
-                            
+
                             <div className="flex-1">
                                 {index === 0 && (
                                     <label className="block text-gray-700 font-medium mb-2">
@@ -763,7 +613,7 @@ const CreateBonForm = () => {
                                 />
                             </div>
                         </div>
-                        
+
                         <div className="flex-1">
                             {index === 0 && (
                                 <label className="block text-gray-700 font-medium mb-2">

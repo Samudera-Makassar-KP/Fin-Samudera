@@ -62,7 +62,7 @@ const CreateBsCheck = () => {
                     // Pending BonSementara for Super Admin
                     const pendingQ = query(
                         collection(db, 'bonSementara'),
-                        where('status', 'in', ['Diajukan', 'Divalidasi', 'Diproses'])
+                        where('status', 'in', ['Diajukan', 'Diproses'])
                     )
                     const pendingSnapshot = await getDocs(pendingQ)
                     pendingBonSementara = pendingSnapshot.docs.map((doc) => ({
@@ -74,7 +74,7 @@ const CreateBsCheck = () => {
                     // Approved BonSementara for Super Admin
                     const approvedQ = query(
                         collection(db, 'bonSementara'),
-                        where('status', 'in', ['Divalidasi', 'Diproses', 'Disetujui'])
+                        where('status', 'in', ['Diproses', 'Disetujui'])
                     )
                     const approvedSnapshot = await getDocs(approvedQ)
                     approvedBonSementara = approvedSnapshot.docs
@@ -87,7 +87,6 @@ const CreateBsCheck = () => {
                             doc.statusHistory.some((history) =>
                                 history.actor === uid &&
                                 [
-                                    'Disetujui oleh Super Admin (Pengganti Validator)',
                                     'Disetujui oleh Super Admin (Pengganti Reviewer 1)',
                                     'Disetujui oleh Super Admin (Pengganti Reviewer 2)',
                                     'Disetujui oleh Super Admin',
@@ -96,21 +95,13 @@ const CreateBsCheck = () => {
                         )
                 } else {
                     // Get all documents where user is assigned in any role
-                    const [validatorDocs, reviewer1Docs, reviewer2Docs] = await Promise.all([
-                        // Get documents where user is assigned as validator
-                        getDocs(
-                            query(
-                                collection(db, 'bonSementara'),
-                                where('user.validator', 'array-contains', uid),
-                                where('status', '==', 'Diajukan')
-                            )
-                        ),
+                    const [reviewer1Docs, reviewer2Docs] = await Promise.all([
                         // Get documents where user is assigned as reviewer1
                         getDocs(
                             query(
                                 collection(db, 'bonSementara'),
                                 where('user.reviewer1', 'array-contains', uid),
-                                where('status', '==', 'Divalidasi')
+                                where('status', '==', 'Diajukan')
                             )
                         ),
                         // Get documents where user is assigned as reviewer2
@@ -124,11 +115,6 @@ const CreateBsCheck = () => {
                     ])
 
                     pendingBonSementara = [
-                        ...validatorDocs.docs.map(doc => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data(),
-                        })),
                         ...reviewer1Docs.docs.map(doc => ({
                             id: doc.id,
                             displayId: doc.data().displayId,
@@ -148,7 +134,7 @@ const CreateBsCheck = () => {
                     // Get approved documents
                     const approvedQ = query(
                         collection(db, 'bonSementara'),
-                        where('status', 'in', ['Divalidasi', 'Diproses', 'Disetujui'])
+                        where('status', 'in', ['Diproses', 'Disetujui'])
                     )
                     const approvedSnapshot = await getDocs(approvedQ)
                     approvedBonSementara = approvedSnapshot.docs
@@ -158,15 +144,13 @@ const CreateBsCheck = () => {
                             ...doc.data(),
                         }))
                         .filter((doc) => {
-                            const isAssignedAsValidator = doc.user.validator?.includes(uid)
                             const isAssignedAsReviewer1 = doc.user.reviewer1?.includes(uid)
                             const isAssignedAsReviewer2 = doc.user.reviewer2?.includes(uid)
-                            
+
                             return doc.statusHistory.some(
                                 (history) =>
                                     history.actor === uid &&
                                     (
-                                        (isAssignedAsValidator && history.status === 'Disetujui oleh Validator') ||
                                         (isAssignedAsReviewer1 && history.status === 'Disetujui oleh Reviewer 1') ||
                                         (isAssignedAsReviewer2 && history.status === 'Disetujui oleh Reviewer 2')
                                     )
@@ -238,12 +222,10 @@ const CreateBsCheck = () => {
                     const userRole = localStorage.getItem('userRole')
                     const bonSementaraRef = doc(db, 'bonSementara', item.id)
 
-                    // Cek apakah UID termasuk dalam super admin, validator, reviewer1, atau reviewer2
+                    // Cek apakah UID termasuk dalam super admin, reviewer1, atau reviewer2
                     const isSuperAdmin = userRole === 'Super Admin'
-                    const isValidator = item.user.validator.includes(uid)
                     const isReviewer1 = item.user.reviewer1.includes(uid)
                     const isReviewer2 = item.user.reviewer2.includes(uid)
-                    const isValidatorAndReviewer1 = isValidator && isReviewer1
 
                     let updateData = {}
                     const newStatusHistory = {
@@ -254,13 +236,6 @@ const CreateBsCheck = () => {
                     if (isSuperAdmin) {
                         // Super Admin approval logic
                         if (item.status === 'Diajukan') {
-                            newStatusHistory.status = 'Disetujui oleh Super Admin (Pengganti Validator)'
-                            updateData = {
-                                status: 'Divalidasi',
-                                approvedByValidator: false,
-                                approvedBySuperAdmin: true,
-                            }
-                        } else if (item.status === 'Divalidasi') {
                             newStatusHistory.status = 'Disetujui oleh Super Admin (Pengganti Reviewer 1)'
                             updateData = {
                                 status: 'Diproses',
@@ -275,23 +250,7 @@ const CreateBsCheck = () => {
                                 approvedBySuperAdmin: true,
                             }
                         }
-                    } else if (item.status === 'Diajukan') {
-                        if (isValidatorAndReviewer1) {
-                            newStatusHistory.status = 'Disetujui oleh Reviewer 1'
-                            updateData = {
-                                status: 'Diproses',
-                                approvedByValidator: true,
-                                approvedByReviewer1: true,
-                                approvedByReviewer1Status: 'reviewer',
-                            }
-                        } else if (isValidator) {
-                            newStatusHistory.status = 'Disetujui oleh Validator'
-                            updateData = {
-                                status: 'Divalidasi',
-                                approvedByValidator: true,
-                            }
-                        }
-                    } else if (item.status === 'Divalidasi' && isReviewer1) {
+                    } else if (item.status === 'Diajukan' && isReviewer1) {
                         newStatusHistory.status = 'Disetujui oleh Reviewer 1'
                         updateData = {
                             status: 'Diproses',
@@ -374,29 +333,16 @@ const CreateBsCheck = () => {
                     const userRole = localStorage.getItem('userRole')
                     const bonSementaraRef = doc(db, 'bonSementara', item.id)
 
-                    // Cek apakah UID termasuk dalam super admin, validator, reviewer1, atau reviewer2
+                    // Cek apakah UID termasuk dalam super admin, reviewer1, atau reviewer2
                     const isSuperAdmin = userRole === 'Super Admin'
-                    const isValidator = item.user.validator.includes(uid)
                     const isReviewer1 = item.user.reviewer1.includes(uid)
                     const isReviewer2 = item.user.reviewer2.includes(uid)
-                    const isValidatorAndReviewer1 = isValidator && isReviewer1
 
                     let updateData = {}
 
                     if (isSuperAdmin) {
                         // Super Admin rejection logic
-                        if (!item.approvedByValidatorStatus) {
-                            updateData = {
-                                status: 'Ditolak',
-                                approvedByValidatorStatus: 'superadmin',
-                                rejectedBySuperAdmin: true,
-                                statusHistory: arrayUnion({
-                                    status: 'Ditolak oleh Super Admin (Pengganti Validator)',
-                                    timestamp: new Date().toISOString(),
-                                    actor: uid
-                                })
-                            }
-                        } else if (!item.approvedByReviewer1Status) {
+                        if (!item.approvedByReviewer1Status) {
                             updateData = {
                                 status: 'Ditolak',
                                 approvedByReviewer1Status: 'superadmin',
@@ -417,33 +363,6 @@ const CreateBsCheck = () => {
                                 rejectedBySuperAdmin: true,
                                 statusHistory: arrayUnion({
                                     status: 'Ditolak oleh Super Admin (Pengganti Reviewer 2)',
-                                    timestamp: new Date().toISOString(),
-                                    actor: uid
-                                })
-                            }
-                        }
-                    } else if (!item.approvedByValidatorStatus) {
-                        if (isValidatorAndReviewer1) {
-                            // User is both validator and reviewer1, reject with both roles
-                            updateData = {
-                                status: 'Ditolak',
-                                approvedByValidatorStatus: 'validator',
-                                approvedByReviewer1Status: 'reviewer',
-                                statusHistory: arrayUnion(
-                                    {
-                                        status: 'Ditolak oleh Reviewer 1',
-                                        timestamp: new Date().toISOString(),
-                                        actor: uid
-                                    }
-                                )
-                            }
-                        } else if (isValidator) {
-                            // Regular validator rejection
-                            updateData = {
-                                status: 'Ditolak',
-                                approvedByValidatorStatus: 'validator',
-                                statusHistory: arrayUnion({
-                                    status: 'Ditolak oleh Validator',
                                     timestamp: new Date().toISOString(),
                                     actor: uid
                                 })
@@ -610,21 +529,19 @@ const CreateBsCheck = () => {
             {/* Tab Navigation */}
             <div className="flex mb-4 space-x-2 justify-center md:justify-end text-sm">
                 <button
-                    className={`px-4 py-2 rounded-full md:w-auto w-full ${
-                        activeTab === 'pending'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    className={`px-4 py-2 rounded-full md:w-auto w-full ${activeTab === 'pending'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
                     onClick={() => setActiveTab('pending')}
                 >
                     Perlu Ditanggapi
                 </button>
                 <button
-                    className={`px-4 py-2 rounded-full md:w-auto w-full ${
-                        activeTab === 'approved'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
+                    className={`px-4 py-2 rounded-full md:w-auto w-full ${activeTab === 'approved'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
                     onClick={() => setActiveTab('approved')}
                 >
                     Riwayat Persetujuan
@@ -691,19 +608,14 @@ const CreateBsCheck = () => {
                                                         <td className="p-2 border text-center">
                                                             <span
                                                                 className={`px-4 py-1 rounded-full text-xs font-medium 
-                                                    ${
-                                                        item.status === 'Diajukan'
-                                                            ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
-                                                            : item.status === 'Disetujui'
-                                                              ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
-                                                              : item.status === 'Diproses'
-                                                                ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
-                                                                : item.status === 'Ditolak'
-                                                                  ? 'bg-red-200 text-red-800 border-[1px] border-red-600'
-                                                                  : item.status === 'Divalidasi'
-                                                                    ? 'bg-purple-200 text-purple-800 border-[1px] border-purple-600'
-                                                                    : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
-                                                    }`}
+                                                    ${item.status === 'Diajukan'
+                                                                        ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
+                                                                        : item.status === 'Disetujui'
+                                                                            ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
+                                                                            : item.status === 'Diproses'
+                                                                                ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
+                                                                                : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
+                                                                    }`}
                                                             >
                                                                 {item.status || 'Tidak Diketahui'}
                                                             </span>
