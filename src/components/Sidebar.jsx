@@ -177,7 +177,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                             Ajukan Bon Sementara
                                         </NavLink>
                                     </li>
-                                    {(role === 'Reviewer' || role === 'Validator') && (
+                                    {(role === 'Reviewer') && (
                                         <li>
                                             <NavLink
                                                 to="/create-bs/cek-pengajuan"
