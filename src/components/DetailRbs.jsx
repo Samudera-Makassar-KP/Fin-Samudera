@@ -408,7 +408,7 @@ const DetailRbs = () => {
                             {/* First column */}
                             <div className="space-y-1 flex-1">
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
-                                    <p>ID</p>
+                                    <p>Nomor Dokumen</p>
                                     <p className="text-left">:</p>
                                     <p className="break-all">{reimbursementDetail?.displayId ?? 'N/A'}</p>
                                 </div>
@@ -482,7 +482,7 @@ const DetailRbs = () => {
 
                     {/* Desktop layout  */}
                     <div className="hidden xl:grid grid-cols-[auto_1fr] gap-x-16 text-base">
-                        <p>ID</p>
+                        <p>Nomor Dokumen</p>
                         <p>: {reimbursementDetail?.displayId ?? 'N/A'}</p>
                         <p>Nama Lengkap</p>
                         <p>: {reimbursementDetail?.user?.nama ?? 'N/A'}</p>

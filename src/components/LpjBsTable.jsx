@@ -320,7 +320,7 @@ const LpjBsTable = () => {
                                     <thead>
                                         <tr className="bg-gray-100 text-left">
                                             <th className="px-2 py-2 border text-center w-auto">No.</th>
-                                            <th className="px-4 py-2 border">ID</th>
+                                            <th className="px-4 py-2 border">Nomor Dokumen</th>
                                             <th className="px-4 py-2 border">Kategori LPJ BS</th>
                                             <th className="px-4 py-2 border">Nomor BS</th>
                                             <th className="px-4 py-2 border">Jumlah BS</th>

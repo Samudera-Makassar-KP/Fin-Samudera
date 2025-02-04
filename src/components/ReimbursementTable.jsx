@@ -315,7 +315,7 @@ const ReimbursementTable = () => {
                                     <thead>
                                         <tr className="bg-gray-100 text-left">
                                             <th className="px-2 py-2 border text-center w-auto">No.</th>
-                                            <th className="px-4 py-2 border">ID</th>
+                                            <th className="px-4 py-2 border">Nomor Dokumen</th>
                                             <th className="px-4 py-2 border">Kategori Reimbursement</th>
                                             <th className="px-4 py-2 border">Jumlah</th>
                                             <th className="px-4 py-2 border">Tanggal Pengajuan</th>

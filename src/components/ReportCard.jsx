@@ -1,13 +1,33 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { db } from '../firebaseConfig'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 
 const ReportCard = () => {
+    const navigate = useNavigate()
     const [reimbursementCount, setReimbursementCount] = useState(0)
     const [bonSementaraCount, setBonSementaraCount] = useState(0)
     const [lpjCount, setLpjCount] = useState(0)
     const [userRole, setUserRole] = useState('')
     const [isLoading, setIsLoading] = useState(true)
+
+    const handleReimbursementClick = () => {
+        if (reimbursementCount > 0) {
+            navigate('/reimbursement/cek-pengajuan')
+        }
+    }
+
+    const handleBonSementaraClick = () => {
+        if (bonSementaraCount > 0) {
+            navigate('/create-bs/cek-pengajuan')
+        }
+    }
+
+    const handleLpjClick = () => {
+        if (lpjCount > 0) {
+            navigate('/lpj/cek-pengajuan')
+        }
+    }
 
     useEffect(() => {
         const role = localStorage.getItem('userRole')
@@ -162,7 +182,11 @@ const ReportCard = () => {
                 {userRole === 'Reviewer' ? (
                     // Desktop layout untuk Reviewer
                     <>
-                        <div className="bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg">
+                        <div
+                            onClick={handleReimbursementClick}
+                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
+                                ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        >
                             <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-6 rounded-full">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -186,7 +210,11 @@ const ReportCard = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg">
+                        <div
+                            onClick={handleBonSementaraClick}
+                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
+                                ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        >
                             <div className="bg-gradient-to-r from-teal-400 to-green-500 p-6 rounded-full">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -210,7 +238,11 @@ const ReportCard = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg">
+                        <div
+                            onClick={handleLpjClick}
+                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
+                                ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        >
                             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 rounded-full">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -237,7 +269,11 @@ const ReportCard = () => {
                 ) : (
                     // Desktop Non-Reviewer Layout (follows Reviewer layout style but with flex-row)
                     <>
-                        <div className="bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1">
+                        <div
+                            onClick={handleReimbursementClick}
+                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1 
+                                ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        >
                             <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-6 rounded-full">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -261,7 +297,11 @@ const ReportCard = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1">
+                        <div
+                            onClick={handleLpjClick}
+                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1 
+                                ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        >
                             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 rounded-full">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -291,7 +331,11 @@ const ReportCard = () => {
             {/* Laptop View (1024) */}
             <div className="hidden lg:block xl:hidden">
                 <div className={`flex flex-row gap-4 ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}>
-                    <div className="flex-1 bg-white p-4 rounded-lg shadow-sm">
+                    <div
+                        onClick={handleReimbursementClick}
+                        className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
+                            ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                    >
                         <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-full w-fit mb-2">
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -316,7 +360,11 @@ const ReportCard = () => {
                     </div>
 
                     {userRole === 'Reviewer' && (
-                        <div className="flex-1 bg-white p-4 rounded-lg shadow-sm">
+                        <div
+                            onClick={handleBonSementaraClick}
+                            className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
+                            ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        >
                             <div className="bg-gradient-to-r from-teal-400 to-green-500 p-4 rounded-full w-fit mb-2">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
@@ -341,7 +389,11 @@ const ReportCard = () => {
                         </div>
                     )}
 
-                    <div className="flex-1 bg-white p-4 rounded-lg shadow-sm">
+                    <div
+                        onClick={handleLpjClick}
+                        className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
+                            ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                    >
                         <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-4 rounded-full w-fit mb-2">
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -371,7 +423,11 @@ const ReportCard = () => {
             <div
                 className={`hidden md:flex md:flex-row md:gap-4 lg:hidden ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}
             >
-                <div className="flex-1 bg-white p-4 rounded-lg shadow-sm">
+                <div
+                    onClick={handleReimbursementClick}
+                    className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
+                        ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                >
                     <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-full w-fit mb-2">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -396,7 +452,11 @@ const ReportCard = () => {
                 </div>
 
                 {userRole === 'Reviewer' && (
-                    <div className="flex-1 bg-white p-4 rounded-lg shadow-sm">
+                    <div
+                        onClick={handleBonSementaraClick}
+                        className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
+                        ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                    >
                         <div className="bg-gradient-to-r from-teal-400 to-green-500 p-4 rounded-full w-fit mb-2">
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -421,7 +481,11 @@ const ReportCard = () => {
                     </div>
                 )}
 
-                <div className="flex-1 bg-white p-4 rounded-lg shadow-sm">
+                <div
+                    onClick={handleLpjClick}
+                    className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
+                        ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                >
                     <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-4 rounded-full w-fit mb-2">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -450,7 +514,11 @@ const ReportCard = () => {
                 <p className="text-xl font-medium mb-2">Pengajuan Perlu Ditanggapi</p>
                 <div className="flex flex-col">
                     {/* Reimbursement Section */}
-                    <div className="flex items-center justify-between w-full bg-white p-3 rounded-lg">
+                    <div
+                        onClick={handleReimbursementClick}
+                        className={`flex items-center justify-between w-full bg-white p-3 rounded-lg 
+                            ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                    >
                         <div className="flex items-center gap-3">
                             <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-full">
                                 <svg
@@ -481,7 +549,11 @@ const ReportCard = () => {
 
                     {/* Nomor Bon Section */}
                     {userRole === 'Reviewer' && (
-                        <div className="flex items-center justify-between w-full bg-white p-3 rounded-lg">
+                        <div
+                            onClick={handleBonSementaraClick}
+                            className={`flex items-center justify-between w-full bg-white p-3 rounded-lg 
+                            ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        >
                             <div className="flex items-center gap-3">
                                 <div className="bg-gradient-to-r from-teal-400 to-green-500 p-3 rounded-full">
                                     <svg
@@ -512,7 +584,11 @@ const ReportCard = () => {
                     <hr className="border-gray-150" />
 
                     {/* LPJ Bon Sementara Section */}
-                    <div className="flex items-center justify-between w-full bg-white p-3 rounded-lg">
+                    <div
+                        onClick={handleLpjClick}
+                        className={`flex items-center justify-between w-full bg-white p-3 rounded-lg 
+                            ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                    >
                         <div className="flex items-center gap-3">
                             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-3 rounded-full">
                                 <svg

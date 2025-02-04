@@ -229,7 +229,7 @@ const LpjBsCheck = () => {
     const handleApprove = (item) => {
         openModal({
             title: 'Konfirmasi Approve',
-            message: `Apakah Anda yakin ingin menyetujui LPJ Bon Sementara dengan ID ${item.displayId}?`,
+            message: `Apakah Anda yakin ingin menyetujui LPJ Bon Sementara dengan Nomor Dokumen ${item.displayId}?`,
             onConfirm: async () => {
                 try {
                     const uid = localStorage.getItem('userUid')
@@ -365,7 +365,7 @@ const LpjBsCheck = () => {
     const handleReject = (item) => {
         openModal({
             title: 'Konfirmasi Reject',
-            message: `Apakah Anda yakin ingin menolak LPJ Bon Sementara dengan ID ${item.displayId}?`,
+            message: `Apakah Anda yakin ingin menolak LPJ Bon Sementara dengan Nomor Dokumen ${item.displayId}?`,
             onConfirm: async () => {
                 try {
                     const uid = localStorage.getItem('userUid')
@@ -653,7 +653,7 @@ const LpjBsCheck = () => {
                                             <thead>
                                                 <tr className="bg-gray-100 text-left">
                                                     <th className="p-2 border text-center w-auto">No.</th>
-                                                    <th className="px-4 py-2 border">ID</th>
+                                                    <th className="px-4 py-2 border">Nomor Dokumen</th>
                                                     <th className="px-4 py-2 border">Nama</th>
                                                     <th className="px-4 py-2 border">Kategori LPJ BS</th>
                                                     <th className="px-4 py-2 border">Nomor BS</th>
@@ -800,7 +800,7 @@ const LpjBsCheck = () => {
                                             <thead>
                                                 <tr className="bg-gray-100 text-left">
                                                     <th className="p-2 border text-center w-auto">No.</th>
-                                                    <th className="px-4 py-2 border">ID</th>
+                                                    <th className="px-4 py-2 border">Nomor Dokumen</th>
                                                     <th className="px-4 py-2 border">Nama</th>
                                                     <th className="px-4 py-2 border">Kategori LPJ</th>
                                                     <th className="px-4 py-2 border">Nomor BS</th>
