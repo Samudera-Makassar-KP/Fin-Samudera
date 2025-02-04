@@ -826,11 +826,12 @@ const FormLpjUmum = () => {
                                 {index === 0 && (
                                     <label className="hidden xl:block text-gray-700 font-medium mb-2">Keterangan</label>
                                 )}
-                                <input
+                                <textarea
                                     type="text"
                                     value={item.keterangan}
+                                    style={{scrollbarWidth: 'none'}}
                                     onChange={(e) => handleInputChange(index, 'keterangan', e.target.value)}
-                                    className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
+                                    className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2 resize-none"
                                 />
                             </div>
 
@@ -853,7 +854,7 @@ const FormLpjUmum = () => {
                                 />
                             </div>
 
-                            <div className="flex items-end my-2 xl:my-0">
+                            <div className="flex items-end my-2 xl:pb-1.5 xl:my-0">
                                 <button
                                     className="w-full h-10 px-4 py-2 bg-transparent text-red-500 border border-red-500 rounded-md hover:bg-red-100"
                                     onClick={() => handleRemoveForm(index)}

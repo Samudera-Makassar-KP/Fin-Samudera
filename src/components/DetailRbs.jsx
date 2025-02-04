@@ -270,7 +270,12 @@ const DetailRbs = () => {
             case 'item':
                 return item[column.key] || 'N/A'
             case 'keterangan':
-                return item[column.key] || '-'
+                if (!item.keterangan) return ''
+                return (
+                    <div className="whitespace-pre-wrap">
+                        {item.keterangan}
+                    </div>
+                )
             default:
                 return item[column.key] || 'N/A'
         }

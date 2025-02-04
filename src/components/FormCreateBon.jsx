@@ -620,8 +620,9 @@ const CreateBonForm = () => {
                                     Aktivitas (Keterangan) <span className="text-red-500">*</span>
                                 </label>
                             )}
-                            <input
-                                className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
+                            <textarea
+                                className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2 resize-none"
+                                style={{scrollbarWidth: 'none'}}  
                                 type="text"
                                 value={bon.aktivitas}
                                 onChange={(e) => handleInputChange(index, "aktivitas", e.target.value)}

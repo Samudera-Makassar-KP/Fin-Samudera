@@ -781,8 +781,9 @@ const RbsOperasionalForm = () => {
                                 {index === 0 && (
                                     <label className="hidden xl:block text-gray-700 font-medium mb-2">Keterangan</label>
                                 )}
-                                <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                <textarea
+                                    className="w-full h-10 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none resize-none"
+                                    style={{scrollbarWidth: 'none'}}
                                     type="text"
                                     value={reimbursement.keterangan}
                                     onChange={(e) => handleInputChange(index, 'keterangan', e.target.value)}
@@ -808,7 +809,7 @@ const RbsOperasionalForm = () => {
                                 />
                             </div>
 
-                            <div className="flex items-end my-2 xl:my-0">
+                            <div className="flex items-end my-2 xl:pb-1.5 xl:my-0">
                                 <button
                                     className="w-full h-10 px-4 py-2 bg-transparent text-red-500 border border-red-500 rounded-md hover:bg-red-100"
                                     onClick={() => handleRemoveForm(index)}

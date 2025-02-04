@@ -557,7 +557,7 @@ const DetailLpj = () => {
                                         <td className="px-4 py-2 border min-w-32">{item.namaItem}</td>
                                         <td className="px-4 py-2 border">Rp{item.biaya.toLocaleString('id-ID')}</td>
                                         <td className="px-4 py-2 border w-24">{item.jumlah}</td>
-                                        <td className="px-4 py-2 border">{item.keterangan ?? '-'}</td>
+                                        <td className="px-4 py-2 border whitespace-pre-wrap">{item.keterangan ?? '-'}</td>
                                         <td className="px-4 py-2 border">
                                             Rp{item.jumlahBiaya.toLocaleString('id-ID')}
                                         </td>
