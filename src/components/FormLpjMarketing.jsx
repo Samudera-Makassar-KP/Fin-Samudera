@@ -984,11 +984,12 @@ const FormLpjMarketing = () => {
                                 {index === 0 && (
                                     <label className="hidden xl:block text-gray-700 font-medium mb-2">Keterangan</label>
                                 )}
-                                <input
+                                <textarea
                                     type="text"
                                     value={item.keterangan}
                                     onChange={(e) => handleInputChange(index, 'keterangan', e.target.value)}
-                                    className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
+                                    className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2 resize-none"
+                                    style={{scrollbarWidth: 'none'}}
                                 />
                             </div>
 
@@ -1011,7 +1012,13 @@ const FormLpjMarketing = () => {
                                 />
                             </div>
 
-                            <div className="flex items-end my-2 xl:my-0">
+                            <div className="flex-1 items-end my-2 xl:max-w-20 xl:my-0">
+                                {(index === 0 || window.innerWidth < 1280) && (
+                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden"> </label>
+                                )}
+                                {index === 0 && (
+                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">&nbsp;</label>
+                                )}
                                 <button
                                     className="w-full h-10 px-4 py-2 bg-transparent text-red-500 border border-red-500 rounded-md hover:bg-red-100"
                                     onClick={() => handleRemoveForm(index)}

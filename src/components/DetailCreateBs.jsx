@@ -455,7 +455,7 @@ const DetailCreateBs = () => {
                                     <tr key={index}>
                                         <td className="px-4 py-2 border">{item.nomorBS}</td>
                                         <td className="px-4 py-2 border">{item.kategori}</td>
-                                        <td className="px-4 py-2 border">{item.aktivitas}</td>
+                                        <td className="px-4 py-2 border whitespace-pre-wrap">{item.aktivitas}</td>
                                         <td className="px-4 py-2 border">Rp{item.jumlahBS.toLocaleString('id-ID')}</td>
                                         <td className="px-4 py-2 border">
                                             {formatDate(bonSementaraDetail.tanggalPengajuan) ?? 'N/A'}
