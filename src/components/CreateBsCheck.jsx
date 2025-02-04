@@ -215,7 +215,7 @@ const CreateBsCheck = () => {
     const handleApprove = (item) => {
         openModal({
             title: 'Konfirmasi Approve',
-            message: `Apakah Anda yakin ingin menyetujui bon sementara dengan ID ${item.displayId}?`,
+            message: `Apakah Anda yakin ingin menyetujui bon sementara dengan Nomor BS ${item.displayId}?`,
             onConfirm: async () => {
                 try {
                     const uid = localStorage.getItem('userUid')
@@ -326,7 +326,7 @@ const CreateBsCheck = () => {
     const handleReject = (item) => {
         openModal({
             title: 'Konfirmasi Reject',
-            message: `Apakah Anda yakin ingin menolak Bon Sementara dengan ID ${item.displayId}?`,
+            message: `Apakah Anda yakin ingin menolak Bon Sementara dengan Nomor BS ${item.displayId}?`,
             onConfirm: async () => {
                 try {
                     const uid = localStorage.getItem('userUid')

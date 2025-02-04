@@ -309,7 +309,10 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                 {/* Table */}
                 <View style={styles.tableContainer}>
                     {/* REIMBURSEMENT Row */}
-                    <View style={[styles.tableRow]}>
+                    <View style={[styles.tableRow, { position: 'relative' }]}>                        
+                        <Text style={{ position: 'absolute', left: 4, top: 4, fontSize: 10 }}>
+                            {reimbursementDetail.displayId || '-'}
+                        </Text>
                         <View
                             style={[
                                 styles.tableCell,
@@ -325,6 +328,7 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                             <Text>REIMBURSEMENT</Text>
                         </View>
                     </View>
+
 
                     {/* Header Row */}
                     <View style={[styles.tableRow, styles.tableHeader]}>
@@ -372,13 +376,13 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                                 <Text style={{ width: 100 }}>
                                     {item.tanggal
                                         ? new Date(item.tanggal)
-                                              .toLocaleDateString('en-GB', {
-                                                  day: '2-digit',
-                                                  month: 'short',
-                                                  year: '2-digit'
-                                              })
-                                              .replace(/\./g, '')
-                                              .replace(/\s/g, '-')
+                                            .toLocaleDateString('en-GB', {
+                                                day: '2-digit',
+                                                month: 'short',
+                                                year: '2-digit'
+                                            })
+                                            .replace(/\./g, '')
+                                            .replace(/\s/g, '-')
                                         : '-'}
                                 </Text>
                                 <Text style={{ marginLeft: 12 }}>{item.jenis || '-'}</Text>
@@ -524,6 +528,6 @@ const generateReimbursementPDF = async (reimbursementDetail) => {
     }
 }
 
-;<ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} closeOnClick pauseOnHover />
+    ; <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} closeOnClick pauseOnHover />
 
 export { ReimbursementPDF, generateReimbursementPDF }

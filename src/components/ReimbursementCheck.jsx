@@ -229,7 +229,7 @@ const ReimbursementCheck = () => {
     const handleApprove = (item) => {
         openModal({
             title: 'Konfirmasi Approve',
-            message: `Apakah Anda yakin ingin menyetujui reimbursement dengan ID ${item.displayId}?`,
+            message: `Apakah Anda yakin ingin menyetujui reimbursement dengan Nomor Dokumen ${item.displayId}?`,
             onConfirm: async () => {
                 try {
                     const uid = localStorage.getItem('userUid')
@@ -367,7 +367,7 @@ const ReimbursementCheck = () => {
     const handleReject = (item) => {
         openModal({
             title: 'Konfirmasi Reject',
-            message: `Apakah Anda yakin ingin menolak reimbursement dengan ID ${item.displayId}?`,
+            message: `Apakah Anda yakin ingin menolak reimbursement dengan Nomor Dokumen ${item.displayId}?`,
             onConfirm: async () => {
                 try {
                     const uid = localStorage.getItem('userUid')
@@ -655,7 +655,7 @@ const ReimbursementCheck = () => {
                                             <thead>
                                                 <tr className="bg-gray-100 text-left">
                                                     <th className="p-2 border text-center w-auto">No.</th>
-                                                    <th className="px-4 py-2 border">ID</th>
+                                                    <th className="px-4 py-2 border">Nomor Dokumen</th>
                                                     <th className="px-4 py-2 border">Nama</th>
                                                     <th className="px-4 py-2 border">Kategori Reimbursement</th>
                                                     <th className="px-4 py-2 border">Jumlah</th>
@@ -798,7 +798,7 @@ const ReimbursementCheck = () => {
                                             <thead>
                                                 <tr className="bg-gray-100 text-left">
                                                     <th className="p-2 border text-center w-auto">No.</th>
-                                                    <th className="px-4 py-2 border">ID</th>
+                                                    <th className="px-4 py-2 border">Nomor Dokumen</th>
                                                     <th className="px-4 py-2 border">Nama</th>
                                                     <th className="px-4 py-2 border">Kategori Reimbursement</th>
                                                     <th className="px-4 py-2 border">Jumlah</th>
