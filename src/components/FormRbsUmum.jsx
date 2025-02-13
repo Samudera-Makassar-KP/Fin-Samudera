@@ -51,8 +51,13 @@ const RbsUmumForm = () => {
 
     const [selectedUnit, setSelectedUnit] = useState('')
     const [isAdmin, setIsAdmin] = useState(false)
+
     const [validatorOptions, setValidatorOptions] = useState([])
     const [selectedValidator, setSelectedValidator] = useState(null)
+
+    const [reviewerOptions, setReviewerOptions] = useState([])
+    const [selectedReviewer1, setSelectedReviewer1] = useState(null)
+    const [selectedReviewer2, setSelectedReviewer2] = useState(null)
 
     useEffect(() => {
         const fetchValidators = async () => {
@@ -79,6 +84,34 @@ const RbsUmumForm = () => {
 
         if (isAdmin) {
             fetchValidators()
+        }
+    }, [isAdmin])
+
+    useEffect(() => {
+        const fetchReviewer = async () => {
+            try {
+                const usersRef = collection(db, 'users')
+                const q = query(usersRef, where('role', 'in', ['Reviewer']))
+                const querySnapshot = await getDocs(q)
+
+                const options = querySnapshot.docs.map((doc) => {
+                    const userData = doc.data()
+                    return {
+                        value: userData.uid,
+                        label: userData.nama,
+                        role: userData.role
+                    }
+                })
+
+                setReviewerOptions(options)
+            } catch (error) {
+                console.error('Error fetching validators:', error)
+                toast.error('Gagal memuat daftar reviewer')
+            }
+        }
+
+        if (isAdmin) {
+            fetchReviewer()
         }
     }, [isAdmin])
 
@@ -173,6 +206,13 @@ const RbsUmumForm = () => {
         // Reset attachment state
         setAttachmentFile(null)
         setAttachmentFileName('')
+
+        // Reset all selector states for admin
+        if (isAdmin) {
+            setSelectedValidator(null)
+            setSelectedReviewer1(null)
+            setSelectedReviewer2(null)
+        }
     }
 
     const formatRupiah = (number) => {
@@ -321,13 +361,22 @@ const RbsUmumForm = () => {
         try {
             setIsSubmitting(true)
 
+            // Validasi reviewer1 dan reviewer2 tidak boleh sama
+            if (selectedReviewer1 && selectedReviewer2 && selectedReviewer1.value === selectedReviewer2.value) {
+                toast.warning('Reviewer 1 dan Reviewer 2 tidak boleh sama')
+                setIsSubmitting(false)
+                return
+            }
+
             // Validasi form dengan pesan spesifik
             const missingFields = []
 
             // Validasi data pengguna
             if (!userData.nama) missingFields.push('Nama')
-            if (!selectedUnit?.value) missingFields.push('Unit')
+            if (!selectedUnit?.value) missingFields.push('Unit Bisnis')
             if (isAdmin && !selectedValidator) missingFields.push('Validator')
+            if (isAdmin && !selectedReviewer1) missingFields.push('Reviewer 1')
+            if (isAdmin && !selectedReviewer2) missingFields.push('Reviewer 2')
 
             // Tentukan apakah ada lebih dari satu item reimbursement
             const multipleItems = reimbursements.length > 1
@@ -368,7 +417,7 @@ const RbsUmumForm = () => {
                     )
                 })
 
-                setIsSubmitting(false);
+                setIsSubmitting(false)
                 return
             }
 
@@ -400,8 +449,8 @@ const RbsUmumForm = () => {
                     unitCode: getUnitCode(selectedUnit.value),
                     department: userData.department,
                     validator: isAdmin ? [selectedValidator.value] : userData.validator,
-                    reviewer1: userData.reviewer1,
-                    reviewer2: userData.reviewer2
+                    reviewer1: isAdmin ? [selectedReviewer1.value] : userData.reviewer1,
+                    reviewer2: isAdmin ? [selectedReviewer2.value] : userData.reviewer2
                 },
                 reimbursements: reimbursements.map((item) => ({
                     biaya: parseRupiah(item.biaya),
@@ -409,7 +458,7 @@ const RbsUmumForm = () => {
                     keterangan: item.keterangan,
                     tanggal: item.tanggal,
                     isLainnya: item.isLainnya,
-                    jenis: item.isLainnya ? item.jenisLain : item.jenis.value,
+                    jenis: item.isLainnya ? item.jenisLain : item.jenis.value
                 })),
                 displayId: displayId,
                 kategori: 'GA/Umum',
@@ -437,7 +486,7 @@ const RbsUmumForm = () => {
             const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
 
             // Update dengan ID dokumen
-            await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id });
+            await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
 
             // Reset unit bisnis ke unit awal untuk admin
             if (isAdmin) {
@@ -451,11 +500,8 @@ const RbsUmumForm = () => {
             toast.success('Reimbursement GA/Umum berhasil diajukan!')
 
             // Reset form setelah berhasil submit
-            if (isAdmin) {
-                setSelectedValidator(null)
-            }
             resetForm()
-            setIsSubmitting(false);
+            setIsSubmitting(false)
         } catch (error) {
             console.error('Error submitting reimbursement:', error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
@@ -534,7 +580,7 @@ const RbsUmumForm = () => {
                                     disabled
                                 />
                             </div>
-                            <div>
+                            <div className='block xl:hidden'>
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Unit Bisnis <span className="text-red-500">*</span>
                                 </label>
@@ -549,6 +595,22 @@ const RbsUmumForm = () => {
                                     isSearchable={false}
                                 />
                             </div>
+                            <div className='hidden xl:block'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Validator <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={validatorOptions}
+                                    value={selectedValidator}
+                                    onChange={setSelectedValidator}
+                                    placeholder="Pilih Validator"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                />
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
@@ -560,7 +622,39 @@ const RbsUmumForm = () => {
                                     options={validatorOptions}
                                     value={selectedValidator}
                                     onChange={setSelectedValidator}
-                                    placeholder="Pilih Validator..."
+                                    placeholder="Pilih Validator"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                />
+                            </div>
+                            <div className='block xl:hidden'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 11111 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer1}
+                                    onChange={setSelectedReviewer1}
+                                    placeholder="Pilih Reviewer 1"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                />
+                            </div>
+                            <div className='block xl:hidden'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 222222 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer2}
+                                    onChange={setSelectedReviewer2}
+                                    placeholder="Pilih Reviewer 2"
                                     className="basic-single"
                                     classNamePrefix="select"
                                     styles={customStyles}
@@ -579,13 +673,13 @@ const RbsUmumForm = () => {
                             </div>
                             <div className='hidden xl:block'>
                                 <label className="block text-gray-700 font-medium mb-2">
-                                    Validator <span className="text-red-500">*</span>
+                                    Reviewer 1 <span className="text-red-500">*</span>
                                 </label>
                                 <Select
-                                    options={validatorOptions}
-                                    value={selectedValidator}
-                                    onChange={setSelectedValidator}
-                                    placeholder="Pilih Validator..."
+                                    options={reviewerOptions}
+                                    value={selectedReviewer1}
+                                    onChange={setSelectedReviewer1}
+                                    placeholder="Pilih Reviewer 1"
                                     className="basic-single"
                                     classNamePrefix="select"
                                     styles={customStyles}
@@ -607,9 +701,19 @@ const RbsUmumForm = () => {
                             </div>
                             <div className='hidden xl:block'>
                                 <label className="block text-gray-700 font-medium mb-2">
-                                    Lampiran <span className="text-red-500">*</span>
+                                    Reviewer 2 <span className="text-red-500">*</span>
                                 </label>
-                                {renderFileUpload()}
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer2}
+                                    onChange={setSelectedReviewer2}
+                                    placeholder="Pilih Reviewer 2"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                />
                             </div>
                         </div>
 
@@ -623,11 +727,35 @@ const RbsUmumForm = () => {
                                     disabled
                                 />
                             </div>
+                            <div className='hidden xl:block'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Lampiran <span className="text-red-500">*</span>
+                                </label>
+                                {renderFileUpload()}
+                            </div>
                             <div className='block xl:hidden'>
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Lampiran <span className="text-red-500">*</span>
                                 </label>
                                 {renderFileUpload()}
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div className='hidden xl:block'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Unit Bisnis <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={BUSINESS_UNITS}
+                                    value={selectedUnit}
+                                    onChange={setSelectedUnit}
+                                    placeholder="Pilih Unit Bisnis"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                />
                             </div>
                         </div>
                     </>
