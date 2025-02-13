@@ -275,7 +275,7 @@ const ReimbursementCheck = () => {
                         }
                     } else if (item.status === 'Diajukan') {
                         if (isValidatorAndReviewer1) {
-                            newStatusHistory.status = 'Disetujui oleh Reviewer 1'
+                            newStatusHistory.status = 'Disetujui oleh Reviewer 1 Sekaligus Validator'
                             updateData = {
                                 status: 'Diproses',
                                 approvedByValidator: true,
