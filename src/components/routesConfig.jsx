@@ -28,6 +28,9 @@ export const routesConfig = [
     '/manage-users/add',
     '/manage-users/edit',
 
+    // Export Route
+    '/ekspor-laporan-pengajuan',
+
     // Catch-all for NotFound
     '*'
 ];

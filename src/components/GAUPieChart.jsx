@@ -419,10 +419,10 @@ const GAUPieChart = () => {
                             </div>
                             {/* Month and Year Filter Skeletons */}
                             <div className="flex gap-2 w-full md:w-3/5">
-                                <div className="w-1/2">
+                                <div className="w-7/12">
                                     <Skeleton height={32} borderRadius={8} />
                                 </div>
-                                <div className="w-1/2">
+                                <div className="w-5/12">
                                     <Skeleton height={32} borderRadius={8} />
                                 </div>
                             </div>
@@ -441,7 +441,7 @@ const GAUPieChart = () => {
                             </div>
                             <div className="flex gap-2 w-full md:w-3/5">
                                 <Select
-                                    className="w-1/2"
+                                    className="w-7/12"
                                     value={selectedMonth}
                                     onChange={handleMonthChange}
                                     options={months}
@@ -449,7 +449,7 @@ const GAUPieChart = () => {
                                     isSearchable={false}
                                 />
                                 <Select
-                                    className="w-1/2"
+                                    className="w-5/12"
                                     value={selectedYear}
                                     onChange={handleYearChange}
                                     options={[{ value: "all", label: "Semua Tahun" }, ...availableYears]}
