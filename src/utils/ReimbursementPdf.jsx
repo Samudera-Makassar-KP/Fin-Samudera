@@ -309,7 +309,7 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                 {/* Table */}
                 <View style={styles.tableContainer}>
                     {/* REIMBURSEMENT Row */}
-                    <View style={[styles.tableRow, { position: 'relative' }]}>                        
+                    <View style={[styles.tableRow, { position: 'relative' }]}>
                         <Text style={{ position: 'absolute', left: 4, top: 4, fontSize: 10 }}>
                             {reimbursementDetail.displayId || '-'}
                         </Text>
@@ -335,10 +335,13 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                         <View style={[styles.tableHeaderCell, { width: '6%' }]}>
                             <Text>NO.</Text>
                         </View>
-                        <View style={[styles.tableHeaderCell, { width: '74%' }]}>
+                        <View style={[styles.tableHeaderCell, { width: '68%' }]}>
                             <Text>ACTIVITIES NAME</Text>
                         </View>
-                        <View style={[styles.tableHeaderCell, { width: '20%', borderRight: 0 }]}>
+                        <View style={[styles.tableHeaderCell, { width: '12%' }]}>
+                            <Text>KETERANGAN</Text>
+                        </View>
+                        <View style={[styles.tableHeaderCell, { width: '14%', borderRight: 0 }]}>
                             <Text>JUMLAH (IDR)</Text>
                         </View>
                     </View>
@@ -349,14 +352,17 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                             <Text> </Text>
                         </View>
                         <View
-                            style={[styles.tableCell, { width: '74%', fontWeight: 'bold', textTransform: 'uppercase' }]}
+                            style={[styles.tableCell, { width: '68%', fontWeight: 'bold', textTransform: 'uppercase' }]}
                         >
                             <Text>
                                 BIAYA REIMBURSE {reimbursementDetail.user?.nama || '-'} UNTUK KEGIATAN{' '}
                                 {reimbursementDetail.kategori || '-'}
                             </Text>
                         </View>
-                        <View style={[styles.tableCell, { width: '20%', textAlign: 'right', borderRight: 0 }]}>
+                        <View style={[styles.tableCell, { width: '12%' }]}>
+                            <Text> </Text>
+                        </View>
+                        <View style={[styles.tableCell, { width: '14%', textAlign: 'right', borderRight: 0 }]}>
                             <Text> </Text>
                         </View>
                     </View>
@@ -370,7 +376,7 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                             <View
                                 style={[
                                     styles.tableCell,
-                                    { width: '74%', justifyContent: 'flex-start', flexDirection: 'row' }
+                                    { width: '68%', justifyContent: 'flex-start', alignItems: 'center', flexDirection: 'row' }
                                 ]}
                             >
                                 <Text style={{ width: 100 }}>
@@ -387,7 +393,12 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                                 </Text>
                                 <Text style={{ marginLeft: 12 }}>{item.jenis || '-'}</Text>
                             </View>
-                            <View style={[styles.tableCell, { width: '20%', textAlign: 'right', borderRight: 0 }]}>
+                            <View style={[styles.tableCell, { width: '12%', alignItems: 'flex-start' }]}>
+                                <Text style={{ flexWrap: 'wrap', textAlign: 'left', overflow: 'hidden' }}>
+                                    {(item.keterangan || '').replace(/(\d)/g, '$1\u200B')}
+                                </Text>
+                            </View>
+                            <View style={[styles.tableCell, { width: '14%', textAlign: 'right', borderRight: 0 }]}>
                                 <Text>{(item.biaya || 0).toLocaleString('id-ID')}</Text>
                             </View>
                         </View>
@@ -398,10 +409,13 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                         <View style={[styles.tableCell, { width: '6%' }]}>
                             <Text> </Text>
                         </View>
-                        <View style={[styles.tableCell, { width: '74%' }]}>
+                        <View style={[styles.tableCell, { width: '68%' }]}>
                             <Text> </Text>
                         </View>
-                        <View style={[styles.tableCell, { width: '20%', borderRight: 0 }]}>
+                        <View style={[styles.tableCell, { width: '12%' }]}>
+                            <Text> </Text>
+                        </View>
+                        <View style={[styles.tableCell, { width: '14%', borderRight: 0 }]}>
                             <Text> </Text>
                         </View>
                     </View>
@@ -411,10 +425,13 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                         <View style={[styles.tableCell, { width: '6%' }]}>
                             <Text> </Text>
                         </View>
-                        <View style={[styles.tableCell, { width: '74%', textTransform: 'uppercase' }]}>
+                        <View style={[styles.tableCell, { width: '68%', textTransform: 'uppercase' }]}>
                             <Text>TERBILANG: {terbilang(reimbursementDetail.totalBiaya || 0)}</Text>
                         </View>
-                        <View style={[styles.tableCell, { width: '20%', borderRight: 0 }]}>
+                        <View style={[styles.tableCell, { width: '12%' }]}>
+                            <Text> </Text>
+                        </View>
+                        <View style={[styles.tableCell, { width: '14%', borderRight: 0 }]}>
                             <Text> </Text>
                         </View>
                     </View>
@@ -424,10 +441,10 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                         <View style={[styles.tableCell, { width: '6%', borderRight: 0 }]}>
                             <Text> </Text>
                         </View>
-                        <View style={[styles.tableCell, { width: '74%', textAlign: 'right' }]}>
+                        <View style={[styles.tableCell, { width: '80%', textAlign: 'right' }]}>
                             <Text>TOTAL:</Text>
                         </View>
-                        <View style={[styles.tableCell, { width: '20%', borderRight: 0, textAlign: 'right' }]}>
+                        <View style={[styles.tableCell, { width: '14%', borderRight: 0, textAlign: 'right' }]}>
                             <Text>{reimbursementDetail.totalBiaya?.toLocaleString('id-ID') || '-'}</Text>
                         </View>
                     </View>

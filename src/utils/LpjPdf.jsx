@@ -343,10 +343,10 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator }) => {
                                 <Text>
                                     {lpjDetail.tanggal
                                         ? new Date(lpjDetail.tanggal).toLocaleDateString('id-ID', {
-                                              day: '2-digit',
-                                              month: '2-digit',
-                                              year: 'numeric'
-                                          })
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric'
+                                        })
                                         : '-'}
                                 </Text>
                                 <Text> </Text>
@@ -598,7 +598,7 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator }) => {
                             </View>
                             <View style={[styles.tableCell, { width: '10%', borderRight: 0 }]}>
                                 <Text style={{ flexWrap: 'wrap', textAlign: 'left', overflow: 'hidden' }}>
-                                    {item?.keterangan || ' '}
+                                    {(item?.keterangan || '').replace(/(\d)/g, '$1\u200B')}
                                 </Text>
                             </View>
                         </View>
@@ -846,14 +846,14 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator }) => {
                         <Text style={{ fontWeight: 'bold' }}>
                             {lpjDetail.tanggalPengajuan
                                 ? 'Makassar, ' +
-                                  new Date(lpjDetail.tanggalPengajuan)
-                                      .toLocaleDateString('id-ID', {
-                                          day: '2-digit',
-                                          month: 'long',
-                                          year: 'numeric'
-                                      })
-                                      .replace(/\./g, '')
-                                      .replace(/\s/g, ' ')
+                                new Date(lpjDetail.tanggalPengajuan)
+                                    .toLocaleDateString('id-ID', {
+                                        day: '2-digit',
+                                        month: 'long',
+                                        year: 'numeric'
+                                    })
+                                    .replace(/\./g, '')
+                                    .replace(/\s/g, ' ')
                                 : '-'}
                         </Text>
                         <View style={styles.footerRow}>
@@ -925,6 +925,6 @@ const generateLpjPDF = async (lpjDetail) => {
     }
 }
 
-;<ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} closeOnClick pauseOnHover />
+    ; <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} closeOnClick pauseOnHover />
 
 export { LpjPDF, generateLpjPDF }
