@@ -632,7 +632,7 @@ const RbsUmumForm = () => {
                             </div>
                             <div className='block xl:hidden'>
                                 <label className="block text-gray-700 font-medium mb-2">
-                                    Reviewer 11111 <span className="text-red-500">*</span>
+                                    Reviewer 1 <span className="text-red-500">*</span>
                                 </label>
                                 <Select
                                     options={reviewerOptions}
@@ -648,7 +648,7 @@ const RbsUmumForm = () => {
                             </div>
                             <div className='block xl:hidden'>
                                 <label className="block text-gray-700 font-medium mb-2">
-                                    Reviewer 222222 <span className="text-red-500">*</span>
+                                    Reviewer 2 <span className="text-red-500">*</span>
                                 </label>
                                 <Select
                                     options={reviewerOptions}
