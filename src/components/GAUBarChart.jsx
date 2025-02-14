@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Bar } from "react-chartjs-2";
 import { Chart as ChartJS, BarElement, CategoryScale, LinearScale, Tooltip, Legend } from "chart.js";
 import { collection, getDocs } from "firebase/firestore";
@@ -11,6 +11,8 @@ ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend, ChartD
 const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClose }) => {
     const [chartData, setChartData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [originalLabels, setOriginalLabels] = useState({});
+    const chartRef = useRef(null);
 
     useEffect(() => {
         if (onClose) {
@@ -33,6 +35,29 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
     ];
 
     const getColor = (index) => baseColors[index % baseColors.length];
+
+    const calculateTextWidth = (text, fontSize) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        context.font = `${fontSize}px Arial`;
+        return context.measureText(text).width;
+    };
+
+    const adaptiveTextTruncate = (text, maxWidth, fontSize = 10) => {
+        const textWidth = calculateTextWidth(text, fontSize);
+        const availableWidth = maxWidth;
+
+        if (textWidth <= availableWidth) {
+            return text;
+        }
+
+        let truncatedText = text;
+        while (calculateTextWidth(truncatedText + '...', fontSize) > availableWidth && truncatedText.length > 0) {
+            truncatedText = truncatedText.slice(0, -1);
+        }
+
+        return truncatedText + '...';
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -84,6 +109,33 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
         }
     }, [selectedType, selectedMonth, selectedYear]);
 
+    const truncateString = (str) => {
+        if (str.length > 10) {
+            return str.substring(0, 10) + '...';
+        }
+        return str;
+    };
+
+    useEffect(() => {
+        if (!chartData) return;
+
+        const labelMapping = {};
+        chartData.forEach(reimb => {
+            const itemName = reimb.item
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim()
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+
+            const truncated = truncateString(itemName);
+            labelMapping[truncated] = itemName;
+        });
+
+        setOriginalLabels(labelMapping);
+    }, [chartData]);
+
     const prepareChartData = () => {
         if (!chartData) return null;
 
@@ -95,17 +147,13 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                 .split(' ')
                 .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                 .join(' ');
+
             acc[itemName] = (acc[itemName] || 0) + 1;
             return acc;
         }, {});
 
-        const labels = Object.keys(itemCounts).map(item =>
-            item.split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(' ')
-        );
+        const labels = Object.keys(itemCounts);
         const values = Object.values(itemCounts);
-
         const backgroundColors = values.map((_, index) => getColor(index));
 
         return {
@@ -161,6 +209,7 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                 <div className="min-h-[200px] h-full">
                     {chartDisplayData && chartDisplayData.labels.length > 0 ? (
                         <Bar
+                            ref={chartRef}
                             data={chartDisplayData}
                             options={{
                                 responsive: true,
@@ -176,6 +225,13 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                                             size: 12
                                         },
                                     },
+                                    tooltip: {
+                                        callbacks: {
+                                            title: (context) => {
+                                                return originalLabels[context[0].label] || context[0].label;
+                                            }
+                                        }
+                                    },
                                 },
                                 scales: {
                                     x: {
@@ -188,8 +244,22 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                                         },
                                         ticks: {
                                             maxRotation: 45,
-                                            font: {
-                                                size: 10,
+                                            minRotation: 0,
+                                            autoSkip: false,
+                                            font: { size: 10 },
+                                            callback: function(value) {
+                                                const chart = chartRef.current;
+                                                if (!chart) return value;
+
+                                                const chartArea = chart.chartArea;
+                                                const barWidth = chartArea.right - chartArea.left;
+                                                const labelCount = chartDisplayData.labels.length;
+                                                const availableWidth = (barWidth / labelCount) * 1.5;
+                                                
+                                                const isRotated = this.labelRotation !== 0;
+                                                const maxWidth = isRotated ? availableWidth * 2 : availableWidth;
+
+                                                return adaptiveTextTruncate(chartDisplayData.labels[value], maxWidth);
                                             }
                                         },
                                     },

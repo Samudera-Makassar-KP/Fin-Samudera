@@ -13,12 +13,14 @@ import 'react-loading-skeleton/dist/skeleton.css';
 ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
 const GAUPieChart = () => {
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [chartData, setChartData] = useState(null);
     const [rawData, setRawData] = useState([]);
     const [lpjData, setLpjData] = useState([]);
     const [reimbursementData, setReimbursementData] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState({ value: "all", label: "Semua Bulan" });
     const [selectedYear, setSelectedYear] = useState({ value: "all", label: "Semua Tahun" });
+    const [selectedUnit, setSelectedUnit] = useState({ value: "all", label: "Semua Unit Bisnis" });
     const [availableYears, setAvailableYears] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +43,18 @@ const GAUPieChart = () => {
         { value: "11", label: "November" },
         { value: "12", label: "Desember" }
     ];
+
+    const unitOptions = [
+        { value: "all", label: "Semua Unit Bisnis" },
+        { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
+        { value: 'PT Samudera Makassar Logistik', label: 'PT Samudera Makassar Logistik' },
+        { value: 'PT Kendari Jaya Samudera', label: 'PT Kendari Jaya Samudera' },
+        { value: 'PT Samudera Kendari Logistik', label: 'PT Samudera Kendari Logistik' },
+        { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
+        { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
+        { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
+        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
+    ]
 
     const handleChartClick = (event) => {
         const chart = event.chart;
@@ -106,7 +120,7 @@ const GAUPieChart = () => {
         return baseColors[index % baseColors.length];
     };
 
-    const updateChartData = (month, year) => {
+    const updateChartData = (month, year, unit) => {
         const dataItems = showLPJ ? lpjData : reimbursementData;
 
         if (!dataItems.length) {
@@ -126,7 +140,8 @@ const GAUPieChart = () => {
 
             return (
                 (year.value === "all" || itemYear === parseInt(year.value)) &&
-                (month.value === "all" || itemMonth === parseInt(month.value))
+                (month.value === "all" || itemMonth === parseInt(month.value)) &&
+                (unit?.value === "all" || item.user?.unit === unit?.value)
             );
         });
 
@@ -194,7 +209,7 @@ const GAUPieChart = () => {
         const fetchData = async () => {
             setLoading(true)
 
-            try {              
+            try {
                 // Fetch reimbursement data (hanya yang Disetujui)
                 const reimbQuery = query(collection(db, "reimbursement"), where("status", "==", "Disetujui"));
                 const reimbQuerySnapshot = await getDocs(reimbQuery);
@@ -230,7 +245,7 @@ const GAUPieChart = () => {
                 if (years.length > 0) {
                     const initialYear = yearOptions[0];
                     setSelectedYear(initialYear);
-                    updateChartData(reimbData, lpjFetchedData, selectedMonth, initialYear);
+                    updateChartData(selectedMonth, selectedUnit, initialYear);
                 }
             } catch (error) {
                 console.error("Error fetching data:", error);
@@ -243,8 +258,10 @@ const GAUPieChart = () => {
     }, []);
 
     useEffect(() => {
-        updateChartData(selectedMonth, selectedYear);
-    }, [selectedMonth, selectedYear, showLPJ, reimbursementData, lpjData]);
+        if (selectedMonth && selectedYear && selectedUnit) {
+            updateChartData(selectedMonth, selectedYear, selectedUnit);
+        }
+    }, [selectedMonth, selectedYear, selectedUnit, showLPJ, reimbursementData, lpjData]);
 
     useEffect(() => {
         const years = reimbursementData.concat(lpjData).reduce((acc, item) => {
@@ -258,16 +275,17 @@ const GAUPieChart = () => {
 
     const handleMonthChange = (option) => {
         setSelectedMonth(option);
-        updateChartData(option, selectedYear);
+        updateChartData(option, selectedYear, selectedUnit);
     };
 
     const handleYearChange = (option) => {
         setSelectedYear(option);
-        updateChartData(selectedMonth, option);
+        updateChartData(selectedMonth, option, selectedUnit);
     };
 
-    const handleToggleChange = (isLPJ) => {
-        setShowLPJ(isLPJ);
+    const handleUnitChange = (option) => {
+        setSelectedUnit(option);
+        updateChartData(selectedMonth, selectedYear, option);
     };
 
     const selectStyles = {
@@ -301,9 +319,82 @@ const GAUPieChart = () => {
     return (
         <div className="bg-white px-6 py-4 flex flex-col w-full shadow-sm rounded-lg">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-                <h2 className="text-xl font-medium">
-                    {showLPJ ? "Pengajuan GA/Umum (LPJ BS)" : "Pengajuan GA/Umum (Reimbursement)"}
-                </h2>
+                <div className="relative">
+                    <h2
+                        className="text-xl font-medium cursor-pointer hover:text-gray-700 flex items-center gap-2 transition-all duration-200"
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    >
+                        {showLPJ ? "Pengajuan GA/Umum (LPJ BS)" : "Pengajuan GA/Umum (Reimbursement)"}
+                        <svg
+                            className={`w-6 h-6 md:w-5 md:h-5 transition-transform duration-200 flex-shrink-0 ${isDropdownOpen ? "rotate-180" : ""
+                                }`}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="M5 9l7 7 7-7" />
+                        </svg>
+                    </h2>
+
+                    {isDropdownOpen && (
+                        <div
+                            className="absolute top-full left-0 mt-1 bg-white rounded-lg py-1 z-50 min-w-[250px] md:w-auto"
+                            onMouseLeave={() => setIsDropdownOpen(false)}
+                        >
+                            <div
+                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                onClick={() => {
+                                    setShowLPJ(false);
+                                    setIsDropdownOpen(false);
+                                }}
+                            >
+                                <span className={`${!showLPJ ? "font-medium text-red-600" : ""}`}>
+                                    Reimbursement
+                                </span>
+                                {!showLPJ && (
+                                    <svg
+                                        className="w-5 h-5 md:w-4 md:h-4 text-red-600 flex-shrink-0"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    >
+                                        <path d="M5 13l4 4L19 7" />
+                                    </svg>
+                                )}
+                            </div>
+                            <div
+                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                onClick={() => {
+                                    setShowLPJ(true);
+                                    setIsDropdownOpen(false);
+                                }}
+                            >
+                                <span className={`${showLPJ ? "font-medium text-red-600" : ""}`}>
+                                    LPJ BS
+                                </span>
+                                {showLPJ && (
+                                    <svg
+                                        className="w-5 h-5 md:w-4 md:h-4 text-red-600 flex-shrink-0"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    >
+                                        <path d="M5 13l4 4L19 7" />
+                                    </svg>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
                 {loading ? (
                     <Skeleton width={100} height={20} />
                 ) : (
@@ -319,42 +410,38 @@ const GAUPieChart = () => {
             <hr className="border-gray-100 my-2" />
 
             <div className="flex flex-col w-full h-full gap-4 xl:gap-2">
-                <div className="flex flex-col md:flex-row xl:flex-row justify-between items-center gap-2">
-                    <label className="w-full md:w-64 xl:w-52 cursor-pointer">
-                        {loading ? (
-                            <Skeleton height={32} />
-                        ) : (
-                            <div className="w-full bg-gray-100 p-1 rounded-full">
-                                <div className="flex items-center">
-                                    <div
-                                        onClick={() => handleToggleChange(false)}
-                                        className={`flex-1 text-center text-xs p-2 rounded-full cursor-pointer transition-all duration-300 
-                                            ${!showLPJ ? 'bg-red-600 text-white' : 'bg-transparent text-gray-700'}`}
-                                    >
-                                        Reimbursement
-                                    </div>
-                                    <div
-                                        onClick={() => handleToggleChange(true)}
-                                        className={`flex-1 text-center text-xs p-2 rounded-full cursor-pointer transition-all duration-300 
-                                            ${showLPJ ? 'bg-red-600 text-white' : 'bg-transparent text-gray-700'}`}
-                                    >
-                                        LPJ BS
-                                    </div>
+                <div className="flex flex-col md:flex-row gap-2">
+                    {loading ? (
+                        <>
+                            {/* Unit Filter Skeleton */}
+                            <div className="w-full md:w-2/5">
+                                <Skeleton height={32} borderRadius={8} />
+                            </div>
+                            {/* Month and Year Filter Skeletons */}
+                            <div className="flex gap-2 w-full md:w-3/5">
+                                <div className="w-7/12">
+                                    <Skeleton height={32} borderRadius={8} />
+                                </div>
+                                <div className="w-5/12">
+                                    <Skeleton height={32} borderRadius={8} />
                                 </div>
                             </div>
-                        )}
-                    </label>
-
-                    <div className="flex flex-row md:flex-row gap-2 w-full md:w-auto lg:w-80 xl:w-72">
-                        {loading ? (
-                            <>
-                                <Skeleton width={150} height={32} />
-                                <Skeleton width={150} height={32} />
-                            </>
-                        ) : (
-                            <>
+                        </>
+                    ) : (
+                        <>
+                            <div className="w-full md:w-2/5">
                                 <Select
-                                    className="w-full md:w-36 lg:w-full"
+                                    className="w-full"
+                                    value={selectedUnit}
+                                    onChange={handleUnitChange}
+                                    options={unitOptions}
+                                    styles={selectStyles}
+                                    isSearchable={false}
+                                />
+                            </div>
+                            <div className="flex gap-2 w-full md:w-3/5">
+                                <Select
+                                    className="w-7/12"
                                     value={selectedMonth}
                                     onChange={handleMonthChange}
                                     options={months}
@@ -362,16 +449,16 @@ const GAUPieChart = () => {
                                     isSearchable={false}
                                 />
                                 <Select
-                                    className="w-full md:w-36 lg:w-full"
+                                    className="w-5/12"
                                     value={selectedYear}
                                     onChange={handleYearChange}
                                     options={[{ value: "all", label: "Semua Tahun" }, ...availableYears]}
                                     styles={selectStyles}
                                     isSearchable={false}
                                 />
-                            </>
-                        )}
-                    </div>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Chart Area */}
@@ -385,7 +472,7 @@ const GAUPieChart = () => {
                             chartData.labels.length === 0 ? (
                                 <div className="w-full h-40 xl:h-full flex justify-center items-center">
                                     <p className="text-gray-500 text-sm text-center px-4">
-                                        {showLPJ ? "Tidak ada pengajuan LPJ Bon Sementara GA/Umum" : "Tidak ada pengajuan Reimbursement GA/Umum"} untuk periode yang dipilih
+                                        {showLPJ ? "Tidak ada pengajuan LPJ Bon Sementara GA/Umum" : "Tidak ada pengajuan Reimbursement GA/Umum"} untuk Bisnis Unit dan periode yang dipilih
                                     </p>
                                 </div>
                             ) : (

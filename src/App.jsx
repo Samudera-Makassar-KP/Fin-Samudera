@@ -23,6 +23,7 @@ import EditUserPage from './pages/EditUserPage';
 import CreateBon from './pages/CreateBonPage';
 import CreateBsCheckPage from './pages/CreateBsCheckPage';
 import DetailCreateBsPage from './pages/DetailCreateBsPage';
+import ReportExportPage from './pages/ReportExportPage';
 
 const AppContent = () => {
     const userRole = localStorage.getItem('userRole'); 
@@ -150,6 +151,12 @@ const AppContent = () => {
                 <Route path="/manage-users/edit" element={
                     <ProtectedRoute allowedRoles={['Super Admin']}>
                         <EditUserPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/ekspor-laporan-pengajuan" element={
+                    <ProtectedRoute allowedRoles={['Super Admin']}>
+                        <ReportExportPage />
                     </ProtectedRoute>
                 } />
 

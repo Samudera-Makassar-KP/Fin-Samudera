@@ -87,8 +87,13 @@ const FormLpjMarketing = () => {
 
     const [selectedUnit, setSelectedUnit] = useState('')
     const [isAdmin, setIsAdmin] = useState(false)
+
     const [validatorOptions, setValidatorOptions] = useState([])
     const [selectedValidator, setSelectedValidator] = useState(null)
+
+    const [reviewerOptions, setReviewerOptions] = useState([])
+    const [selectedReviewer1, setSelectedReviewer1] = useState(null)
+    const [selectedReviewer2, setSelectedReviewer2] = useState(null)
 
     useEffect(() => {
         const fetchValidators = async () => {
@@ -115,6 +120,34 @@ const FormLpjMarketing = () => {
 
         if (isAdmin) {
             fetchValidators()
+        }
+    }, [isAdmin])
+
+    useEffect(() => {
+        const fetchReviewer = async () => {
+            try {
+                const usersRef = collection(db, 'users')
+                const q = query(usersRef, where('role', 'in', ['Reviewer']))
+                const querySnapshot = await getDocs(q)
+
+                const options = querySnapshot.docs.map((doc) => {
+                    const userData = doc.data()
+                    return {
+                        value: userData.uid,
+                        label: userData.nama,
+                        role: userData.role
+                    }
+                })
+
+                setReviewerOptions(options)
+            } catch (error) {
+                console.error('Error fetching validators:', error)
+                toast.error('Gagal memuat daftar reviewer')
+            }
+        }
+
+        if (isAdmin) {
+            fetchReviewer()
         }
     }, [isAdmin])
 
@@ -328,13 +361,22 @@ const FormLpjMarketing = () => {
         try {
             setIsSubmitting(true)
 
+            // Validasi reviewer1 dan reviewer2 tidak boleh sama
+            if (selectedReviewer1 && selectedReviewer2 && selectedReviewer1.value === selectedReviewer2.value) {
+                toast.warning('Reviewer 1 dan Reviewer 2 tidak boleh sama');
+                setIsSubmitting(false);
+                return;
+            }
+
             // Validasi form dengan pesan spesifik
             const missingFields = []
 
             // Validasi data pengguna
             if (!userData.nama) missingFields.push('Nama')
-            if (!selectedUnit?.value) missingFields.push('Unit')
+            if (!selectedUnit?.value) missingFields.push('Unit Bisnis')
             if (isAdmin && !selectedValidator) missingFields.push('Validator')
+            if (isAdmin && !selectedReviewer1) missingFields.push('Reviewer 1')
+            if (isAdmin && !selectedReviewer2) missingFields.push('Reviewer 2')
 
             // Tambahkan validasi untuk form-level fields
             if (!nomorBS) missingFields.push('Nomor Bon Sementara')
@@ -395,8 +437,8 @@ const FormLpjMarketing = () => {
                     unitCode: getUnitCode(selectedUnit.value),
                     department: userData.department,
                     validator: isAdmin ? [selectedValidator.value] : userData.validator,
-                    reviewer1: userData.reviewer1,
-                    reviewer2: userData.reviewer2
+                    reviewer1: isAdmin ? [selectedReviewer1.value] : userData.reviewer1,
+                    reviewer2: isAdmin ? [selectedReviewer2.value] : userData.reviewer2
                 },
                 lpj: lpj.map((item) => ({
                     namaItem: item.namaItem,
@@ -450,10 +492,6 @@ const FormLpjMarketing = () => {
             })
             toast.success('LPJ Marketing/Operasional berhasil dibuat')
 
-            // Reset form setelah berhasil submit
-            if (isAdmin) {
-                setSelectedValidator(null)
-            }
             resetForm()
             setIsSubmitting(false)
         } catch (error) {
@@ -487,6 +525,13 @@ const FormLpjMarketing = () => {
         // Reset attachment state
         setAttachmentFile(null)
         setAttachmentFileName('')
+
+        // Reset all selector states for admin
+        if (isAdmin) {
+            setSelectedValidator(null)
+            setSelectedReviewer1(null)
+            setSelectedReviewer2(null)
+        }
     }
 
     // Render file upload section
@@ -579,7 +624,6 @@ const FormLpjMarketing = () => {
                                 <label className="block text-gray-700 font-medium mb-2">
                                     Unit Bisnis {isAdmin && <span className="text-red-500">*</span>}
                                 </label>
-                                {isAdmin ? (
                                     <Select
                                         options={BUSINESS_UNITS}
                                         value={selectedUnit}
@@ -590,14 +634,6 @@ const FormLpjMarketing = () => {
                                         styles={customStyles}
                                         isSearchable={false}
                                     />
-                                ) : (
-                                    <input
-                                        className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                        type="text"
-                                        value={selectedUnit?.label || ''}
-                                        disabled
-                                    />
-                                )}
                             </div>
                         </div>
 
@@ -610,7 +646,39 @@ const FormLpjMarketing = () => {
                                     options={validatorOptions}
                                     value={selectedValidator}
                                     onChange={setSelectedValidator}
-                                    placeholder="Pilih Validator..."
+                                    placeholder="Pilih Validator"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                />
+                            </div>
+                            <div className="block xl:hidden">
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 1 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer1}
+                                    onChange={setSelectedReviewer1}
+                                    placeholder="Pilih Reviewer 1"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                />
+                            </div>
+                            <div className="block xl:hidden">
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 2 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer2}
+                                    onChange={setSelectedReviewer2}
+                                    placeholder="Pilih Reviewer 2"
                                     className="basic-single"
                                     classNamePrefix="select"
                                     styles={customStyles}
@@ -667,16 +735,51 @@ const FormLpjMarketing = () => {
                                     placeholder="Masukkan jumlah bon sementara tanpa Rp"
                                 />
                             </div>
+                            <div className="hidden xl:block">
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 1 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer1}
+                                    onChange={setSelectedReviewer1}
+                                    placeholder="Pilih Reviewer 1"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                             <div>
                                 <label className="block text-gray-700 font-medium mb-2">
-                                    Project <span className="text-red-500">*</span>
+                                    Nomor Job Order <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     className="w-full h-10 px-4 py-2 border text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                                     type="text"
-                                    value={project}
-                                    onChange={(e) => setProject(e.target.value)}
-                                    placeholder="Masukkan nama project"
+                                    value={nomorJO}
+                                    onChange={(e) => setNomorJO(e.target.value)}
+                                    placeholder="Masukkan nomor job order"
+                                />
+                            </div>
+                            <div className="hidden xl:block">
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 2 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer2}
+                                    onChange={setSelectedReviewer2}
+                                    placeholder="Pilih Reviewer 2"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={true}
+                                    isClearable={true}
                                 />
                             </div>
                         </div>
@@ -696,14 +799,14 @@ const FormLpjMarketing = () => {
                             </div>
                             <div>
                                 <label className="block text-gray-700 font-medium mb-2">
-                                    Nomor Job Order <span className="text-red-500">*</span>
+                                    Project <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     className="w-full h-10 px-4 py-2 border text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                                     type="text"
-                                    value={nomorJO}
-                                    onChange={(e) => setNomorJO(e.target.value)}
-                                    placeholder="Masukkan nomor job order"
+                                    value={project}
+                                    onChange={(e) => setProject(e.target.value)}
+                                    placeholder="Masukkan nama project"
                                 />
                             </div>
                         </div>

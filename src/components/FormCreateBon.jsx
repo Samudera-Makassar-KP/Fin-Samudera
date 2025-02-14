@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, runTransaction } from 'firebase/firestore'
+import { doc, setDoc, getDoc, addDoc, collection, runTransaction, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
@@ -106,6 +106,38 @@ const CreateBonForm = () => {
     const [selectedUnit, setSelectedUnit] = useState('')
     const [isAdmin, setIsAdmin] = useState(false)
 
+    const [reviewerOptions, setReviewerOptions] = useState([])
+    const [selectedReviewer1, setSelectedReviewer1] = useState(null)
+    const [selectedReviewer2, setSelectedReviewer2] = useState(null)
+
+    useEffect(() => {
+        const fetchReviewer = async () => {
+            try {
+                const usersRef = collection(db, 'users')
+                const q = query(usersRef, where('role', 'in', ['Reviewer']))
+                const querySnapshot = await getDocs(q)
+
+                const options = querySnapshot.docs.map((doc) => {
+                    const userData = doc.data()
+                    return {
+                        value: userData.uid,
+                        label: userData.nama,
+                        role: userData.role
+                    }
+                })
+
+                setReviewerOptions(options)
+            } catch (error) {
+                console.error('Error fetching validators:', error)
+                toast.error('Gagal memuat daftar reviewer')
+            }
+        }
+
+        if (isAdmin) {
+            fetchReviewer()
+        }
+    }, [isAdmin])
+
     const kategoriOptions = [
         { value: 'GA/Umum', label: 'GA/Umum' },
         { value: 'Marketing/Operasional', label: 'Marketing/Operasional' }
@@ -160,6 +192,8 @@ const CreateBonForm = () => {
 
         // Reset the category selection
         setSelectedKategori(null)
+        setSelectedReviewer1(null)
+        setSelectedReviewer2(null)
     }
 
     const formatRupiah = (number) => {
@@ -351,12 +385,21 @@ const CreateBonForm = () => {
         try {
             setIsSubmitting(true)
 
+            // Validasi reviewer1 dan reviewer2 tidak boleh sama
+            if (selectedReviewer1 && selectedReviewer2 && selectedReviewer1.value === selectedReviewer2.value) {
+                toast.warning('Reviewer 1 dan Reviewer 2 tidak boleh sama')
+                setIsSubmitting(false)
+                return
+            }
+
             // Validasi form dengan pesan spesifik
             const missingFields = []
 
             // Validasi data pengguna
             if (!userData.nama) missingFields.push('Nama')
-            if (!selectedUnit?.value) missingFields.push('Unit')
+            if (!selectedUnit?.value) missingFields.push('Unit Bisnis')
+            if (isAdmin && !selectedReviewer1) missingFields.push('Reviewer 1')
+            if (isAdmin && !selectedReviewer2) missingFields.push('Reviewer 2')
 
             // Tentukan apakah ada lebih dari satu item bon sementara
             const multipleItems = bonSementara.length > 1
@@ -390,7 +433,7 @@ const CreateBonForm = () => {
 
             // Gunakan nomorBS pertama sebagai Id
             const displayId = bonSementara[0]?.nomorBS
-            const kodeUnitBisnis = BUSINESS_UNIT_CODES[selectedUnit.value];
+            const kodeUnitBisnis = BUSINESS_UNIT_CODES[selectedUnit.value]
 
             // Fungsi untuk mengonversi format Rupiah ke angka
             const parseRupiah = (value) => {
@@ -407,8 +450,8 @@ const CreateBonForm = () => {
                     unit: selectedUnit.value,
                     posisi: userData.posisi,
                     department: userData.department,
-                    reviewer1: userData.reviewer1,
-                    reviewer2: userData.reviewer2
+                    reviewer1: isAdmin ? [selectedReviewer1.value] : userData.reviewer1,
+                    reviewer2: isAdmin ? [selectedReviewer2.value] : userData.reviewer2
                 },
                 bonSementara: bonSementara.map((item) => ({
                     nomorBS: item.nomorBS,
@@ -444,23 +487,23 @@ const CreateBonForm = () => {
             }
 
             // update nilai di collection counter
-            const counterRef = doc(db, 'businessUnitCounters', kodeUnitBisnis);
+            const counterRef = doc(db, 'businessUnitCounters', kodeUnitBisnis)
             await runTransaction(db, async (transaction) => {
-                const counterDoc = await transaction.get(counterRef);
-                const today = new Date();
-                const month = (today.getMonth() + 1).toString().padStart(2, '0');
+                const counterDoc = await transaction.get(counterRef)
+                const today = new Date()
+                const month = (today.getMonth() + 1).toString().padStart(2, '0')
 
-                let newLastNumber;
+                let newLastNumber
                 if (!counterDoc.exists() || counterDoc.data().lastResetMonth !== month) {
-                    newLastNumber = 501;
+                    newLastNumber = 501
                 } else {
-                    newLastNumber = counterDoc.data().lastNumber + 1;
+                    newLastNumber = counterDoc.data().lastNumber + 1
                 }
 
                 transaction.set(counterRef, {
                     lastNumber: newLastNumber,
                     lastResetMonth: month
-                });
+                })
             })
 
             console.log('Bon Sementara berhasil dibuat:', {
@@ -472,8 +515,8 @@ const CreateBonForm = () => {
             // Reset form setelah berhasil submit
             resetForm()
             setIsSubmitting(false)
-            const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '00005');
-            setCurrentCounter(nextSequence);
+            const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '00005')
+            setCurrentCounter(nextSequence)
         } catch (error) {
             console.error('Error submitting bon sementara:', error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
@@ -489,93 +532,220 @@ const CreateBonForm = () => {
             </h2>
 
             <div className="bg-white p-6 rounded-lg shadow">
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                    <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
-                        <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                            type="text"
-                            value={userData.nama}
-                            disabled
-                        />
-                    </div>
-                    {isAdmin ? (
-                        <div>
-                            <label className="block text-gray-700 font-medium mb-2">
-                                Unit Bisnis <span className="text-red-500">*</span>
-                            </label>
-                            <Select
-                                options={BUSINESS_UNITS}
-                                value={selectedUnit}
-                                onChange={handleUnitChange}
-                                placeholder="Pilih Unit Bisnis"
-                                className="basic-single"
-                                classNamePrefix="select"
-                                styles={customStyles}
-                                isSearchable={false}
-                            />
+                {isAdmin ? (
+                    <>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={userData.nama}
+                                    disabled
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Unit Bisnis <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={BUSINESS_UNITS}
+                                    value={selectedUnit}
+                                    onChange={handleUnitChange}
+                                    placeholder="Pilih Unit Bisnis"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                />
+                            </div>
                         </div>
-                    ) : (
-                        <div>
-                            <label className="block text-gray-700 font-medium mb-2">
-                                Unit Bisnis
-                            </label>
-                            <input
-                                className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                                type="text"
-                                value={selectedUnit?.label || ''}
-                                disabled
-                            />
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={userData.accountNumber}
+                                    disabled
+                                />
+                            </div>
+                            <div className='hidden xl:block'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 1 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer1}
+                                    onChange={setSelectedReviewer1}
+                                    placeholder="Pilih Reviewer 1"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                    isClearable={true}
+                                />
+                            </div>
                         </div>
-                    )}
-                </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                    <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
-                        <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                            type="text"
-                            value={userData.accountNumber}
-                            disabled
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
-                        <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                            type="text"
-                            value={userData.bankName}
-                            disabled
-                        />
-                    </div>
-                </div>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={userData.bankName}
+                                    disabled
+                                />
+                            </div>
+                            <div className='hidden xl:block'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 2 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer2}
+                                    onChange={setSelectedReviewer2}
+                                    placeholder="Pilih Reviewer 2"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                    isClearable={true}
+                                />
+                            </div>
+                        </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
-                    <div>
-                        <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
-                        <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
-                            type="text"
-                            value={formatDate(todayDate)}
-                            disabled
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-gray-700 font-medium mb-2">
-                            Kategori BS <span className="text-red-500">*</span>
-                        </label>
-                        <Select
-                            options={kategoriOptions}
-                            value={selectedKategori}
-                            onChange={handleKategoriChange}
-                            placeholder="Pilih Kategori..."
-                            className="w-full"
-                            styles={customStyles}
-                            isSearchable={false}
-                        />
-                    </div>
-                </div>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={formatDate(todayDate)}
+                                    disabled
+                                />
+                            </div>
+                            <div className='block xl:hidden'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 1 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer1}
+                                    onChange={setSelectedReviewer1}
+                                    placeholder="Pilih Reviewer 1"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                    isClearable={true}
+                                />
+                            </div>
+                            <div className='block xl:hidden'>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Reviewer 2 <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={reviewerOptions}
+                                    value={selectedReviewer2}
+                                    onChange={setSelectedReviewer2}
+                                    placeholder="Pilih Reviewer 2"
+                                    className="basic-single"
+                                    classNamePrefix="select"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                    isClearable={true}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Kategori BS <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={kategoriOptions}
+                                    value={selectedKategori}
+                                    onChange={handleKategoriChange}
+                                    placeholder="Pilih Kategori..."
+                                    className="w-full"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                />
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={userData.nama}
+                                    disabled
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Unit Bisnis</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={selectedUnit?.label || ''}
+                                    disabled
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={userData.accountNumber}
+                                    disabled
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={userData.bankName}
+                                    disabled
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
+                                <input
+                                    className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 cursor-not-allowed"
+                                    type="text"
+                                    value={formatDate(todayDate)}
+                                    disabled
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    Kategori BS <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    options={kategoriOptions}
+                                    value={selectedKategori}
+                                    onChange={handleKategoriChange}
+                                    placeholder="Pilih Kategori..."
+                                    className="w-full"
+                                    styles={customStyles}
+                                    isSearchable={false}
+                                />
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 <hr className="border-gray-300 my-6" />
 
