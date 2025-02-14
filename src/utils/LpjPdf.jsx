@@ -158,52 +158,29 @@ const getApprovedReviewerNames = async (lpjDetail) => {
         return { reviewer1Name: '-', reviewer2Name: '-' }
     }
 
-    const { reviewer1 = [], reviewer2 = [] } = lpjDetail.user || {}
     const { statusHistory } = lpjDetail
 
-    const findApprovedReviewer = async (reviewers, backupRole) => {
-        // Cek approval oleh Super Admin terlebih dahulu
-        const superAdminApproval = statusHistory.find((history) =>
-            history.status.toLowerCase().includes('disetujui oleh super admin (pengganti reviewer')
-        )
+    // Cek apakah Super Admin menggantikan kedua reviewer
+    const superAdminForReviewer1 = statusHistory.find(history =>
+        history.status.toLowerCase().includes('disetujui oleh super admin (pengganti reviewer 1)')
+    )
+    const superAdminForReviewer2 = statusHistory.find(history =>
+        history.status.toLowerCase().includes('disetujui oleh super admin (pengganti reviewer 2)')
+    )
 
-        if (superAdminApproval) {
-            return 'Super Admin'
-        }
-
-        // Jika bukan Super Admin, lanjutkan dengan logika reviewer normal
-        for (const reviewerUid of reviewers) {
-            const approved = statusHistory.find(
-                (history) =>
-                    history.actor === reviewerUid && history.status.toLowerCase().includes('disetujui oleh reviewer')
-            )
-
-            if (approved) {
-                try {
-                    const reviewerDocRef = doc(db, 'users', reviewerUid)
-                    const reviewerSnapshot = await getDoc(reviewerDocRef)
-
-                    if (reviewerSnapshot.exists()) {
-                        const nama = reviewerSnapshot.data().nama
-                        return nama
-                    }
-                } catch (error) {
-                    console.error(`Error fetching reviewer ${reviewerUid}:`, error)
-                }
-            }
-        }
-
-        return '-'
+    // Jika Super Admin menggantikan kedua reviewer, langsung return Super Admin
+    if (superAdminForReviewer1 && superAdminForReviewer2) {
+        return { reviewer1Name: 'Super Admin', reviewer2Name: '' }
     }
 
-    // Cek reviewer1 (Super Admin atau reviewer normal)
+    // Cek approval untuk reviewer 1
     const reviewer1Approval = statusHistory.find(
         (history) =>
             history.status.toLowerCase().includes('disetujui oleh super admin (pengganti reviewer 1)') ||
             history.status.toLowerCase().includes('disetujui oleh reviewer 1')
     )
 
-    // Cek reviewer2 (Super Admin atau reviewer normal)
+    // Cek approval untuk reviewer 2
     const reviewer2Approval = statusHistory.find(
         (history) =>
             history.status.toLowerCase().includes('disetujui oleh super admin (pengganti reviewer 2)') ||
@@ -213,28 +190,48 @@ const getApprovedReviewerNames = async (lpjDetail) => {
     let reviewer1Name = '-'
     let reviewer2Name = '-'
 
-    // Jika ada approval dari Super Admin untuk reviewer 1
-    if (reviewer1Approval && reviewer1Approval.status.toLowerCase().includes('super admin')) {
-        reviewer1Name = 'Super Admin'
-    } else {
-        reviewer1Name = await findApprovedReviewer(reviewer1, 'Reviewer 1')
+    // Set nama untuk reviewer 1
+    if (reviewer1Approval) {
+        if (reviewer1Approval.status.toLowerCase().includes('super admin')) {
+            reviewer1Name = 'Super Admin'
+        } else {
+            try {
+                const reviewer1DocRef = doc(db, 'users', reviewer1Approval.actor)
+                const reviewer1Snapshot = await getDoc(reviewer1DocRef)
+                if (reviewer1Snapshot.exists()) {
+                    reviewer1Name = reviewer1Snapshot.data().nama
+                }
+            } catch (error) {
+                console.error('Error fetching reviewer 1 name:', error)
+            }
+        }
     }
 
-    // Jika ada approval dari Super Admin untuk reviewer 2
-    if (reviewer2Approval && reviewer2Approval.status.toLowerCase().includes('super admin')) {
-        reviewer2Name = 'Super Admin'
-    } else {
-        reviewer2Name = await findApprovedReviewer(reviewer2, 'Reviewer 2')
-    }
-
-    // Jika kedua reviewer adalah Super Admin, kembalikan Super Admin saja
-    if (reviewer1Name === 'Super Admin' && reviewer2Name === 'Super Admin') {
-        return { reviewer1Name: 'Super Admin', reviewer2Name: '' }
+    // Set nama untuk reviewer 2
+    if (reviewer2Approval) {
+        if (reviewer2Approval.status.toLowerCase().includes('super admin')) {
+            reviewer2Name = 'Super Admin'
+        } else {
+            try {
+                const reviewer2DocRef = doc(db, 'users', reviewer2Approval.actor)
+                const reviewer2Snapshot = await getDoc(reviewer2DocRef)
+                if (reviewer2Snapshot.exists()) {
+                    reviewer2Name = reviewer2Snapshot.data().nama
+                }
+            } catch (error) {
+                console.error('Error fetching reviewer 2 name:', error)
+            }
+        }
     }
 
     // Jika reviewer2 tidak ada atau kosong
     if (reviewer2Name === '-' && reviewer1Name !== '-') {
         return { reviewer1Name, reviewer2Name: '' }
+    }
+
+    // Jika reviewer1 tidak ada atau kosong
+    if (reviewer1Name === '-' && reviewer2Name !== '-') {
+        return { reviewer1Name: reviewer2Name, reviewer2Name: '' }
     }
 
     return { reviewer1Name, reviewer2Name }
