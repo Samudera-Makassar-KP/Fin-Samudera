@@ -274,80 +274,87 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator }) => {
                             </View>
                         </View>
                     ) : lpjDetail.kategori === 'Marketing/Operasional' ? (
-                        <View style={{ flexDirection: 'row' }}>
-                            <View style={{ flexDirection: 'column', marginRight: 12, gap: 4 }}>
-                                <Text>Bisnis Unit</Text>
-                                <Text>Project</Text>
-                                <Text>Customer</Text>
-                                <Text>Location</Text>
-                                <Text>PIC</Text>
+                        <View style={{ flexDirection: 'column', gap: 4 }}>
+                            <View style={{ flexDirection: 'row', gap: 32, paddingRight: 12 }}>
+                                <View style={{ width: '50%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>Bisnis Unit</Text>
+                                    <Text style={{ width: 10, marginRight: 4 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {lpjDetail.user?.unit || '-'}
+                                    </Text>
+                                </View>
                             </View>
-                            <View style={{ flexDirection: 'column', textAlign: 'center', marginRight: 4, gap: 4 }}>
-                                <Text>:</Text>
-                                <Text>:</Text>
-                                <Text>:</Text>
-                                <Text>:</Text>
-                                <Text>:</Text>
+
+                            <View style={{ flexDirection: 'row', gap: 32, paddingRight: 12 }}>
+                                <View style={{ width: '65%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>Project</Text>
+                                    <Text style={{ width: 10, marginRight: 2 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {lpjDetail.project || '-'}
+                                    </Text>
+                                </View>
+                                <View style={{ width: '35%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>No. BS</Text>
+                                    <Text style={{ width: 10, marginRight: 2 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {(lpjDetail.nomorBS || '-').replace(/(\d)/g, '$1\u200B')}
+                                    </Text>
+                                </View>
                             </View>
-                            <View
-                                style={{
-                                    flexDirection: 'column',
-                                    textAlign: 'left',
-                                    textTransform: 'uppercase',
-                                    gap: 4
-                                }}
-                            >
-                                <Text>{lpjDetail.user?.unit || '-'}</Text>
-                                <Text>{lpjDetail.project || '-'}</Text>
-                                <Text>{lpjDetail.customer || '-'}</Text>
-                                <Text>{lpjDetail.lokasi || '-'}</Text>
-                                <Text>{lpjDetail.user?.nama || '-'}</Text>
+
+                            <View style={{ flexDirection: 'row', gap: 32, paddingRight: 12 }}>
+                                <View style={{ width: '65%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>Customer</Text>
+                                    <Text style={{ width: 10, marginRight: 2 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {lpjDetail.customer || '-'}
+                                    </Text>
+                                </View>
+                                <View style={{ width: '35%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>No. Job Order</Text>
+                                    <Text style={{ width: 10, marginRight: 2 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {(lpjDetail.nomorJO || '-').replace(/(\d)/g, '$1\u200B')}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 32, paddingRight: 12 }}>
+                                <View style={{ width: '65%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>Location</Text>
+                                    <Text style={{ width: 10, marginRight: 2 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {lpjDetail.lokasi || '-'}
+                                    </Text>
+                                </View>
+                                <View style={{ width: '35%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>Tgl. Kegiatan</Text>
+                                    <Text style={{ width: 10, marginRight: 2 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {lpjDetail.tanggal
+                                            ? new Date(lpjDetail.tanggal).toLocaleDateString('id-ID', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                year: 'numeric'
+                                            })
+                                            : '-'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 32, paddingRight: 12 }}>
+                                <View style={{ width: '65%', flexDirection: 'row' }}>
+                                    <Text style={{ width: 70 }}>PIC</Text>
+                                    <Text style={{ width: 10, marginRight: 2 }}>:</Text>
+                                    <Text style={{ flex: 1, textTransform: 'uppercase' }}>
+                                        {lpjDetail.user?.nama || '-'}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
                     ) : (
                         <View>
                             <Text>Kategori tidak ditemukan</Text>
-                        </View>
-                    )}
-
-                    {lpjDetail.kategori === 'Marketing/Operasional' && (
-                        <View style={{ flexDirection: 'row' }}>
-                            <View style={{ flexDirection: 'column', marginRight: 12, gap: 4 }}>
-                                <Text> </Text>
-                                <Text>No. BS</Text>
-                                <Text>No. Job Order</Text>
-                                <Text>Tgl. Kegiatan</Text>
-                                <Text> </Text>
-                            </View>
-                            <View style={{ flexDirection: 'column', textAlign: 'center', marginRight: 4, gap: 4 }}>
-                                <Text> </Text>
-                                <Text>:</Text>
-                                <Text>:</Text>
-                                <Text>:</Text>
-                                <Text> </Text>
-                            </View>
-                            <View
-                                style={{
-                                    flexDirection: 'column',
-                                    textAlign: 'left',
-                                    textTransform: 'uppercase',
-                                    gap: 4
-                                }}
-                            >
-                                <Text> </Text>
-                                <Text>{lpjDetail.nomorBS || '-'}</Text>
-                                <Text>{lpjDetail.nomorJO || '-'}</Text>
-                                <Text>
-                                    {lpjDetail.tanggal
-                                        ? new Date(lpjDetail.tanggal).toLocaleDateString('id-ID', {
-                                            day: '2-digit',
-                                            month: '2-digit',
-                                            year: 'numeric'
-                                        })
-                                        : '-'}
-                                </Text>
-                                <Text> </Text>
-                            </View>
                         </View>
                     )}
                 </View>
