@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { db } from '../firebaseConfig' // Pastikan db diimpor dari firebaseConfig
 import { doc, getDoc } from 'firebase/firestore'
 import ReimbursementTable from '../components/ReimbursementTable'
 import CreateBsTable from '../components/CreateBsTable'
 import LpjBsTable from '../components/LpjBsTable'
 import Layout from './Layout'
+import BSAlerts from '../components/BSAlerts'
 
 const EmployeeDashboard = ({ userUid }) => {
     const [user, setUser] = useState(null)
+    const createBsTableRef = useRef(null);
 
     // Ambil email dari localStorage jika tidak dikirim melalui prop
     const uid = userUid || localStorage.getItem('userUid')
@@ -36,6 +38,13 @@ const EmployeeDashboard = ({ userUid }) => {
         fetchUserData()
     }, [uid])
 
+    const scrollToCreateBsTable = () => {
+        createBsTableRef.current?.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+        });
+    };
+
     return (
         <div>
             <Layout>
@@ -44,8 +53,11 @@ const EmployeeDashboard = ({ userUid }) => {
                         <h2 className="text-xl font-medium mb-4">
                             Welcome, <span className="font-bold">{user?.name || 'User'}</span>
                         </h2>
+                        <BSAlerts scrollToTable={scrollToCreateBsTable} />
                         <ReimbursementTable />
-                        <CreateBsTable />
+                        <div ref={createBsTableRef}>
+                            <CreateBsTable />
+                        </div>
                         <LpjBsTable />
                     </div>
                 </div>

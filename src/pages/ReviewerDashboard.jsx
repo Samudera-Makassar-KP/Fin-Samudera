@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { db } from '../firebaseConfig'
 import { doc, getDoc } from 'firebase/firestore'
 import ReimbursementTable from '../components/ReimbursementTable'
@@ -7,9 +7,11 @@ import CreateBsTable from '../components/CreateBsTable'
 import ReportCard from '../components/ReportCard'
 import Layout from './Layout'
 import GAUPieChart from '../components/GAUPieChart'
+import BSAlerts from '../components/BSAlerts'
 
 const ReviewerDashboard = ({ userUid }) => {
     const [user, setUser] = useState(null)
+    const createBsTableRef = useRef(null);
 
     const uid = userUid || localStorage.getItem('userUid')
 
@@ -37,6 +39,13 @@ const ReviewerDashboard = ({ userUid }) => {
         fetchUserData()
     }, [uid])
 
+    const scrollToCreateBsTable = () => {
+        createBsTableRef.current?.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+        });
+    };
+
     return (
         <div>
             <Layout>
@@ -45,12 +54,15 @@ const ReviewerDashboard = ({ userUid }) => {
                         <h2 className="text-xl font-medium mb-4">
                             Welcome, <span className="font-bold">{user?.name || 'User '}</span>
                         </h2>
+                        <BSAlerts scrollToTable={scrollToCreateBsTable} />
                         <div className='flex flex-col xl:flex-row justify-between gap-4 xl:gap-6 mb-6'>
                             <ReportCard />
                             <GAUPieChart />
                         </div>                        
                         <ReimbursementTable />
-                        <CreateBsTable />
+                        <div ref={createBsTableRef}>
+                            <CreateBsTable />
+                        </div>
                         <LpjBsTable />
                     </div>
                 </div>
