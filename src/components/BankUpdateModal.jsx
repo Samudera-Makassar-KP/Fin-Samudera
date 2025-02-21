@@ -196,7 +196,7 @@ const BankUpdateModal = ({ isOpen, onClose }) => {
                                 !hasChanges() 
                                     ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
                                     : 'bg-red-600 hover:bg-red-700 text-white hover:text-gray-200'
-                            } px-6 py-3 rounded-md text-sm md:text-sm transition-colors`}
+                            } w-full px-4 py-2 md:px-6 md:py-3 rounded-md text-sm md:text-sm transition-colors`}
                             disabled={isLoading || !hasChanges()}
                         >
                             {isLoading ? (

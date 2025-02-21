@@ -245,7 +245,7 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
                         <button
                             type="button"
                             onClick={handleForgotPassword}
-                            className="text-red-600 text-sm md:text-sm hover:text-red-700 hover:underline"
+                            className="text-red-600 text-xs md:text-sm hover:text-red-700 hover:underline"
                             disabled={isResetLoading}
                         >
                             {isResetLoading ? 'Mengirim...' : 'Lupa Kata Sandi?'}
@@ -255,7 +255,7 @@ const PasswordChangeModal = ({ isOpen, onClose }) => {
                             className={`${!hasChanges()
                                     ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
                                     : 'bg-red-600 hover:bg-red-700 text-white hover:text-gray-200'
-                                } px-6 py-3 rounded-md text-sm md:text-sm transition-colors`}
+                                } px-4 py-2 md:px-6 md:py-3 rounded-md text-xs md:text-sm transition-colors`}
                             disabled={isLoading || !hasChanges()}
                         >
                             {isLoading ? (
