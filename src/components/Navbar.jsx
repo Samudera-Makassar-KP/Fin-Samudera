@@ -115,7 +115,7 @@ function Navbar({ toggleSidebar }) {
                     <button onClick={toggleSidebar} className="lg:hidden text-gray-600">
                         <FontAwesomeIcon icon={faBars} size="lg" />
                     </button>
-                    <img src={Logo} alt="Samudera Logo" className="h-6 md:h-8" />
+                    <img src={Logo} alt="Samudera Logo" className="h-5 md:h-6" />
                 </div>
                 <div className="flex items-center space-x-2 md:space-x-4 relative" ref={dropdownRef}>
                     {user ? (

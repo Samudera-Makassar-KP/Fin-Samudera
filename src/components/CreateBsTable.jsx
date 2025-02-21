@@ -8,11 +8,13 @@ import Modal from '../components/Modal'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import BSTimerDisplay from './bsTimerDisplay'
 
 const CreateBsTable = () => {
     const [data, setData] = useState({ bonSementara: [] })
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
+    const [lpjStatus, setLpjStatus] = useState({})
 
     // Get current date
     const today = new Date()
@@ -36,7 +38,7 @@ const CreateBsTable = () => {
 
     const filterOptions = {
         status: [
-            { value: 'Diajukan', label: 'Diajukan' },            
+            { value: 'Diajukan', label: 'Diajukan' },
             { value: 'Diproses', label: 'Diproses' },
             { value: 'Disetujui', label: 'Disetujui' },
             { value: 'Ditolak', label: 'Ditolak' },
@@ -104,6 +106,47 @@ const CreateBsTable = () => {
         fetchUserAndBonSementara()
     }, [])
 
+    const fetchLpjStatus = async (bonSementaraList) => {
+        try {
+            const newLpjStatus = {};
+
+            for (const bs of bonSementaraList) {
+                // Query to check if there's a matching LPJ document
+                const lpjQuery = query(
+                    collection(db, 'lpj'),
+                    where('nomorBS', '==', bs.displayId)
+                );
+
+                const lpjSnapshot = await getDocs(lpjQuery);
+
+                if (lpjSnapshot.empty) {
+                    // No LPJ found
+                    newLpjStatus[bs.id] = { status: 'Belum LPJ' };
+                } else {
+                    // Get the LPJ document and check its status
+                    const lpjDoc = lpjSnapshot.docs[0];
+                    const lpjData = lpjDoc.data();
+
+                    if (lpjData.status === 'Disetujui') {
+                        newLpjStatus[bs.id] = {
+                            status: 'Sudah LPJ',
+                            statusHistory: lpjData.statusHistory || []
+                        };
+                    } else {
+                        newLpjStatus[bs.id] = {
+                            status: 'Sedang LPJ',
+                            statusHistory: lpjData.statusHistory || []
+                        };
+                    }
+                }
+            }
+
+            setLpjStatus(newLpjStatus);
+        } catch (error) {
+            console.error('Error fetching LPJ statuses:', error);
+        }
+    };
+
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A' // Handle null/undefined
         const date = new Date(dateString)
@@ -144,6 +187,13 @@ const CreateBsTable = () => {
 
     const totalPages = Math.ceil(filteredBonSementara.length / itemsPerPage)
     const currentBonSementara = filteredBonSementara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+
+    // Add this useEffect after your existing useEffect
+    useEffect(() => {
+        if (data.bonSementara.length > 0) {
+            fetchLpjStatus(data.bonSementara);
+        }
+    }, [data.bonSementara]);
 
     const nextPage = () => {
         if (currentPage < totalPages) {
@@ -204,6 +254,57 @@ const CreateBsTable = () => {
             toast.error('Gagal membatalkan bon sementara. Silakan coba lagi.')
         }
     }
+
+    const shouldShowAlert = (item) => {
+        // Check if the BS is approved
+        if (item.status !== 'Disetujui') return false
+
+        // Find approval entry in statusHistory
+        const approvalEntry =
+            item.statusHistory &&
+            item.statusHistory.find(
+                (entry) =>
+                    entry.status &&
+                    (entry.status === 'Disetujui oleh Reviewer 2' ||
+                        entry.status === 'Disetujui oleh Super Admin (Pengganti Reviewer 2)')
+            )
+
+        if (!approvalEntry) return false
+
+        const approvalDate = new Date(approvalEntry.timestamp)
+        const currentDate = new Date()
+
+        // Calculate days difference
+        const diffTime = currentDate - approvalDate
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+        // Show alert if more than 3 days have passed and LPJ status is "Belum LPJ" or "Sedang LPJ"
+        return diffDays >= 3 && lpjStatus[item.id] &&
+            (lpjStatus[item.id].status === 'Belum LPJ' || lpjStatus[item.id].status === 'Sedang LPJ');
+    }
+
+    const shouldShowTimer = (item) => {
+        // Check if the BS is approved
+        if (item.status !== 'Disetujui') return false;
+
+        // Find approval entry in statusHistory
+        const approvalEntry =
+            item.statusHistory &&
+            item.statusHistory.find(
+                (entry) =>
+                    entry.status &&
+                    (entry.status === 'Disetujui oleh Reviewer 2' ||
+                        entry.status === 'Disetujui oleh Super Admin (Pengganti Reviewer 2)')
+            );
+
+        if (!approvalEntry) return false;
+
+        // Show timer if BS is approved and LPJ status is any of these three states
+        return lpjStatus[item.id] &&
+            (lpjStatus[item.id].status === 'Belum LPJ' ||
+                lpjStatus[item.id].status === 'Sedang LPJ' ||
+                lpjStatus[item.id].status === 'Sudah LPJ');
+    };
 
     const selectStyles = {
         control: (base) => ({
@@ -309,7 +410,7 @@ const CreateBsTable = () => {
 
                     <div className="w-full">
                         <div className="w-full overflow-x-auto">
-                            <div className="inline-block min-w-[800px] w-full">
+                            <div className="inline-block min-w-[1000px] w-full">
                                 <table className="w-full bg-white text-sm">
                                     <thead>
                                         <tr className="bg-gray-100 text-left">
@@ -319,6 +420,7 @@ const CreateBsTable = () => {
                                             <th className="px-4 py-2 border">Jumlah BS</th>
                                             <th className="px-4 py-2 border">Tanggal Pengajuan</th>
                                             <th className="py-2 border text-center">Status</th>
+                                            <th className="py-2 border text-center">Status LPJ</th>
                                             <th className="py-2 border text-center">Aksi</th>
                                         </tr>
                                     </thead>
@@ -329,12 +431,21 @@ const CreateBsTable = () => {
                                                     {index + 1 + (currentPage - 1) * itemsPerPage}
                                                 </td>
                                                 <td className="px-4 py-2 border">
-                                                    <Link
-                                                        to={`/create-bs/${item.id}`}
-                                                        className="text-black hover:text-gray-700 hover:underline cursor-pointer"
-                                                    >
-                                                        {item.displayId}
-                                                    </Link>
+                                                    <div className="flex items-center gap-2">
+                                                        <Link
+                                                            to={`/create-bs/${item.id}`}
+                                                            className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                        >
+                                                            {item.displayId}
+                                                        </Link>
+                                                        {shouldShowAlert(item) && (
+                                                            <span className="text-red-600" title="LPJ belum diselesaikan setelah 3 hari persetujuan">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-2 border">{item.bonSementara[0].kategori}</td>
                                                 <td className="px-4 py-2 border">
@@ -361,6 +472,38 @@ const CreateBsTable = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        {lpjStatus[item.id] ? (
+                                                            <>
+                                                                {(item.status !== 'Disetujui') && (
+                                                                    <span className="px-4 py-1 rounded-full text-xs font-medium 
+                        bg-gray-300 text-gray-700 border-[1px] border-gray-600">
+                                                                        {item.status === 'Diajukan' || item.status === 'Diproses'
+                                                                            ? 'Menunggu Persetujuan'
+                                                                            : item.status === 'Ditolak' || item.status === 'Dibatalkan'
+                                                                                ? 'Tidak Dapat LPJ'
+                                                                                : ''}
+                                                                    </span>
+                                                                )}
+                                                                {shouldShowTimer(item) && (
+                                                                    <BSTimerDisplay
+                                                                        approvalDate={item.statusHistory.find(entry =>
+                                                                            entry.status === 'Disetujui oleh Reviewer 2' ||
+                                                                            entry.status === 'Disetujui oleh Super Admin (Pengganti Reviewer 2)'
+                                                                        )?.timestamp}
+                                                                        lpjStatus={lpjStatus[item.id].status}
+                                                                        lpjStatusHistory={lpjStatus[item.id].statusHistory}
+                                                                    />
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <span className="px-4 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-800 border-[1px] border-gray-600">
+                                                                Loading...
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-2 py-2 border text-center">
                                                     <button
                                                         className="text-red-500 hover:text-red-700 disabled:text-gray-400 disabled:cursor-not-allowed hover"
                                                         onClick={() => handleCancel(item)}
@@ -385,8 +528,8 @@ const CreateBsTable = () => {
                                 onClick={prevPage}
                                 disabled={currentPage === 1}
                                 className={`flex items-center px-2 h-9 rounded-full ${currentPage === 1
-                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
                                     }`}
                             >
                                 <svg
@@ -417,8 +560,8 @@ const CreateBsTable = () => {
                                         key={1}
                                         onClick={() => setCurrentPage(1)}
                                         className={`min-w-[36px] h-9 rounded-full ${currentPage === 1
-                                                ? 'bg-red-600 text-white'
-                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                            ? 'bg-red-600 text-white'
+                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
                                             }`}
                                     >
                                         1
@@ -433,8 +576,8 @@ const CreateBsTable = () => {
                                                 key={i}
                                                 onClick={() => setCurrentPage(i)}
                                                 className={`min-w-[36px] h-9 rounded-full ${currentPage === i
-                                                        ? 'bg-red-600 text-white'
-                                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                    ? 'bg-red-600 text-white'
+                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
                                                     }`}
                                             >
                                                 {i}
@@ -511,8 +654,8 @@ const CreateBsTable = () => {
                                                         key={i}
                                                         onClick={() => setCurrentPage(i)}
                                                         className={`min-w-[36px] h-9 rounded-full ${currentPage === i
-                                                                ? 'bg-red-600 text-white'
-                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                            ? 'bg-red-600 text-white'
+                                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
                                                             }`}
                                                     >
                                                         {i}
@@ -536,8 +679,8 @@ const CreateBsTable = () => {
                                                         key={i}
                                                         onClick={() => setCurrentPage(i)}
                                                         className={`min-w-[36px] h-9 rounded-full ${currentPage === i
-                                                                ? 'bg-red-600 text-white'
-                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                            ? 'bg-red-600 text-white'
+                                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
                                                             }`}
                                                     >
                                                         {i}
@@ -557,8 +700,8 @@ const CreateBsTable = () => {
                                                             key={i}
                                                             onClick={() => setCurrentPage(i)}
                                                             className={`min-w-[36px] h-9 rounded-full ${currentPage === i
-                                                                    ? 'bg-red-600 text-white'
-                                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                                ? 'bg-red-600 text-white'
+                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
                                                                 }`}
                                                         >
                                                             {i}
@@ -581,8 +724,8 @@ const CreateBsTable = () => {
                                                 key={totalPages}
                                                 onClick={() => setCurrentPage(totalPages)}
                                                 className={`min-w-[36px] h-9 rounded-full ${currentPage === totalPages
-                                                        ? 'bg-red-600 text-white'
-                                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                    ? 'bg-red-600 text-white'
+                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
                                                     }`}
                                             >
                                                 {totalPages}
@@ -599,8 +742,8 @@ const CreateBsTable = () => {
                                 onClick={nextPage}
                                 disabled={currentPage === totalPages}
                                 className={`flex items-center px-2 h-9 rounded-full ${currentPage === totalPages
-                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
                                     }`}
                             >
                                 <svg
