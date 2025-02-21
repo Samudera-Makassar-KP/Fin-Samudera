@@ -44,7 +44,6 @@ const ReimbursementTable = () => {
             { value: 'Dibatalkan', label: 'Dibatalkan' }
         ],
         kategori: [
-            { value: 'Medical', label: 'Medical' },
             { value: 'BBM', label: 'BBM' },
             { value: 'Operasional', label: 'Operasional' },
             { value: 'GA/Umum', label: 'GA/Umum' }
