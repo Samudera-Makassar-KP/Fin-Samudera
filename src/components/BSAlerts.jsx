@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
-const BSAlerts = ({ scrollToTable }) => {
+const BsAlerts = ({ scrollToTable }) => {
   const [alerts, setAlerts] = useState({
     pending: [],
     overdue: []
@@ -142,4 +142,4 @@ const BSAlerts = ({ scrollToTable }) => {
   );
 };
 
-export default BSAlerts;
+export default BsAlerts;

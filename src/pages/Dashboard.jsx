@@ -3,10 +3,11 @@ import { db } from '../firebaseConfig'
 import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import ReimbursementTable from '../components/ReimbursementTable'
 import LpjBsTable from '../components/LpjBsTable'
-import CreateBsTable from '../components/CreateBsTable'
+import CreateBsTable from '../components/BsTable'
 import ReportCard from '../components/ReportCard'
 import Layout from './Layout'
-import BSAlerts from '../components/BSAlerts'
+import GAUPieChart from '../components/GAUPieChart'
+import BsAlerts from '../components/BsAlerts'
 import DefaultBankModal from '../components/DefaultBankModal'
 
 const DEFAULT_BANK = {
@@ -14,9 +15,10 @@ const DEFAULT_BANK = {
     accountNumber: '123'
 }
 
-const ValidatorDashboard = ({ userUid }) => {
+const Dashboard = ({ userUid }) => {
     const [user, setUser] = useState({
         name: 'User',
+        role: '',
         bankName: DEFAULT_BANK.bankName,
         accountNumber: DEFAULT_BANK.accountNumber
     });
@@ -43,6 +45,7 @@ const ValidatorDashboard = ({ userUid }) => {
                         const userData = userDoc.data();
                         setUser({
                             name: userData.nama || 'User',
+                            role: userData.role || '',
                             bankName: userData.bankName || DEFAULT_BANK.bankName,
                             accountNumber: userData.accountNumber || DEFAULT_BANK.accountNumber
                         });
@@ -67,6 +70,7 @@ const ValidatorDashboard = ({ userUid }) => {
 
                 setUser({
                     name: userData.nama || 'User',
+                    role: userData.role || '',
                     bankName,
                     accountNumber
                 });
@@ -93,10 +97,16 @@ const ValidatorDashboard = ({ userUid }) => {
                 <div className="container mx-auto py-10 md:py-8">
                     <div className="w-full">
                         <h2 className="text-xl font-medium mb-4">
-                            Welcome, <span className="font-bold">{user?.name || 'User '}</span>
+                            Welcome, <span className="font-bold">{user?.name || 'User'}</span>
                         </h2>
-                        <BSAlerts scrollToTable={scrollToCreateBsTable} />
-                        <ReportCard />
+                        <BsAlerts scrollToTable={scrollToCreateBsTable} />
+                        {user.role === 'Reviewer' && (
+                            <div className='flex flex-col xl:flex-row justify-between gap-4 xl:gap-6 mb-6'>
+                                <ReportCard />
+                                <GAUPieChart />
+                            </div>
+                        )}
+                        {user.role === 'Validator' && <ReportCard />}
                         <ReimbursementTable />
                         <div ref={createBsTableRef}>
                             <CreateBsTable />
@@ -118,4 +128,4 @@ const ValidatorDashboard = ({ userUid }) => {
     )
 }
 
-export default ValidatorDashboard
+export default Dashboard

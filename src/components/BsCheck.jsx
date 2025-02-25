@@ -9,7 +9,7 @@ import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 
-const CreateBsCheck = () => {
+const BSCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')
     const [data, setData] = useState({ bonSementara: [] })
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -716,7 +716,7 @@ const CreateBsCheck = () => {
                                                     <td className="p-2 border text-center w-auto">{index + 1}</td>
                                                     <td className="px-4 py-2 border">
                                                         <Link
-                                                            to={`/create-bs/${item.id}`}
+                                                            to={`/bon-sementara/${item.id}`}
                                                             className="text-black hover:text-gray-700 hover:underline cursor-pointer"
                                                         >
                                                             {item.displayId}
@@ -836,7 +836,7 @@ const CreateBsCheck = () => {
                                                         <td className="p-2 border text-center w-auto">{index + 1}</td>
                                                         <td className="px-4 py-2 border">
                                                             <Link
-                                                                to={`/create-bs/${item.id}`}
+                                                                to={`/bon-sementara/${item.id}`}
                                                                 className="text-black hover:text-gray-700 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
@@ -914,7 +914,7 @@ const CreateBsCheck = () => {
                                                         <td className="p-2 border text-center w-auto">{index + 1}</td>
                                                         <td className="px-4 py-2 border">
                                                             <Link
-                                                                to={`/create-bs/${item.id}`}
+                                                                to={`/bon-sementara/${item.id}`}
                                                                 className="text-black hover:text-gray-700 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
@@ -963,4 +963,4 @@ const CreateBsCheck = () => {
     );
 }
 
-export default CreateBsCheck
+export default BSCheck

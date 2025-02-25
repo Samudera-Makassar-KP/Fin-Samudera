@@ -10,7 +10,7 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 
-const DetailCreateBs = () => {
+const DetailBs = () => {
     const [userData, setUserData] = useState(null)
     const [bonSementaraDetail, setBonSementaraDetail] = useState(null)
     const [reviewers, setReviewers] = useState([])
@@ -527,4 +527,4 @@ const DetailCreateBs = () => {
     )
 }
 
-export default DetailCreateBs
+export default DetailBs

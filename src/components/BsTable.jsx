@@ -4,13 +4,13 @@ import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'f
 import { db } from '../firebaseConfig'
 import EmptyState from '../assets/images/EmptyState.png'
 import Select from 'react-select'
-import Modal from '../components/Modal'
+import Modal from './Modal'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
-import BSTimerDisplay from './bsTimerDisplay'
+import BsTimerDisplay from './BsTimerDisplay'
 
-const CreateBsTable = () => {
+const BsTable = () => {
     const [data, setData] = useState({ bonSementara: [] })
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
@@ -445,7 +445,7 @@ const CreateBsTable = () => {
                                                 <td className="px-4 py-2 border">
                                                     <div className="flex items-center gap-2">
                                                         <Link
-                                                            to={`/create-bs/${item.id}`}
+                                                            to={`/bon-sementara/${item.id}`}
                                                             className="text-black hover:text-gray-700 hover:underline cursor-pointer"
                                                         >
                                                             {item.displayId}
@@ -498,7 +498,7 @@ const CreateBsTable = () => {
                                                                     </span>
                                                                 )}
                                                                 {shouldShowTimer(item) && (
-                                                                    <BSTimerDisplay
+                                                                    <BsTimerDisplay
                                                                         approvalDate={item.statusHistory.find(entry =>
                                                                             entry.status === 'Disetujui oleh Reviewer 2' ||
                                                                             entry.status === 'Disetujui oleh Super Admin (Pengganti Reviewer 2)'
@@ -790,4 +790,4 @@ const CreateBsTable = () => {
     )
 }
 
-export default CreateBsTable
+export default BsTable

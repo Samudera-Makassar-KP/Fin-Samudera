@@ -7,7 +7,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 
-const CreateBonForm = () => {
+const FormBs = () => {
     const [todayDate, setTodayDate] = useState('')
     const [alreadyFetchBS, setAlreadyFetchBS] = useState(false)
     const [userData, setUserData] = useState({
@@ -829,4 +829,4 @@ const CreateBonForm = () => {
     )
 }
 
-export default CreateBonForm
+export default FormBs
