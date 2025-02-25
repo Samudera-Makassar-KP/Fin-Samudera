@@ -731,6 +731,8 @@ const FormLpjMarketing = () => {
                                         classNamePrefix="select"
                                         styles={customStyles}
                                         isSearchable={false}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                             </div>
                         </div>
@@ -750,6 +752,8 @@ const FormLpjMarketing = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className="block xl:hidden">
@@ -766,6 +770,8 @@ const FormLpjMarketing = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className="block xl:hidden">
@@ -782,6 +788,8 @@ const FormLpjMarketing = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div>
@@ -804,12 +812,14 @@ const FormLpjMarketing = () => {
                                     options={validatorOptions}
                                     value={selectedValidator}
                                     onChange={setSelectedValidator}
-                                    placeholder="Pilih Validator..."
+                                    placeholder="Pilih Validator"
                                     className="basic-single"
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -847,6 +857,8 @@ const FormLpjMarketing = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -878,6 +890,8 @@ const FormLpjMarketing = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>

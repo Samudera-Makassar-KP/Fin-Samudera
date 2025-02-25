@@ -308,10 +308,6 @@ const ReportExport = () => {
             padding: '6px 12px',
             cursor: 'pointer'
         }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '170px'
-        }),
         multiValue: (base) => ({
             ...base,
             fontSize: '14px',
@@ -671,6 +667,8 @@ const ReportExport = () => {
                                             styles={selectStyles}
                                             placeholder="Pilih Unit Bisnis"
                                             isSearchable={false}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                     <div className="flex gap-2 w-full">
@@ -682,6 +680,8 @@ const ReportExport = () => {
                                             styles={selectStyles}
                                             placeholder="Pilih Bulan"
                                             isSearchable={false}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                         <Select
                                             value={filters.tahun}
@@ -691,6 +691,8 @@ const ReportExport = () => {
                                             styles={selectStyles}
                                             placeholder="Pilih Tahun"
                                             isSearchable={false}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                     <button

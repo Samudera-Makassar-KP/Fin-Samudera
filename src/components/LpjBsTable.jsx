@@ -237,10 +237,6 @@ const LpjBsTable = () => {
             fontSize: '12px',
             padding: '6px 12px',
             cursor: 'pointer'
-        }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
         })
     }
 
@@ -258,6 +254,8 @@ const LpjBsTable = () => {
                 className="w-38 lg:w-40"
                 styles={selectStyles}
                 isSearchable={false}
+                menuPortalTarget={document.body}
+                menuPosition="absolute"
             />
         )
     }

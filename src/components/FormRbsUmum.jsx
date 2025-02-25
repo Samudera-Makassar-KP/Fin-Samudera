@@ -553,10 +553,6 @@ const RbsUmumForm = () => {
             padding: '0 7px',
             height: '40px',
             minHeight: '40px'
-        }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
         })
     }
 
@@ -593,6 +589,8 @@ const RbsUmumForm = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='hidden xl:block'>
@@ -609,6 +607,8 @@ const RbsUmumForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -628,6 +628,8 @@ const RbsUmumForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -644,6 +646,8 @@ const RbsUmumForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -660,6 +664,8 @@ const RbsUmumForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div>
@@ -685,6 +691,8 @@ const RbsUmumForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -713,6 +721,8 @@ const RbsUmumForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -755,6 +765,8 @@ const RbsUmumForm = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -864,6 +876,8 @@ const RbsUmumForm = () => {
                                             className="w-full"
                                             styles={customStyles}                                            
                                             isSearchable={false}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     )}
                                 </div>

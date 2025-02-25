@@ -323,10 +323,6 @@ const AddUserForm = () => {
             fontSize: '14px',
             flexShrink: 0
         }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
-        })
     }
 
     return (
@@ -410,6 +406,8 @@ const AddUserForm = () => {
                                             isClearable
                                             styles={selectStyles}
                                             isSearchable={true}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                     <div className="mb-2">
@@ -425,6 +423,8 @@ const AddUserForm = () => {
                                             classNamePrefix="select"
                                             styles={selectStyles}
                                             onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'department')}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                 </div>
@@ -442,6 +442,8 @@ const AddUserForm = () => {
                                             classNamePrefix="select"
                                             styles={selectStyles}
                                             onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'validator')}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                     <div className="mb-2">
@@ -457,6 +459,8 @@ const AddUserForm = () => {
                                             classNamePrefix="select"
                                             styles={selectStyles}
                                             onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'reviewer1')}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                 </div>
@@ -479,6 +483,8 @@ const AddUserForm = () => {
                                             isClearable
                                             styles={selectStyles}
                                             isSearchable={false}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                 )}
@@ -497,6 +503,8 @@ const AddUserForm = () => {
                                         isClearable
                                         styles={selectStyles}
                                         isSearchable={false}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                                 </div>
                             </div>
@@ -515,6 +523,8 @@ const AddUserForm = () => {
                                             classNamePrefix="select"
                                             styles={selectStyles}
                                             onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'reviewer2')}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     </div>
                                 )}
@@ -563,6 +573,8 @@ const AddUserForm = () => {
                                 isClearable
                                 styles={selectStyles}
                                 isSearchable={false}
+                                menuPortalTarget={document.body}
+                                menuPosition="absolute"
                             />
                         </div>
                         {formData.role !== 'Super Admin' && (
@@ -580,6 +592,8 @@ const AddUserForm = () => {
                                         classNamePrefix="select"
                                         styles={selectStyles}
                                         isSearchable={false}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                                 </div>
                                 <div className="mb-2">
@@ -595,6 +609,8 @@ const AddUserForm = () => {
                                         className="basic-multi-select mt-1"
                                         classNamePrefix="select"
                                         styles={selectStyles}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                                 </div>
                                 <div className="mb-2">
@@ -610,6 +626,8 @@ const AddUserForm = () => {
                                         classNamePrefix="select"
                                         styles={selectStyles}
                                         isSearchable={true}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                                 </div>
                                 <div className="mb-2">
@@ -649,6 +667,8 @@ const AddUserForm = () => {
                                         classNamePrefix="select"
                                         styles={selectStyles}
                                         onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'validator')}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                                 </div>
                                 <div className="mb-2">
@@ -664,6 +684,8 @@ const AddUserForm = () => {
                                         classNamePrefix="select"
                                         styles={selectStyles}
                                         onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'reviewer1')}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                                 </div>
                                 <div className="mb-2">
@@ -679,6 +701,8 @@ const AddUserForm = () => {
                                         classNamePrefix="select"
                                         styles={selectStyles}
                                         onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'reviewer2')}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                                 </div>
                             </div>

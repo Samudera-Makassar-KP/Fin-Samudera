@@ -698,6 +698,8 @@ const FormLpjUmum = () => {
                                         classNamePrefix="select"
                                         styles={customStyles}
                                         isSearchable={false}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                             </div>
                             <div className="hidden xl:block">
@@ -714,6 +716,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -733,6 +737,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -749,6 +755,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -765,6 +773,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div>
@@ -793,6 +803,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -830,6 +842,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -871,6 +885,8 @@ const FormLpjUmum = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>

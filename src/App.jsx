@@ -35,7 +35,7 @@ const AppContent = () => {
 
                 {/* Dashboard Routes */}
                 <Route path="/dashboard" element={
-                    <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee', 'Super Admin']}>
+                    <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee']}>
                         <Dashboard />
                     </ProtectedRoute>
                 } />

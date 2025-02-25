@@ -557,6 +557,8 @@ const FormBs = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -585,6 +587,8 @@ const FormBs = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -613,6 +617,8 @@ const FormBs = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -641,6 +647,8 @@ const FormBs = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -657,6 +665,8 @@ const FormBs = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div>
@@ -671,6 +681,8 @@ const FormBs = () => {
                                     className="w-full"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -741,6 +753,8 @@ const FormBs = () => {
                                     className="w-full"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>

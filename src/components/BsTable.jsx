@@ -343,10 +343,6 @@ const BsTable = () => {
             fontSize: '12px',
             padding: '6px 12px',
             cursor: 'pointer'
-        }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
         })
     }
 
@@ -364,6 +360,8 @@ const BsTable = () => {
                 className="w-38 lg:w-40"
                 styles={selectStyles}
                 isSearchable={false}
+                menuPortalTarget={document.body}
+                menuPosition="absolute"
             />
         )
     }
