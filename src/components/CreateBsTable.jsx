@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import EmptyState from '../assets/images/EmptyState.png'
 import Select from 'react-select'
@@ -127,7 +127,12 @@ const CreateBsTable = () => {
                     const lpjDoc = lpjSnapshot.docs[0];
                     const lpjData = lpjDoc.data();
 
-                    if (lpjData.status === 'Disetujui') {
+                    if (lpjData.status === 'Dibatalkan' || lpjData.status === 'Ditolak') {
+                        newLpjStatus[bs.id] = {
+                            status: 'Belum LPJ',
+                            statusHistory: lpjData.statusHistory || []
+                        };
+                    } else if (lpjData.status === 'Disetujui') {
                         newLpjStatus[bs.id] = {
                             status: 'Sudah LPJ',
                             statusHistory: lpjData.statusHistory || []
@@ -226,16 +231,23 @@ const CreateBsTable = () => {
         }
 
         try {
+            const uid = localStorage.getItem('userUid')
             const bonSemetaraDocRef = doc(db, 'bonSementara', selectedReport.id)
+
+            const newStatusHistory = {
+                timestamp: new Date().toISOString(),
+                actor: uid,
+                status: 'Dibatalkan'
+            };
 
             // Memperbarui data di Firestore
             await updateDoc(bonSemetaraDocRef, {
                 status: 'Dibatalkan',
-                cancelReason: cancelReason || 'Alasan tidak diberikan'
+                cancelReason: cancelReason || 'Alasan tidak diberikan',
+                statusHistory: arrayUnion(newStatusHistory)
             })
 
-            // Menyegarkan data bon semetara setelah pembatalan
-            const uid = localStorage.getItem('userUid')
+            // Refresh data
             const q = query(collection(db, 'bonSementara'), where('user.uid', '==', uid))
             const querySnapshot = await getDocs(q)
             const bonSementara = querySnapshot.docs.map((doc) => ({
