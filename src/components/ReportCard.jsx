@@ -19,7 +19,7 @@ const ReportCard = () => {
 
     const handleBonSementaraClick = () => {
         if (bonSementaraCount > 0) {
-            navigate('/create-bs/cek-pengajuan')
+            navigate('/bon-sementara/cek-pengajuan')
         }
     }
 

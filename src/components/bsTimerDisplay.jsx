@@ -1,6 +1,6 @@
 import React from 'react';
 
-const BSTimerDisplay = ({ approvalDate, lpjStatus, lpjStatusHistory }) => {
+const BsTimerDisplay = ({ approvalDate, lpjStatus, lpjStatusHistory }) => {
     const [timeDisplay, setTimeDisplay] = React.useState('');
     const [isOverdue, setIsOverdue] = React.useState(false);
 
@@ -179,4 +179,4 @@ const BSTimerDisplay = ({ approvalDate, lpjStatus, lpjStatusHistory }) => {
     );
 };
 
-export default BSTimerDisplay;
+export default BsTimerDisplay;

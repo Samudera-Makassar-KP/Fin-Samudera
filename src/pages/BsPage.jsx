@@ -1,19 +1,19 @@
 import React, { useEffect } from 'react'
 import Layout from './Layout'
-import CreateBonForm from '../components/FormCreateBon'
+import FormBs from '../components/FormBs'
 
-const CreateBon = () => {
+const FormBsPage = () => {
     useEffect(() => {
-        document.title = 'Create BS - Samudera Indonesia'
+        document.title = 'Ajukan Bon Sementara - Samudera Indonesia'
     }, [])
 
     return (
         <div>
             <Layout>
-                <CreateBonForm />
+                <FormBs />
             </Layout>
         </div>
     )
 }
 
-export default CreateBon
+export default FormBsPage

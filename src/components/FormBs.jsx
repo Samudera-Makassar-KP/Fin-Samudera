@@ -7,7 +7,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 
-const CreateBonForm = () => {
+const FormBs = () => {
     const [todayDate, setTodayDate] = useState('')
     const [alreadyFetchBS, setAlreadyFetchBS] = useState(false)
     const [userData, setUserData] = useState({
@@ -557,6 +557,8 @@ const CreateBonForm = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -585,6 +587,8 @@ const CreateBonForm = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -613,6 +617,8 @@ const CreateBonForm = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -641,6 +647,8 @@ const CreateBonForm = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -657,6 +665,8 @@ const CreateBonForm = () => {
                                     styles={customStyles}
                                     isSearchable={false}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div>
@@ -671,6 +681,8 @@ const CreateBonForm = () => {
                                     className="w-full"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -741,6 +753,8 @@ const CreateBonForm = () => {
                                     className="w-full"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -829,4 +843,4 @@ const CreateBonForm = () => {
     )
 }
 
-export default CreateBonForm
+export default FormBs

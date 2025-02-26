@@ -12,10 +12,10 @@ export const routesConfig = [
     '/reimbursement/cek-pengajuan',
     '/reimbursement/:id', // Dynamic route
 
-    // Create BS Routes
-    '/create-bs/create',
-    '/create-bs/cek-pengajuan',
-    '/create-bs/:id', // Dynamic route
+    // Bon Sementara Routes
+    '/bon-sementara/ajukan',
+    '/bon-sementara/cek-pengajuan',
+    '/bon-sementara/:id', // Dynamic route
 
     // LPJ BS Routes
     '/lpj/umum',

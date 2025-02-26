@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import EmptyState from '../assets/images/EmptyState.png'
 import Select from 'react-select'
@@ -176,16 +176,23 @@ const LpjBsTable = () => {
         }
 
         try {
+            const uid = localStorage.getItem('userUid')
             const lpjDocRef = doc(db, 'lpj', selectedReport.id)
+
+            const newStatusHistory = {
+                timestamp: new Date().toISOString(),
+                actor: uid,
+                status: 'Dibatalkan'                
+            };
 
             // Memperbarui data di Firestore
             await updateDoc(lpjDocRef, {
                 status: 'Dibatalkan',
-                cancelReason: cancelReason || 'Alasan tidak diberikan'
+                cancelReason: cancelReason || 'Alasan tidak diberikan',
+                statusHistory: arrayUnion(newStatusHistory)
             })
 
-            // Menyegarkan data bon semetara setelah pembatalan
-            const uid = localStorage.getItem('userUid')
+            // Refresh data
             const q = query(collection(db, 'lpj'), where('user.uid', '==', uid))
             const querySnapshot = await getDocs(q)
             const lpj = querySnapshot.docs.map((doc) => ({
@@ -230,10 +237,6 @@ const LpjBsTable = () => {
             fontSize: '12px',
             padding: '6px 12px',
             cursor: 'pointer'
-        }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
         })
     }
 
@@ -251,6 +254,8 @@ const LpjBsTable = () => {
                 className="w-38 lg:w-40"
                 styles={selectStyles}
                 isSearchable={false}
+                menuPortalTarget={document.body}
+                menuPosition="absolute"
             />
         )
     }

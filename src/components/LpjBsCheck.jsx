@@ -12,11 +12,15 @@ import 'react-loading-skeleton/dist/skeleton.css'
 const LpjBsCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')
     const [data, setData] = useState({ lpj: [] })
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false)
     const [approvedData, setApprovedData] = useState({ lpj: [] })
+    const [canceledData, setCanceledData] = useState({ lpj: [] })
     const [filteredApprovedData, setFilteredApprovedData] = useState({ lpj: [] })
+    const [filteredCanceledData, setFilteredCanceledData] = useState({ lpj: [] })
+    const [isValidatorForAny, setIsValidatorForAny] = useState(false);
     const [showModal, setShowModal] = useState(false)
     const [modalProps, setModalProps] = useState({})
-        const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
 
     const uid = localStorage.getItem('userUid')
     const userRole = localStorage.getItem('userRole')
@@ -56,6 +60,7 @@ const LpjBsCheck = () => {
 
                 let pendingLpj = []
                 let approvedLpj = []
+                let canceledLpj = []
 
                 if (userRole === 'Super Admin') {
                     // Pending lpj for Super Admin
@@ -171,6 +176,25 @@ const LpjBsCheck = () => {
                                         (isAssignedAsReviewer2 && history.status === 'Disetujui oleh Reviewer 2'))
                             )
                         })
+
+                    // Get canceled documents
+                    const canceledQ = query(
+                        collection(db, 'lpj'),
+                        where('status', '==', 'Dibatalkan'),
+                        where('user.validator', 'array-contains', uid)
+                    );
+                    const canceledSnapshot = await getDocs(canceledQ);
+                    canceledLpj = canceledSnapshot.docs
+                        .map((doc) => ({
+                            id: doc.id,
+                            displayId: doc.data().displayId,
+                            ...doc.data()
+                        }))
+                        .filter(doc =>
+                            doc.statusHistory.some(history => history.status === 'Dibatalkan')
+                        );
+
+                    setIsValidatorForAny(canceledLpj.length > 0);
                 }
 
                 // Sort Lpj by date
@@ -195,6 +219,15 @@ const LpjBsCheck = () => {
                     return latestB - latestA
                 })
 
+                // Sort canceled lpj by the latest statusHistory timestamp
+                canceledLpj.sort((a, b) => {
+                    const timestampA = a.statusHistory
+                        .find(history => history.status === 'Dibatalkan')?.timestamp || '';
+                    const timestampB = b.statusHistory
+                        .find(history => history.status === 'Dibatalkan')?.timestamp || '';
+                    return new Date(timestampB) - new Date(timestampA);
+                });
+
                 const existingYears = new Set(
                     approvedLpj
                         .map(
@@ -215,6 +248,7 @@ const LpjBsCheck = () => {
 
                 setData({ lpj: pendingLpj })
                 setApprovedData({ lpj: approvedLpj })
+                setCanceledData({ lpj: canceledLpj })
             } catch (error) {
                 console.error('Error fetching lpj data:', error)
             } finally {
@@ -224,6 +258,28 @@ const LpjBsCheck = () => {
 
         fetchUserAndLpj()
     }, [uid, userRole])
+
+    const getAvailableTabs = () => {
+        const tabs = [
+            {
+                id: "pending",
+                label: "Perlu Ditanggapi"
+            },
+            {
+                id: "approved",
+                label: "Riwayat Persetujuan"
+            }
+        ];
+
+        if (isValidatorForAny) {
+            tabs.push({
+                id: "canceled",
+                label: "Pengajuan Dibatalkan"
+            });
+        }
+
+        return tabs;
+    };
 
     // Handle Approve
     const handleApprove = (item) => {
@@ -522,6 +578,31 @@ const LpjBsCheck = () => {
         ]
     }
 
+    // Filtering effect for canceled data
+    useEffect(() => {
+        const filterData = () => {
+            const filteredCanceled = canceledData.lpj.filter(item => {
+                // Find the cancellation entry in statusHistory
+                const canceledEntry = item.statusHistory
+                    .find(status => status.status === 'Dibatalkan');
+
+                if (!canceledEntry) return false;
+
+                const itemDate = new Date(canceledEntry.timestamp);
+                const matchesMonth = filters.bulan
+                    ? itemDate.getMonth() + 1 === filters.bulan.value
+                    : true;
+                const matchesYear = filters.tahun
+                    ? itemDate.getFullYear() === filters.tahun.value
+                    : true;
+
+                return matchesMonth && matchesYear;
+            });
+            setFilteredCanceledData({ lpj: filteredCanceled });
+        };
+        filterData();
+    }, [filters.bulan, filters.tahun, canceledData]);
+
     useEffect(() => {
         const filterData = () => {
             const filtered = approvedData.lpj.filter(item => {
@@ -591,195 +672,217 @@ const LpjBsCheck = () => {
                 onChange={(option) => handleFilterChange(field, option)}
                 options={options}
                 placeholder={label}
-                className="w-full md:w-40"
+                className="w-full md:w-32 xl:w-40"
                 styles={selectStyles}
                 isSearchable={false}
+                menuPortalTarget={document.body}
+                menuPosition="absolute"
             />
         )
     }
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4 md:mb-0">
-                Cek <span className="font-bold">Laporan Bon Sementara</span>
+            <h2 className="text-xl font-medium mb-4">
+                Cek <span className="font-bold">Pengajuan LPJ Bon Sementara</span>
             </h2>
 
-            {/* Tab Navigation */}
-            <div className="flex mb-4 space-x-2 justify-center md:justify-end text-sm">
-                <button
-                    className={`px-4 py-2 rounded-full md:w-auto w-full ${
-                        activeTab === 'pending'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                    onClick={() => setActiveTab('pending')}
-                >
-                    Perlu Ditanggapi
-                </button>
-                <button
-                    className={`px-4 py-2 rounded-full md:w-auto w-full ${
-                        activeTab === 'approved'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                    onClick={() => setActiveTab('approved')}
-                >
-                    Riwayat Persetujuan
-                </button>
-            </div>
+            <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
+                <div className="mb-4">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 xl:gap-24">
+                        {/* Dropdown Title Section */}
+                        <div className="relative flex-shrink-0">
+                            <h3
+                                className="text-xl font-medium cursor-pointer hover:text-gray-700 flex items-center gap-2 transition-all duration-200"
+                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            >
+                                {activeTab === 'pending'
+                                    ? 'LPJ Bon Sementara Perlu Ditanggapi'
+                                    : activeTab === 'approved'
+                                        ? 'Riwayat Persetujuan LPJ Bon Sementara'
+                                        : 'Pengajuan LPJ Bon Sementara Dibatalkan'}
+                                <svg
+                                    className={`w-6 h-6 md:w-5 md:h-5 transition-transform duration-200 flex-shrink-0 ${isDropdownOpen ? "rotate-180" : ""}`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                >
+                                    <path d="M5 9l7 7 7-7" />
+                                </svg>
+                            </h3>
 
-            <div>
-                {activeTab === 'pending' ? (
-                    // Pending LPJ Table
-                    <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
-                        <h3 className="text-xl font-medium mb-4">Daftar LPJ Bon Sementara Perlu Ditanggapi</h3>
-                        {loading ? (
-                            <Skeleton count={5} height={40} />
-                        ) : data.lpj.length === 0 ? (
-                            <div className="flex justify-center">
-                                <figure className="w-44 h-44">
-                                    <img
-                                        src={EmptyState}
-                                        alt="LPJ Bon Sementara icon"
-                                        className="w-full h-full object-contain"
-                                    />
-                                </figure>
-                            </div>
-                        ) : (
-                            <div className="w-full">
-                                <div className="w-full overflow-x-auto">
-                                    <div className="inline-block min-w-[900px] w-full">
-                                        <table className="w-full bg-white border rounded-lg text-sm">
-                                            <thead>
-                                                <tr className="bg-gray-100 text-left">
-                                                    <th className="p-2 border text-center w-auto">No.</th>
-                                                    <th className="px-4 py-2 border">Nomor Dokumen</th>
-                                                    <th className="px-4 py-2 border">Nama</th>
-                                                    <th className="px-4 py-2 border">Kategori LPJ BS</th>
-                                                    <th className="px-4 py-2 border">Nomor BS</th>
-                                                    <th className="px-4 py-2 border">Jumlah BS</th>
-                                                    <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                                    <th className="p-2 border text-center">Status</th>
-                                                    <th className="p-2 border text-center">Aksi</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {data.lpj.map((item, index) => (
-                                                    <tr key={index}>
-                                                        <td className="p-2 border text-center w-auto">{index + 1}</td>
-                                                        <td className="px-4 py-2 border">
-                                                            <Link
-                                                                to={`/lpj/${item.id}`}
-                                                                className="text-black hover:text-gray-700 hover:underline cursor-pointer"
-                                                            >
-                                                                {item.displayId}
-                                                            </Link>
-                                                        </td>
-                                                        <td className="px-4 py-2 border">{item.user.nama}</td>
-                                                        <td className="px-4 py-2 border">{item.kategori}</td>
-                                                        <td className="px-4 py-2 border">{item.nomorBS}</td>
-                                                        <td className="px-4 py-2 border">
-                                                            Rp{item.jumlahBS.toLocaleString('id-ID')}
-                                                        </td>
-                                                        <td className="px-4 py-2 border">
-                                                            {formatDate(item.tanggalPengajuan)}
-                                                        </td>
-                                                        <td className="p-2 border text-center">
-                                                            <span
-                                                                className={`px-4 py-1 rounded-full text-xs font-medium 
-                                                    ${
-                                                        item.status === 'Diajukan'
-                                                            ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
-                                                            : item.status === 'Disetujui'
-                                                              ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
-                                                              : item.status === 'Diproses'
-                                                                ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
-                                                                : item.status === 'Ditolak'
-                                                                  ? 'bg-red-200 text-red-800 border-[1px] border-red-600'
-                                                                  : item.status === 'Divalidasi'
-                                                                    ? 'bg-purple-200 text-purple-800 border-[1px] border-purple-600'
-                                                                    : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
-                                                    }`}
-                                                            >
-                                                                {item.status || 'Tidak Diketahui'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-2 border text-center">
-                                                            <div className="flex justify-center space-x-2">
-                                                                <button
-                                                                    className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600"
-                                                                    onClick={() => handleApprove(item)}
-                                                                    title="Approve"
-                                                                >
-                                                                    <svg
-                                                                        className="w-6 h-6"
-                                                                        viewBox="0 0 24 24"
-                                                                        fill="none"
-                                                                        stroke="currentColor"
-                                                                        strokeWidth="2"
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            d="M5 13l4 4L19 7"
-                                                                        />
-                                                                    </svg>
-                                                                </button>
-
-                                                                <button
-                                                                    className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600"
-                                                                    onClick={() => handleReject(item)}
-                                                                    title="Reject"
-                                                                >
-                                                                    <svg
-                                                                        className="w-6 h-6"
-                                                                        viewBox="0 0 24 24"
-                                                                        fill="none"
-                                                                        stroke="currentColor"
-                                                                        strokeWidth="2"
-                                                                    >
-                                                                        <path
-                                                                            strokeLinecap="round"
-                                                                            strokeLinejoin="round"
-                                                                            d="M6 18L18 6M6 6l12 12"
-                                                                        />
-                                                                    </svg>
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                            {isDropdownOpen && (
+                                <div className="absolute top-full left-0 mt-1 bg-white rounded-lg py-1 z-50 min-w-[250px] md:w-auto shadow-lg">
+                                    {getAvailableTabs().map((tab) => (
+                                        <div
+                                            key={tab.id}
+                                            className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                            onClick={() => {
+                                                setActiveTab(tab.id);
+                                                setIsDropdownOpen(false);
+                                            }}
+                                        >
+                                            <span className={`${activeTab === tab.id ? "font-medium text-red-600" : ""}`}>
+                                                {tab.label}
+                                            </span>
+                                            {activeTab === tab.id && (
+                                                <svg
+                                                    className="w-5 h-5 md:w-4 md:h-4 text-red-600 flex-shrink-0"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                >
+                                                    <path d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
+                            )}
+                        </div>
+
+                        {/* Filter controls for approved and canceled tabs */}
+                        {(activeTab === 'approved' || activeTab === 'canceled') && !loading && (
+                            <div className="flex space-x-2 w-full md:w-auto">
+                                <FilterSelect field="bulan" label="Bulan" />
+                                <FilterSelect field="tahun" label="Tahun" />
                             </div>
                         )}
                     </div>
-                ) : (
-                    // Approved LPJ Table
-                    <div className="bg-white p-6 rounded-lg mb-6 shadow-sm min-h-[50vh]">
-                        <div className="mb-6">
-                            <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
-                                <h3 className="text-xl font-medium mb-4 md:mb-0">
-                                    Riwayat Persetujuan LPJ Bon Sementara
-                                </h3>
-                                {loading ? (
-                                    <div className="grid grid-cols-2 md:flex md:flex-row gap-2 w-full md:w-auto">
-                                        {[...Array(2)].map((_, index) => (
-                                            <div key={index} className="w-full md:w-40">
-                                                <Skeleton className="w-full h-8" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="flex space-x-2 w-full md:w-auto">
-                                        <FilterSelect field="bulan" label="Bulan" />
-                                        <FilterSelect field="tahun" label="Tahun" />
-                                    </div>
-                                )}
+                </div>
+
+                {activeTab === 'pending' ? (
+                    // Pending LPJ section 
+                    loading ? (
+                        <Skeleton count={5} height={40} />
+                    ) : data.lpj.length === 0 ? (
+                        <div className="flex justify-center">
+                            <figure className="w-44 h-44">
+                                <img
+                                    src={EmptyState}
+                                    alt="LPJ Bon Sementara icon"
+                                    className="w-full h-full object-contain"
+                                />
+                            </figure>
+                        </div>
+                    ) : (
+                        <div className="w-full">
+                            <div className="w-full overflow-x-auto">
+                                <div className="inline-block min-w-[900px] w-full">
+                                    <table className="w-full bg-white border rounded-lg text-sm">
+                                        <thead>
+                                            <tr className="bg-gray-100 text-left">
+                                                <th className="p-2 border text-center w-auto">No.</th>
+                                                <th className="px-4 py-2 border">Nomor Dokumen</th>
+                                                <th className="px-4 py-2 border">Nama</th>
+                                                <th className="px-4 py-2 border">Kategori LPJ BS</th>
+                                                <th className="px-4 py-2 border">Nomor BS</th>
+                                                <th className="px-4 py-2 border">Jumlah BS</th>
+                                                <th className="px-4 py-2 border">Tanggal Pengajuan</th>
+                                                <th className="p-2 border text-center">Status</th>
+                                                <th className="p-2 border text-center">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {data.lpj.map((item, index) => (
+                                                <tr key={index}>
+                                                    <td className="p-2 border text-center w-auto">{index + 1}</td>
+                                                    <td className="px-4 py-2 border">
+                                                        <Link
+                                                            to={`/lpj/${item.id}`}
+                                                            className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                        >
+                                                            {item.displayId}
+                                                        </Link>
+                                                    </td>
+                                                    <td className="px-4 py-2 border">{item.user.nama}</td>
+                                                    <td className="px-4 py-2 border">{item.kategori}</td>
+                                                    <td className="px-4 py-2 border">{item.nomorBS}</td>
+                                                    <td className="px-4 py-2 border">
+                                                        Rp{item.jumlahBS.toLocaleString('id-ID')}
+                                                    </td>
+                                                    <td className="px-4 py-2 border">
+                                                        {formatDate(item.tanggalPengajuan)}
+                                                    </td>
+                                                    <td className="p-2 border text-center">
+                                                        <span
+                                                            className={`px-4 py-1 rounded-full text-xs font-medium 
+                                            ${item.status === 'Diajukan'
+                                                                    ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
+                                                                    : item.status === 'Disetujui'
+                                                                        ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
+                                                                        : item.status === 'Diproses'
+                                                                            ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
+                                                                            : item.status === 'Ditolak'
+                                                                                ? 'bg-red-200 text-red-800 border-[1px] border-red-600'
+                                                                                : item.status === 'Divalidasi'
+                                                                                    ? 'bg-purple-200 text-purple-800 border-[1px] border-purple-600'
+                                                                                    : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
+                                                                }`}
+                                                        >
+                                                            {item.status || 'Tidak Diketahui'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-2 border text-center">
+                                                        <div className="flex justify-center space-x-2">
+                                                            <button
+                                                                className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600"
+                                                                onClick={() => handleApprove(item)}
+                                                                title="Approve"
+                                                            >
+                                                                <svg
+                                                                    className="w-6 h-6"
+                                                                    viewBox="0 0 24 24"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="2"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        d="M5 13l4 4L19 7"
+                                                                    />
+                                                                </svg>
+                                                            </button>
+
+                                                            <button
+                                                                className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600"
+                                                                onClick={() => handleReject(item)}
+                                                                title="Reject"
+                                                            >
+                                                                <svg
+                                                                    className="w-6 h-6"
+                                                                    viewBox="0 0 24 24"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="2"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        d="M6 18L18 6M6 6l12 12"
+                                                                    />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
+                    )
+                ) : activeTab === 'approved' ? (
+                    // Approved LPJ section
+                    <div>
                         {loading ? (
                             <Skeleton count={5} height={40} />
                         ) : filteredApprovedData.lpj.length === 0 ? (
@@ -854,6 +957,77 @@ const LpjBsCheck = () => {
                             </div>
                         )}
                     </div>
+                ) : (
+                    // Canceled LPJ section
+                    <div>
+                        {loading ? (
+                            <Skeleton count={5} height={40} />
+                        ) : filteredCanceledData.lpj.length === 0 ? (
+                            <div className="flex justify-center">
+                                <figure className="w-44 h-44">
+                                    <img
+                                        src={EmptyState}
+                                        alt="LPJ Bon Sementara icon"
+                                        className="w-full h-full object-contain"
+                                    />
+                                </figure>
+                            </div>
+                        ) : (
+                            <div className="w-full">
+                                <div className="w-full overflow-x-auto">
+                                    <div className="inline-block min-w-[1000px] w-full">
+                                        <table className="min-w-full bg-white border rounded-lg text-sm">
+                                            <thead>
+                                                <tr className="bg-gray-100 text-left">
+                                                    <th className="p-2 border text-center w-auto">No.</th>
+                                                    <th className="px-4 py-2 border">Nomor Dokumen</th>
+                                                    <th className="px-4 py-2 border">Nama</th>
+                                                    <th className="px-4 py-2 border">Kategori LPJ</th>
+                                                    <th className="px-4 py-2 border">Nomor BS</th>
+                                                    <th className="px-4 py-2 border">Jumlah BS</th>
+                                                    <th className="px-4 py-2 border">Tanggal Pengajuan</th>
+                                                    <th className="px-4 py-2 border">Tanggal Dibatalkan</th>
+                                                    <th className="px-4 py-2 border">Alasan Pembatalan</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredCanceledData.lpj.map((item, index) => (
+                                                    <tr key={index}>
+                                                        <td className="p-2 border text-center w-auto">{index + 1}</td>
+                                                        <td className="p-4 border">
+                                                            <Link
+                                                                to={`/lpj/${item.id}`}
+                                                                className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                            >
+                                                                {item.displayId}
+                                                            </Link>
+                                                        </td>
+                                                        <td className="p-4 border">{item.user.nama}</td>
+                                                        <td className="p-4 border">{item.kategori}</td>
+                                                        <td className="p-4 border">{item.nomorBS}</td>
+                                                        <td className="p-4 border">
+                                                            Rp{item.jumlahBS.toLocaleString('id-ID')}
+                                                        </td>
+                                                        <td className="p-4 border">
+                                                            {formatDate(item.tanggalPengajuan)}
+                                                        </td>
+                                                        <td className="p-4 border">
+                                                            {formatDate(
+                                                                item.statusHistory
+                                                                    .find(status => status.status === 'Dibatalkan')
+                                                                    ?.timestamp
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 border truncate max-w-[150px] overflow-hidden whitespace-nowrap">{item.cancelReason || '-'}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
 
@@ -867,7 +1041,7 @@ const LpjBsCheck = () => {
                 confirmText="Ya"
             />
         </div>
-    )
+    );
 };
 
 export default LpjBsCheck;

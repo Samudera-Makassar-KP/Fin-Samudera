@@ -389,7 +389,7 @@ const DetailLpj = () => {
                                     <p className="text-left">:</p>
                                     <p className="break-words">
                                         {Array.isArray(lpjDetail?.user?.department) &&
-                                        lpjDetail.user.department.length > 0
+                                            lpjDetail.user.department.length > 0
                                             ? lpjDetail.user.department.join(', ')
                                             : ''}
                                     </p>
@@ -468,8 +468,8 @@ const DetailLpj = () => {
                                         {lpjDetail?.status === 'Ditolak'
                                             ? 'Ditolak Oleh'
                                             : lpjDetail?.status === 'Divalidasi'
-                                              ? 'Divalidasi Oleh'
-                                              : 'Disetujui Oleh'}
+                                                ? 'Divalidasi Oleh'
+                                                : 'Disetujui Oleh'}
                                     </p>
                                     <p className="text-left">:</p>
                                     <p className="break-words">{getDetailedApprovalStatus(lpjDetail, reviewers)}</p>
@@ -527,8 +527,8 @@ const DetailLpj = () => {
                             {lpjDetail?.status === 'Ditolak'
                                 ? 'Ditolak Oleh'
                                 : lpjDetail?.status === 'Divalidasi'
-                                  ? 'Divalidasi Oleh'
-                                  : 'Disetujui Oleh'}
+                                    ? 'Divalidasi Oleh'
+                                    : 'Disetujui Oleh'}
                         </p>
                         <p>: {getDetailedApprovalStatus(lpjDetail, reviewers)}</p>
                         <p></p>
@@ -610,23 +610,21 @@ const DetailLpj = () => {
                 {/* Responsive action buttons */}
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">
                     <button
-                        className={`w-full md:w-auto px-12 py-3 rounded ${
-                            userData?.uid === lpjDetail?.user.uid
-                                ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
-                                : 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                        }`}
+                        className={`w-full md:w-auto px-12 py-3 rounded ${userData?.uid === lpjDetail?.user.uid || lpjDetail?.user.validator?.includes(userData?.uid)
+                            ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
+                            : 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
+                            }`}
                         onClick={() => handleViewAttachment(lpjDetail?.lampiranUrl)}
                     >
                         Lihat Lampiran
                     </button>
 
-                    {userData?.uid === lpjDetail?.user.uid && (
+                    {(userData?.uid === lpjDetail?.user.uid || lpjDetail?.user.validator?.includes(userData?.uid)) && (
                         <button
-                            className={`w-full md:w-auto px-16 py-3 rounded ${
-                                lpjDetail?.status === 'Disetujui'
-                                    ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                                    : 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                            }`}
+                            className={`w-full md:w-auto px-16 py-3 rounded ${lpjDetail?.status === 'Disetujui'
+                                ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
+                                : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                }`}
                             onClick={handleGenerateAndPreviewPDF}
                             disabled={lpjDetail?.status !== 'Disetujui' || isLoading}
                         >

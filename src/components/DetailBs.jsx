@@ -10,7 +10,7 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 
-const DetailCreateBs = () => {
+const DetailBs = () => {
     const [userData, setUserData] = useState(null)
     const [bonSementaraDetail, setBonSementaraDetail] = useState(null)
     const [reviewers, setReviewers] = useState([])
@@ -71,7 +71,7 @@ const DetailCreateBs = () => {
                 // Combine reviewer names and filter out null values
                 const validReviewerNames = [...reviewer1Names, ...reviewer2Names].filter((name) => name !== null)
                 setReviewers({
-                    reviewerNames: validReviewerNames,                    
+                    reviewerNames: validReviewerNames,
                 })
             } catch (error) {
                 console.error('Error fetching data:', error)
@@ -499,7 +499,7 @@ const DetailCreateBs = () => {
                         </button>
                     )}
 
-                    {userData?.uid === bonSementaraDetail?.user.uid && (
+                    {(userData?.uid === bonSementaraDetail?.user.uid || bonSementaraDetail?.user.reviewer1?.includes(userData?.uid)) && (
                         <button
                             className={`px-16 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui'
                                 ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
@@ -527,4 +527,4 @@ const DetailCreateBs = () => {
     )
 }
 
-export default DetailCreateBs
+export default DetailBs

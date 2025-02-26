@@ -8,6 +8,7 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import useFormDraft from '../hooks/useFormDraft'
 
 const FormLpjUmum = () => {
     const [todayDate, setTodayDate] = useState('')
@@ -507,6 +508,7 @@ const FormLpjUmum = () => {
 
         // Reset all selector states for admin
         if (isAdmin) {
+            setSelectedUnit(null)
             setSelectedValidator(null)
             setSelectedReviewer1(null)
             setSelectedReviewer2(null)
@@ -579,6 +581,90 @@ const FormLpjUmum = () => {
         })
     }
 
+    const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, 'lpj-umum', initialLpjState)
+
+    const handleSaveDraft = async () => {
+        let attachmentBase64 = null;
+        if (attachmentFile) {
+            const reader = new FileReader();
+            attachmentBase64 = await new Promise((resolve) => {
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(attachmentFile);
+            });
+        }
+        
+        const formData = {
+            nomorBS,
+            jumlahBS,
+            lpj,
+            tanggalPengajuan,
+            attachmentFileName,
+            attachmentFile: attachmentBase64,
+            selectedUnit: selectedUnit ? {
+                value: selectedUnit.value,
+                label: selectedUnit.label
+            } : null,
+            selectedValidator: selectedValidator ? {
+                value: selectedValidator.value,
+                label: selectedValidator.label
+            } : null,
+            selectedReviewer1: selectedReviewer1 ? {
+                value: selectedReviewer1.value,
+                label: selectedReviewer1.label
+            } : null,
+            selectedReviewer2: selectedReviewer2 ? {
+                value: selectedReviewer2.value,
+                label: selectedReviewer2.label
+            } : null,
+            calculatedCosts
+        };
+        
+        await saveDraft(formData);
+
+        resetForm()
+    }
+
+    const handleLoadDraft = async () => {
+        const draftData = await loadDraft();
+        if (draftData) {
+            setNomorBS(draftData.nomorBS || '');
+            setJumlahBS(draftData.jumlahBS || '');
+            setLpj(draftData.lpj || [initialLpjState]);
+            setTanggalPengajuan(draftData.tanggalPengajuan || todayDate);
+            setAttachmentFileName(draftData.attachmentFileName || '');
+            
+            // Convert base64 kembali ke File object jika ada file
+            if (draftData.attachmentFile) {
+                // Extract MIME type dari base64 string
+                const mimeType = draftData.attachmentFile.split(';')[0].split(':')[1];
+                
+                // Convert base64 ke blob
+                const base64Response = await fetch(draftData.attachmentFile);
+                const blob = await base64Response.blob();
+                
+                // Buat File object baru
+                const file = new File([blob], draftData.attachmentFileName, {
+                    type: mimeType
+                });
+                
+                setAttachmentFile(file);
+            }
+            
+            if (isAdmin) {
+                setSelectedUnit(draftData.selectedUnit || null);
+                setSelectedValidator(draftData.selectedValidator || null);
+                setSelectedReviewer1(draftData.selectedReviewer1 || null);
+                setSelectedReviewer2(draftData.selectedReviewer2 || null);
+            }
+            
+            setCalculatedCosts(draftData.calculatedCosts || {
+                totalBiaya: 0,
+                sisaLebih: 0,
+                sisaKurang: 0
+            });
+        }
+    }
+
     return (
         <div className="container mx-auto py-10 md:py-8">
             <h2 className="text-xl font-medium mb-4">
@@ -612,6 +698,8 @@ const FormLpjUmum = () => {
                                         classNamePrefix="select"
                                         styles={customStyles}
                                         isSearchable={false}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
                                     />
                             </div>
                             <div className="hidden xl:block">
@@ -628,6 +716,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -647,6 +737,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -663,6 +755,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -679,6 +773,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div>
@@ -707,6 +803,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -744,6 +842,8 @@ const FormLpjUmum = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -785,6 +885,8 @@ const FormLpjUmum = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -1037,7 +1139,19 @@ const FormLpjUmum = () => {
                     </div>
                 )}
 
-                <div className="flex justify-end mt-6">
+                <div className="flex flex-col-reverse xl:flex-row justify-end mt-6 gap-4">
+                    <button
+                        className={`w-full xl:w-fit rounded py-3 px-16
+                            ${hasDraft 
+                                ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800' 
+                                : 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
+                            }
+                            flex items-center justify-center relative transition duration-150 ease-in-out`}
+                            onClick={hasDraft ? handleLoadDraft : handleSaveDraft}
+                    >
+                        {hasDraft ? 'Load Draft' : 'Save Draft'}
+                    </button>
+
                     <button
                         className={`w-full xl:w-fit rounded text-white py-3 
                         ${isSubmitting ? 'px-8 bg-red-700 cursor-not-allowed' : 'px-16 bg-red-600 hover:bg-red-700 hover:text-gray-200'}

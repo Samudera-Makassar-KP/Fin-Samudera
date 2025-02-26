@@ -427,7 +427,7 @@ const DetailRbs = () => {
                                     <p className="text-left">:</p>
                                     <p className="break-words">
                                         {Array.isArray(reimbursementDetail?.user?.department) &&
-                                        reimbursementDetail.user.department.length > 0
+                                            reimbursementDetail.user.department.length > 0
                                             ? reimbursementDetail.user.department.join(', ')
                                             : ''}
                                     </p>
@@ -473,8 +473,8 @@ const DetailRbs = () => {
                                         {reimbursementDetail?.status === 'Ditolak'
                                             ? 'Ditolak Oleh'
                                             : reimbursementDetail?.status === 'Divalidasi'
-                                              ? 'Divalidasi Oleh'
-                                              : 'Disetujui Oleh'}
+                                                ? 'Divalidasi Oleh'
+                                                : 'Disetujui Oleh'}
                                     </p>
                                     <p className="text-left">:</p>
                                     <p className="break-words">
@@ -495,7 +495,7 @@ const DetailRbs = () => {
                         <p>
                             :{' '}
                             {Array.isArray(reimbursementDetail?.user?.department) &&
-                            reimbursementDetail.user.department.length > 0
+                                reimbursementDetail.user.department.length > 0
                                 ? reimbursementDetail.user.department.join(', ')
                                 : ''}
                         </p>
@@ -517,8 +517,8 @@ const DetailRbs = () => {
                             {reimbursementDetail?.status === 'Ditolak'
                                 ? 'Ditolak Oleh'
                                 : reimbursementDetail?.status === 'Divalidasi'
-                                  ? 'Divalidasi Oleh'
-                                  : 'Disetujui Oleh'}
+                                    ? 'Divalidasi Oleh'
+                                    : 'Disetujui Oleh'}
                         </p>
                         <p>: {getDetailedApprovalStatus(reimbursementDetail, reviewers)}</p>
                     </div>
@@ -581,23 +581,21 @@ const DetailRbs = () => {
                 {/* Responsive action buttons */}
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">
                     <button
-                        className={`w-full md:w-auto px-12 py-3 rounded ${
-                            userData?.uid === reimbursementDetail?.user.uid
+                        className={`w-full md:w-auto px-12 py-3 rounded ${userData?.uid === reimbursementDetail?.user.uid || reimbursementDetail?.user.validator?.includes(userData?.uid)
                                 ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
                                 : 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                        }`}
+                            }`}
                         onClick={() => handleViewAttachment(reimbursementDetail?.lampiranUrl)}
                     >
                         Lihat Lampiran
                     </button>
 
-                    {userData?.uid === reimbursementDetail?.user.uid && (
+                    {(userData?.uid === reimbursementDetail?.user.uid || reimbursementDetail?.user.validator?.includes(userData?.uid)) && (
                         <button
-                            className={`w-full md:w-auto px-16 py-3 rounded ${
-                                reimbursementDetail?.status === 'Disetujui'
-                                    ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                                    : 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                            }`}
+                            className={`w-full md:w-auto px-16 py-3 rounded ${reimbursementDetail?.status === 'Disetujui'
+                                ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
+                                : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                }`}
                             onClick={handleGenerateAndPreviewPDF}
                             disabled={reimbursementDetail?.status !== 'Disetujui' || isLoading}
                         >

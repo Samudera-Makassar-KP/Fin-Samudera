@@ -90,7 +90,7 @@ const LoginPage = () => {
             if (role === 'Super Admin') {
                 navigate('/manage-users');
             } else if (['Admin', 'Validator', 'Reviewer', 'Employee'].includes(role)) {
-                navigate(`/dashboard/${role.toLowerCase().replace(' ', '')}`);
+                navigate('/dashboard');
             } else {
                 setError('Role tidak dikenali. Hubungi Super Admin.');
                 setIsLoading(false);

@@ -9,10 +9,6 @@ import LpjUmum from './pages/LpjUmum';
 import LpjMarketing from './pages/LpjMarketing';
 import DetailReimbursementPage from './pages/DetailRbsPage';
 import DetailLpjPage from './pages/DetailLpjPage';
-import EmployeeDashboard from './pages/EmployeeDashboard';
-import ReviewerDashboard from './pages/ReviewerDashboard';
-import ValidatorDashboard from './pages/ValidatorDashboard';
-import AdminDashboard from './pages/AdminDashboard';
 import NotFoundPage from './pages/NotFoundPage';
 import ProtectedRoute from './components/protectedRoute';
 import RbsCheckPage from './pages/RbsCheckPage';
@@ -20,10 +16,11 @@ import LpjCheckPage from './pages/LpjCheckPage';
 import ManageUserPage from './pages/ManageUserPage';
 import AddUserPage from './pages/AddUserPage';
 import EditUserPage from './pages/EditUserPage';
-import CreateBon from './pages/CreateBonPage';
-import CreateBsCheckPage from './pages/CreateBsCheckPage';
-import DetailCreateBsPage from './pages/DetailCreateBsPage';
+import FormBsPage from './pages/BsPage';
+import BsCheckPage from './pages/BsCheckPage';
+import DetailBsPage from './pages/DetailBsPage';
 import ReportExportPage from './pages/ReportExportPage';
+import Dashboard from './pages/Dashboard';
 
 const AppContent = () => {
     const userRole = localStorage.getItem('userRole'); 
@@ -37,26 +34,9 @@ const AppContent = () => {
                 <Route path="/" element={<Login />} />
 
                 {/* Dashboard Routes */}
-                <Route path="/dashboard/admin" element={
-                    <ProtectedRoute allowedRoles={['Admin']}>
-                        <AdminDashboard />
-                    </ProtectedRoute>
-                } />
-                <Route path="/dashboard/reviewer" element={
-                    <ProtectedRoute allowedRoles={['Reviewer']}>
-                        <ReviewerDashboard />
-                    </ProtectedRoute>
-                } />
-
-                <Route path="/dashboard/validator" element={
-                    <ProtectedRoute allowedRoles={['Validator']}>
-                        <ValidatorDashboard />
-                    </ProtectedRoute>
-                } />
-
-                <Route path="/dashboard/employee" element={
-                    <ProtectedRoute allowedRoles={['Employee']}>
-                        <EmployeeDashboard />
+                <Route path="/dashboard" element={
+                    <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee']}>
+                        <Dashboard />
                     </ProtectedRoute>
                 } />
 
@@ -91,22 +71,22 @@ const AppContent = () => {
                     </ProtectedRoute>
                 } />
 
-                {/* Create BS Routes */}
-                <Route path="/create-bs/create" element={
+                {/* Bon Sementara Routes */}
+                <Route path="/bon-sementara/ajukan" element={
                     <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin']}>
-                        <CreateBon />
+                        <FormBsPage />
                     </ProtectedRoute>
                 } />
 
-                <Route path="/create-bs/cek-pengajuan" element={
+                <Route path="/bon-sementara/cek-pengajuan" element={
                     <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin']}>
-                        <CreateBsCheckPage />
+                        <BsCheckPage />
                     </ProtectedRoute>
                 } />
 
-                <Route path="/create-bs/:id" element={
+                <Route path="/bon-sementara/:id" element={
                     <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
-                        <DetailCreateBsPage />
+                        <DetailBsPage />
                     </ProtectedRoute>
                 } />
 

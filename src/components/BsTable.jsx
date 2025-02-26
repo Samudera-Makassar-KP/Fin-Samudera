@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import EmptyState from '../assets/images/EmptyState.png'
 import Select from 'react-select'
-import Modal from '../components/Modal'
+import Modal from './Modal'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
-import BSTimerDisplay from './bsTimerDisplay'
+import BsTimerDisplay from './BsTimerDisplay'
 
-const CreateBsTable = () => {
+const BsTable = () => {
     const [data, setData] = useState({ bonSementara: [] })
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
@@ -127,7 +127,12 @@ const CreateBsTable = () => {
                     const lpjDoc = lpjSnapshot.docs[0];
                     const lpjData = lpjDoc.data();
 
-                    if (lpjData.status === 'Disetujui') {
+                    if (lpjData.status === 'Dibatalkan' || lpjData.status === 'Ditolak') {
+                        newLpjStatus[bs.id] = {
+                            status: 'Belum LPJ',
+                            statusHistory: lpjData.statusHistory || []
+                        };
+                    } else if (lpjData.status === 'Disetujui') {
                         newLpjStatus[bs.id] = {
                             status: 'Sudah LPJ',
                             statusHistory: lpjData.statusHistory || []
@@ -226,16 +231,23 @@ const CreateBsTable = () => {
         }
 
         try {
+            const uid = localStorage.getItem('userUid')
             const bonSemetaraDocRef = doc(db, 'bonSementara', selectedReport.id)
+
+            const newStatusHistory = {
+                timestamp: new Date().toISOString(),
+                actor: uid,
+                status: 'Dibatalkan'
+            };
 
             // Memperbarui data di Firestore
             await updateDoc(bonSemetaraDocRef, {
                 status: 'Dibatalkan',
-                cancelReason: cancelReason || 'Alasan tidak diberikan'
+                cancelReason: cancelReason || 'Alasan tidak diberikan',
+                statusHistory: arrayUnion(newStatusHistory)
             })
 
-            // Menyegarkan data bon semetara setelah pembatalan
-            const uid = localStorage.getItem('userUid')
+            // Refresh data
             const q = query(collection(db, 'bonSementara'), where('user.uid', '==', uid))
             const querySnapshot = await getDocs(q)
             const bonSementara = querySnapshot.docs.map((doc) => ({
@@ -331,10 +343,6 @@ const CreateBsTable = () => {
             fontSize: '12px',
             padding: '6px 12px',
             cursor: 'pointer'
-        }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
         })
     }
 
@@ -352,6 +360,8 @@ const CreateBsTable = () => {
                 className="w-38 lg:w-40"
                 styles={selectStyles}
                 isSearchable={false}
+                menuPortalTarget={document.body}
+                menuPosition="absolute"
             />
         )
     }
@@ -433,7 +443,7 @@ const CreateBsTable = () => {
                                                 <td className="px-4 py-2 border">
                                                     <div className="flex items-center gap-2">
                                                         <Link
-                                                            to={`/create-bs/${item.id}`}
+                                                            to={`/bon-sementara/${item.id}`}
                                                             className="text-black hover:text-gray-700 hover:underline cursor-pointer"
                                                         >
                                                             {item.displayId}
@@ -486,7 +496,7 @@ const CreateBsTable = () => {
                                                                     </span>
                                                                 )}
                                                                 {shouldShowTimer(item) && (
-                                                                    <BSTimerDisplay
+                                                                    <BsTimerDisplay
                                                                         approvalDate={item.statusHistory.find(entry =>
                                                                             entry.status === 'Disetujui oleh Reviewer 2' ||
                                                                             entry.status === 'Disetujui oleh Super Admin (Pengganti Reviewer 2)'
@@ -778,4 +788,4 @@ const CreateBsTable = () => {
     )
 }
 
-export default CreateBsTable
+export default BsTable

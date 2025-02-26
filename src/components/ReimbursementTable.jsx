@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import EmptyState from '../assets/images/EmptyState.png'
 import Select from 'react-select'
@@ -44,7 +44,6 @@ const ReimbursementTable = () => {
             { value: 'Dibatalkan', label: 'Dibatalkan' }
         ],
         kategori: [
-            { value: 'Medical', label: 'Medical' },
             { value: 'BBM', label: 'BBM' },
             { value: 'Operasional', label: 'Operasional' },
             { value: 'GA/Umum', label: 'GA/Umum' }
@@ -181,14 +180,22 @@ const ReimbursementTable = () => {
         }
 
         try {
+            const uid = localStorage.getItem('userUid');
             const reimbursementDocRef = doc(db, 'reimbursement', selectedReport.id)
+
+            const newStatusHistory = {
+                timestamp: new Date().toISOString(),
+                actor: uid,
+                status: 'Dibatalkan'                
+            };
+
             await updateDoc(reimbursementDocRef, {
                 status: 'Dibatalkan',
-                cancelReason: cancelReason || 'Alasan tidak diberikan'
+                cancelReason: cancelReason || 'Alasan tidak diberikan',
+                statusHistory: arrayUnion(newStatusHistory)
             })
 
-            // Refresh data
-            const uid = localStorage.getItem('userUid')
+            // Refresh data            
             const q = query(collection(db, 'reimbursement'), where('user.uid', '==', uid))
             const querySnapshot = await getDocs(q)
             const reimbursements = querySnapshot.docs.map((doc) => ({
@@ -231,10 +238,6 @@ const ReimbursementTable = () => {
             fontSize: '12px',
             padding: '6px 12px',
             cursor: 'pointer'
-        }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
         })
     }
 
@@ -252,6 +255,8 @@ const ReimbursementTable = () => {
                 className="w-38 lg:w-40"
                 styles={selectStyles}
                 isSearchable={false}
+                menuPortalTarget={document.body}
+                menuPosition="absolute"
             />
         )
     }

@@ -70,7 +70,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                 <li>
                                     <hr className="border-red-500" />
                                     <NavLink
-                                        to="/create-bs/cek-pengajuan"
+                                        to="/bon-sementara/cek-pengajuan"
                                         className={({ isActive }) =>
                                             isActive
                                                 ? 'block w-full py-2 pl-8 text-white bg-[#FF5B5F]'
@@ -111,7 +111,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                             <>
                                 <li>
                                     <NavLink
-                                        to={`/dashboard/${role}`}
+                                        to={`/dashboard`}
                                         className={({ isActive }) =>
                                             isActive
                                                 ? 'block w-full py-2 pl-8 text-white bg-[#FF5B5F]'
@@ -174,13 +174,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                 )}
                                 <li>
                                     <hr className="border-red-500" />
-                                    {/* Menu Create Bon Sementara */}
+                                    {/* Menu Ajukan Bon Sementara */}
                                     <span className="block w-full py-2 pl-4 text-gray-100 text-xs font-semibold cursor-default">
                                         BON SEMENTARA
                                     </span>
                                     <li>
                                         <NavLink
-                                            to="/create-bs/create"
+                                            to="/bon-sementara/ajukan"
                                             className={({ isActive }) =>
                                                 isActive
                                                     ? 'block w-full py-2 pl-8 text-white bg-[#FF5B5F]'
@@ -193,7 +193,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                     {(role === 'Reviewer') && (
                                         <li>
                                             <NavLink
-                                                to="/create-bs/cek-pengajuan"
+                                                to="/bon-sementara/cek-pengajuan"
                                                 className={({ isActive }) =>
                                                     isActive
                                                         ? 'block w-full py-2 pl-8 text-white bg-[#FF5B5F]'

@@ -548,10 +548,6 @@ const RbsOperasionalForm = () => {
             padding: '0 7px',
             height: '40px',
             minHeight: '40px'
-        }),
-        menuList: (base) => ({
-            ...base,
-            maxHeight: '160px'
         })
     }
 
@@ -588,6 +584,8 @@ const RbsOperasionalForm = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='hidden xl:block'>
@@ -604,6 +602,8 @@ const RbsOperasionalForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -623,6 +623,8 @@ const RbsOperasionalForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -639,6 +641,8 @@ const RbsOperasionalForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div className='block xl:hidden'>
@@ -655,6 +659,8 @@ const RbsOperasionalForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                             <div>
@@ -680,6 +686,8 @@ const RbsOperasionalForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -708,6 +716,8 @@ const RbsOperasionalForm = () => {
                                     styles={customStyles}
                                     isSearchable={true}
                                     isClearable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -750,6 +760,8 @@ const RbsOperasionalForm = () => {
                                     classNamePrefix="select"
                                     styles={customStyles}
                                     isSearchable={false}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
                                 />
                             </div>
                         </div>
@@ -859,6 +871,8 @@ const RbsOperasionalForm = () => {
                                             className="w-full"
                                             styles={customStyles}                                            
                                             isSearchable={false}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
                                         />
                                     )}
                                 </div>
