@@ -267,7 +267,8 @@ const AddUserForm = () => {
         { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
         { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
         { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
-        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
+        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
+        { value: 'Samudera', label: 'Samudera' }
     ]
 
     // Options department
@@ -280,6 +281,7 @@ const AddUserForm = () => {
         { value: 'QHSE', label: 'QHSE' },
         { value: 'VMS', label: 'VMS' },
         { value: 'IT', label: 'IT' },
+        { value: 'Panitia', label: 'Panitia' },
     ]
 
     // Options posisi

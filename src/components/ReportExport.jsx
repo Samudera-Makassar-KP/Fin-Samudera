@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom'
 import { collection, query, where, getDocs, or } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import Select from 'react-select';
@@ -39,7 +40,6 @@ const ReportExport = () => {
     });
 
     const unitOptions = [
-        { value: "all", label: "Semua Unit Bisnis" },
         { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
         { value: 'PT Samudera Makassar Logistik', label: 'PT Samudera Makassar Logistik' },
         { value: 'PT Kendari Jaya Samudera', label: 'PT Kendari Jaya Samudera' },
@@ -47,8 +47,9 @@ const ReportExport = () => {
         { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
         { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
         { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
-        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
-    ];
+        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
+        { value: 'Samudera', label: 'Samudera' }
+    ]
 
     useEffect(() => {
         const fetchApprovers = async () => {
@@ -780,7 +781,14 @@ const ReportExport = () => {
                                                             <td className="p-2 border text-center">
                                                                 {index + 1 + (currentPage - 1) * itemsPerPage}
                                                             </td>
-                                                            <td className="px-4 py-2 border">{item.displayId}</td>
+                                                            <td className="px-4 py-2 border">
+                                                                <Link
+                                                                    to={`/reimbursement/${item.id}`}
+                                                                    className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                >
+                                                                    {item.displayId}
+                                                                </Link>
+                                                            </td>
                                                             <td className="px-4 py-2 border">{item.user.nama}</td>
                                                             <td className="px-4 py-2 border">{item.user.unit}</td>
                                                             <td className="px-4 py-2 border">{item.kategori}</td>
@@ -845,7 +853,14 @@ const ReportExport = () => {
                                                             <td className="p-2 border text-center">
                                                                 {index + 1 + (currentPage - 1) * itemsPerPage}
                                                             </td>
-                                                            <td className="px-4 py-2 border">{bs.nomorBS}</td>
+                                                            <td className="px-4 py-2 border">
+                                                                <Link
+                                                                    to={`/bon-sementara/${bs.id}`}
+                                                                    className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                >
+                                                                    {bs.nomorBS}
+                                                                </Link>
+                                                            </td>
                                                             <td className="px-4 py-2 border">{bs.user.nama}</td>
                                                             <td className="px-4 py-2 border">{bs.user.unit}</td>
                                                             <td className="px-4 py-2 border">{bs.kategori}</td>
@@ -910,7 +925,14 @@ const ReportExport = () => {
                                                             <td className="p-2 border text-center">
                                                                 {index + 1 + (currentPage - 1) * itemsPerPage}
                                                             </td>
-                                                            <td className="px-4 py-2 border">{item.displayId}</td>
+                                                            <td className="px-4 py-2 border">
+                                                                <Link
+                                                                    to={`/lpj/${item.id}`}
+                                                                    className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                >
+                                                                    {item.displayId}
+                                                                </Link>
+                                                            </td>
                                                             <td className="px-4 py-2 border">{item.user.nama}</td>
                                                             <td className="px-4 py-2 border">{item.user.unit}</td>
                                                             <td className="px-4 py-2 border">{item.kategori}</td>

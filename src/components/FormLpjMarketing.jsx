@@ -161,7 +161,8 @@ const FormLpjMarketing = () => {
             { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
             { value: 'PT SILkargo Indonesia', label: 'PT SILkargo Indonesia' },
             { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
-            { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
+            { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
+            { value: 'Samudera', label: 'Samudera' }
         ],
         []
     )

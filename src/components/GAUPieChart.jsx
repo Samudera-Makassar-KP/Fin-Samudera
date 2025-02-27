@@ -45,7 +45,6 @@ const GAUPieChart = () => {
     ];
 
     const unitOptions = [
-        { value: "all", label: "Semua Unit Bisnis" },
         { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
         { value: 'PT Samudera Makassar Logistik', label: 'PT Samudera Makassar Logistik' },
         { value: 'PT Kendari Jaya Samudera', label: 'PT Kendari Jaya Samudera' },
@@ -53,7 +52,8 @@ const GAUPieChart = () => {
         { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
         { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
         { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
-        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
+        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
+        { value: 'Samudera', label: 'Samudera' }
     ]
 
     const handleChartClick = (event) => {
