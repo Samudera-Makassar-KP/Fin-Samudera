@@ -9,7 +9,7 @@ import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 
-const BSCheck = () => {
+const BsCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')
     const [data, setData] = useState({ bonSementara: [] })
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -963,4 +963,4 @@ const BSCheck = () => {
     );
 }
 
-export default BSCheck
+export default BsCheck

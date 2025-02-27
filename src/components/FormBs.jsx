@@ -100,7 +100,8 @@ const FormBs = () => {
         { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
         { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
         { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
-        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' }
+        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
+        { value: 'Samudera', label: 'Samudera' }
     ]
 
     const [selectedUnit, setSelectedUnit] = useState('')
