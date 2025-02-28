@@ -624,7 +624,13 @@ const FormLpjMarketing = () => {
             customer,
             lokasi,
             tanggal,
-            lpj,
+            lpj: lpj.map((item) => ({
+                namaItem: item.namaItem,
+                biaya: item.biaya,
+                jumlah: item.jumlah,
+                jumlahBiaya: Number(item.biaya) * Number(item.jumlah),
+                keterangan: item.keterangan
+            })),
             tanggalPengajuan,
             aktivitas,
             attachmentFileName,
