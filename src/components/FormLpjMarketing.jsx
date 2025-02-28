@@ -293,7 +293,8 @@ const FormLpjMarketing = () => {
         'PT Samudera Agencies Indonesia': 'SAI',
         'PT SILKargo Indonesia': 'SKI',
         'PT PAD Samudera Perdana': 'SP',
-        'PT Masaji Kargosentra Tama': 'MKT'
+        'PT Masaji Kargosentra Tama': 'MKT',
+        'Samudera': 'SMDR',
     }
 
     const getUnitCode = (unitName) => {
