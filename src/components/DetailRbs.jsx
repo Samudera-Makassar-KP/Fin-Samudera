@@ -556,11 +556,15 @@ const DetailRbs = () => {
                                     <td colSpan={columns.length} className="px-4 py-4"></td>
                                 </tr>
 
-                                {reimbursementDetail?.status === 'Dibatalkan' && (
+                                {(reimbursementDetail?.status === 'Dibatalkan' || reimbursementDetail?.status === 'Ditolak') && (
                                     <tr>
                                         <td colSpan={columns.length} className="px-4 py-2 text-left border">
-                                            <span className="font-semibold">Alasan Pembatalan :</span>{' '}
-                                            {reimbursementDetail?.cancelReason}
+                                            <span className="font-semibold">
+                                                {reimbursementDetail?.status === 'Dibatalkan' ? 'Alasan Pembatalan :' : 'Alasan Penolakan :'}
+                                            </span>{' '}
+                                            {reimbursementDetail?.status === 'Dibatalkan'
+                                                ? reimbursementDetail?.cancelReason
+                                                : reimbursementDetail?.rejectReason}
                                         </td>
                                     </tr>
                                 )}
@@ -582,8 +586,8 @@ const DetailRbs = () => {
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">
                     <button
                         className={`w-full md:w-auto px-12 py-3 rounded ${userData?.uid === reimbursementDetail?.user.uid || reimbursementDetail?.user.validator?.includes(userData?.uid)
-                                ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
-                                : 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
+                            ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
+                            : 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
                             }`}
                         onClick={() => handleViewAttachment(reimbursementDetail?.lampiranUrl)}
                     >

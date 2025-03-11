@@ -464,7 +464,7 @@ const DetailBs = () => {
                                 ))}
                             </tbody>
                             <tfoot>
-                                {bonSementaraDetail?.status === 'Dibatalkan' && (
+                                {(bonSementaraDetail?.status === 'Dibatalkan' || bonSementaraDetail?.status === 'Ditolak') && (
                                     <>
                                         <tr>
                                             <td colSpan="5" className="px-4 py-2 text-left border">
@@ -473,8 +473,12 @@ const DetailBs = () => {
                                         </tr>
                                         <tr>
                                             <td colSpan="5" className="px-4 py-2 text-left border">
-                                                <span className="font-semibold">Alasan Pembatalan :</span>{' '}
-                                                {bonSementaraDetail?.cancelReason}
+                                                <span className="font-semibold">
+                                                    {bonSementaraDetail?.status === 'Dibatalkan' ? 'Alasan Pembatalan :' : 'Alasan Penolakan :'}
+                                                </span>{' '}
+                                                {bonSementaraDetail?.status === 'Dibatalkan'
+                                                    ? bonSementaraDetail?.cancelReason
+                                                    : bonSementaraDetail?.rejectReason}
                                             </td>
                                         </tr>
                                     </>

@@ -569,11 +569,15 @@ const DetailLpj = () => {
                                     <td colSpan="6" className="px-4 py-4"></td>
                                 </tr>
 
-                                {lpjDetail?.status === 'Dibatalkan' && (
+                                {(lpjDetail?.status === 'Dibatalkan' || lpjDetail?.status === 'Ditolak') && (
                                     <tr>
                                         <td colSpan="6" className="px-4 py-2 text-left border">
-                                            <span className="font-semibold">Alasan Pembatalan :</span>{' '}
-                                            {lpjDetail?.cancelReason}
+                                            <span className="font-semibold">
+                                                {lpjDetail?.status === 'Dibatalkan' ? 'Alasan Pembatalan :' : 'Alasan Penolakan :'}
+                                            </span>{' '}
+                                            {lpjDetail?.status === 'Dibatalkan'
+                                                ? lpjDetail?.cancelReason
+                                                : lpjDetail?.rejectReason}
                                         </td>
                                     </tr>
                                 )}
