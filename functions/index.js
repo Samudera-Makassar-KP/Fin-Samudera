@@ -51,7 +51,7 @@ const getUserData = async (uid) => {
 
 // Template HTML untuk email
 const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo = true, status = 'approval') => {
-    // Perbaikan deteksi tipe dokumen
+    // Deteksi tipe dokumen
     const documentType = newData.documentType || 
                         (newData.displayId?.includes('LPJ') ? 'LPJ' : 
                         newData.bonSementara ? 'BS' : 'RBS');
@@ -253,9 +253,14 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
             (latestStatus?.actor === reviewer1Data?.uid ? reviewer1Data?.nama : reviewer2Data?.nama) || 
             'Reviewer';
         
+        const rejectReason = newData.rejectReason
+        
         const emailContent = `
             Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-            <br><br>Dokumen pengajuan BS anda telah ditolak oleh ${rejectorName}
+            <br><br>Dokumen pengajuan BS anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
+            <br><div style="background-color: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24; border: 1px solid #f5c6cb;">
+                "<strong><em>${rejectReason}</em></strong>"
+            </div>
         `;
 
         if (!submitterData?.email) {
@@ -400,10 +405,14 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
     if (newData.status === "Ditolak") {
         const subject = `Pengajuan Reimbursement Ditolak - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const rejectorName = actorData?.nama || 'Reviewer';
+        const rejectReason = newData.rejectReason
 
         const emailContent = `
             Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-            <br><br>Dokumen pengajuan Reimbursement anda telah ditolak oleh ${rejectorName}
+            <br><br>Dokumen pengajuan Reimbursement anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
+            <br><div style="background-color: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24; border: 1px solid #f5c6cb;">
+                "<strong><em>${rejectReason}</em></strong>"
+            </div>
         `;
 
         if (submitterData?.email) {
@@ -680,10 +689,14 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
     if (newData.status === "Ditolak") {
         const subject = `Pengajuan LPJ BS Ditolak - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const rejectorName = actorData?.nama || 'Reviewer';
+        const rejectReason = newData.rejectReason
 
         const emailContent = `
             Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-            <br><br>Dokumen pengajuan LPJ BS anda telah ditolak oleh ${rejectorName}
+            <br><br>Dokumen pengajuan LPJ BS anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
+            <br><div style="background-color: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24; border: 1px solid #f5c6cb;">
+                "<strong><em>${rejectReason}</em></strong>"
+            </div>
         `;
 
         if (submitterData?.email) {

@@ -21,6 +21,9 @@ const BsCheck = () => {
     const [showModal, setShowModal] = useState(false)
     const [modalProps, setModalProps] = useState({})
     const [loading, setLoading] = useState(true);
+    const [isRejectModalOpen, setIsRejectModalOpen] = useState(false)
+    const [rejectReason, setRejectReason] = useState('')
+    const [selectedReport, setselectedReport] = useState(null)
 
     const uid = localStorage.getItem('userUid')
 
@@ -256,7 +259,7 @@ const BsCheck = () => {
                 label: "Riwayat Persetujuan"
             }
         ];
-        
+
         if (isValidatorForAny) {
             tabs.push({
                 id: "canceled",
@@ -380,96 +383,114 @@ const BsCheck = () => {
 
     // Handle Reject
     const handleReject = (item) => {
-        openModal({
-            title: 'Konfirmasi Reject',
-            message: `Apakah Anda yakin ingin menolak Bon Sementara dengan Nomor BS ${item.displayId}?`,
-            onConfirm: async () => {
-                try {
-                    const uid = localStorage.getItem('userUid')
-                    const userRole = localStorage.getItem('userRole')
-                    const bonSementaraRef = doc(db, 'bonSementara', item.id)
+        setselectedReport(item)
+        setIsRejectModalOpen(true)
+    }
 
-                    // Cek apakah UID termasuk dalam super admin, reviewer1, atau reviewer2
-                    const isSuperAdmin = userRole === 'Super Admin'
-                    const isReviewer1 = item.user.reviewer1.includes(uid)
-                    const isReviewer2 = item.user.reviewer2.includes(uid)
+    const handleCloseRejectModal = () => {
+        setIsRejectModalOpen(false)
+        setRejectReason('')
+        setselectedReport(null)
+    }
 
-                    let updateData = {}
+    const handleSubmitReject = async () => {
+        if (!selectedReport || !rejectReason) {
+            toast.warning('Harap isi alasan penolakan terlebih dahulu!')
+            return
+        }
 
-                    if (isSuperAdmin) {
-                        // Super Admin rejection logic
-                        if (!item.approvedByReviewer1Status) {
-                            updateData = {
-                                status: 'Ditolak',
-                                approvedByReviewer1Status: 'superadmin',
-                                rejectedBySuperAdmin: true,
-                                statusHistory: arrayUnion({
-                                    status: 'Ditolak oleh Super Admin (Pengganti Reviewer 1)',
-                                    timestamp: new Date().toISOString(),
-                                    actor: uid
-                                })
-                            }
-                        } else if (
-                            item.approvedByReviewer1Status === 'superadmin' ||
-                            item.approvedByReviewer1Status === 'reviewer'
-                        ) {
-                            updateData = {
-                                status: 'Ditolak',
-                                approvedByReviewer2Status: 'superadmin',
-                                rejectedBySuperAdmin: true,
-                                statusHistory: arrayUnion({
-                                    status: 'Ditolak oleh Super Admin (Pengganti Reviewer 2)',
-                                    timestamp: new Date().toISOString(),
-                                    actor: uid
-                                })
-                            }
-                        }
-                    } else {
-                        // Existing reviewer rejection logic
-                        if (isReviewer1) {
-                            updateData = {
-                                status: 'Ditolak',
-                                approvedByReviewer1Status: 'reviewer',
-                                statusHistory: arrayUnion({
-                                    status: 'Ditolak oleh Reviewer 1',
-                                    timestamp: new Date().toISOString(),
-                                    actor: uid
-                                })
-                            }
-                        } else if (
-                            isReviewer2 &&
-                            (item.approvedByReviewer1Status === 'reviewer' ||
-                                item.approvedByReviewer1Status === 'superadmin')
-                        ) {
-                            updateData = {
-                                status: 'Ditolak',
-                                statusHistory: arrayUnion({
-                                    status: 'Ditolak oleh Reviewer 2',
-                                    timestamp: new Date().toISOString(),
-                                    actor: uid
-                                })
-                            }
-                        } else {
-                            throw new Error('Anda tidak memiliki akses untuk menolak bon sementara ini.')
-                        }
+        try {
+            const uid = localStorage.getItem('userUid')
+            const userRole = localStorage.getItem('userRole')
+            const bonSementaraRef = doc(db, 'bonSementara', selectedReport.id)
+
+            // Cek apakah UID termasuk dalam super admin, reviewer1, atau reviewer2
+            const isSuperAdmin = userRole === 'Super Admin'
+            const isReviewer1 = selectedReport.user.reviewer1.includes(uid)
+            const isReviewer2 = selectedReport.user.reviewer2.includes(uid)
+
+            let updateData = {}
+
+            if (isSuperAdmin) {
+                // Super Admin rejection logic
+                if (!selectedReport.approvedByReviewer1Status) {
+                    updateData = {
+                        status: 'Ditolak',
+                        approvedByReviewer1Status: 'superadmin',
+                        rejectedBySuperAdmin: true,
+                        rejectReason: rejectReason || 'Alasan tidak diberikan',
+                        statusHistory: arrayUnion({
+                            status: 'Ditolak oleh Super Admin (Pengganti Reviewer 1)',
+                            timestamp: new Date().toISOString(),
+                            actor: uid,
+                            reason: rejectReason || 'Alasan tidak diberikan'
+                        })
                     }
-
-                    // Update the document
-                    await updateDoc(bonSementaraRef, updateData)
-
-                    // Remove the rejected item from the list
-                    setData(prevData => ({
-                        bonSementara: prevData.bonSementara.filter(r => r.id !== item.id)
-                    }))
-
-                    toast.success('Bon Sementara berhasil ditolak')
-                    closeModal()
-                } catch (error) {
-                    console.error('Error rejecting bon sementara:', error)
-                    toast.error('Gagal menolak Bon Sementara')
+                } else if (
+                    selectedReport.approvedByReviewer1Status === 'superadmin' ||
+                    selectedReport.approvedByReviewer1Status === 'reviewer'
+                ) {
+                    updateData = {
+                        status: 'Ditolak',
+                        approvedByReviewer2Status: 'superadmin',
+                        rejectedBySuperAdmin: true,
+                        rejectReason: rejectReason || 'Alasan tidak diberikan',
+                        statusHistory: arrayUnion({
+                            status: 'Ditolak oleh Super Admin (Pengganti Reviewer 2)',
+                            timestamp: new Date().toISOString(),
+                            actor: uid,
+                            reason: rejectReason || 'Alasan tidak diberikan'
+                        })
+                    }
+                }
+            } else {
+                // Existing reviewer rejection logic
+                if (isReviewer1) {
+                    updateData = {
+                        status: 'Ditolak',
+                        approvedByReviewer1Status: 'reviewer',
+                        rejectReason: rejectReason || 'Alasan tidak diberikan',
+                        statusHistory: arrayUnion({
+                            status: 'Ditolak oleh Reviewer 1',
+                            timestamp: new Date().toISOString(),
+                            actor: uid,
+                            reason: rejectReason || 'Alasan tidak diberikan'
+                        })
+                    }
+                } else if (
+                    isReviewer2 &&
+                    (selectedReport.approvedByReviewer1Status === 'reviewer' ||
+                        selectedReport.approvedByReviewer1Status === 'superadmin')
+                ) {
+                    updateData = {
+                        status: 'Ditolak',
+                        rejectReason: rejectReason || 'Alasan tidak diberikan',
+                        statusHistory: arrayUnion({
+                            status: 'Ditolak oleh Reviewer 2',
+                            timestamp: new Date().toISOString(),
+                            actor: uid,
+                            reason: rejectReason || 'Alasan tidak diberikan'
+                        })
+                    }
+                } else {
+                    throw new Error('Anda tidak memiliki akses untuk menolak bon sementara ini.')
                 }
             }
-        })
+
+            // Update the document
+            await updateDoc(bonSementaraRef, updateData)
+
+            // Remove the rejected item from the list
+            setData(prevData => ({
+                bonSementara: prevData.bonSementara.filter(r => r.id !== selectedReport.id)
+            }))
+
+            toast.success('Bon Sementara berhasil ditolak')
+            handleCloseRejectModal()
+        } catch (error) {
+            console.error('Error rejecting bon sementara:', error)
+            toast.error('Gagal menolak Bon Sementara')
+        }
     }
 
     const formatDate = (dateString) => {
@@ -951,13 +972,29 @@ const BsCheck = () => {
             </div>
 
             <Modal
+                showModal={isRejectModalOpen}
+                selectedReport={selectedReport}
+                cancelReason={rejectReason}
+                setCancelReason={setRejectReason}
+                onClose={handleCloseRejectModal}
+                onConfirm={handleSubmitReject}
+                title="Konfirmasi Reject"
+                message={`Apakah Anda yakin ingin menolak reimbursement dengan Nomor Dokumen ${selectedReport?.displayId || 'ini'}?`}
+                cancelText="Tidak"
+                confirmText="Ya, Tolak"
+                showCancelReason={true}
+                reasonLabel='Alasan Penolakan'
+                reasonPlaceholder='Masukkan alasan penolakan...'
+            />
+            
+            <Modal
                 showModal={showModal}
                 title={modalProps.title}
                 message={modalProps.message}
                 onClose={closeModal}
                 onConfirm={modalProps.onConfirm}
                 cancelText="Batal"
-                confirmText="Ya"
+                confirmText="Setujui"
             />
         </div>
     );

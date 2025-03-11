@@ -12,7 +12,9 @@ const Modal = ({
     confirmText = 'Hapus',
     cancelReason,
     setCancelReason,
-    showCancelReason
+    showCancelReason,
+    reasonLabel = 'Alasan', 
+    reasonPlaceholder = 'Masukkan alasan...' 
 }) => {
     const [isLoading, setIsLoading] = useState(false)
     
@@ -54,14 +56,14 @@ const Modal = ({
                 {showCancelReason && (
                     <div className="mb-4">
                         <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
-                            Alasan Pembatalan <span className="text-red-500">*</span>
+                            {reasonLabel} <span className="text-red-500">*</span>
                         </label>
                         <textarea
                             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
                             rows="3"
                             value={cancelReason}
                             onChange={handleReasonChange}
-                            placeholder="Masukkan alasan pembatalan..."
+                            placeholder={reasonPlaceholder}
                         />
                     </div>
                 )}

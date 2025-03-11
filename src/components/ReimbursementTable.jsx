@@ -647,6 +647,8 @@ const ReimbursementTable = () => {
                 cancelText="Tidak"
                 confirmText="Ya, Batalkan"
                 showCancelReason={true}
+                reasonLabel='Alasan Pembatalan'
+                reasonPlaceholder='Masukkan alasan pembatalan...'
             />
         </div>
     )
