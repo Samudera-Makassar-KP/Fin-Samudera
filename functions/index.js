@@ -34,12 +34,12 @@ const formatDateIndonesia = (dateString) => {
         'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
         'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
-    
+
     const date = new Date(dateString);
     const day = date.getDate();
     const month = months[date.getMonth()];
     const year = date.getFullYear();
-    
+
     return `${day} ${month} ${year}`;
 };
 
@@ -53,10 +53,10 @@ const getUserData = async (uid) => {
 // Helper Function: Template HTML untuk email
 const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo = true, status = 'approval') => {
     // Deteksi tipe dokumen
-    const documentType = newData.documentType || 
-        (newData.displayId?.includes('LPJ') ? 'LPJ' : 
+    const documentType = newData.documentType ||
+        (newData.displayId?.includes('LPJ') ? 'LPJ' :
         newData.bonSementara ? 'BS' : 'RBS');
-    
+
     // Set label dan amount berdasarkan tipe dokumen
     let documentLabel = 'Nomor Dokumen';
     let amountLabel = 'Jumlah';
@@ -84,10 +84,13 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
         case 'rejected':
             headerText = 'Pengajuan Ditolak';
             break;
+        case 'reminder':
+            headerText = 'Pengingat Approval';
+            break;
         default:
-            headerText = 'Permintaan Approval';  
+            headerText = 'Permintaan Approval';
     }
-    
+
     // Generate table rows
     let tableRows = `
         <tr>
@@ -127,26 +130,26 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
             <td style="padding: 10px; border: 1px solid #ddd;">${amount}</td>
         </tr>`;
     }
-    
+
     return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
         <div style="background-color: #ED1C24; color: white; padding: 15px; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px;">
             <h2 style="margin: 0; font-size: 20px;">${headerText}</h2>
         </div>
-        
+
         <div style="padding: 20px;">
             <p style="font-size: 16px; margin-bottom: 10px;">${content}</p>
-            
+
             <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
                 ${tableRows}
             </table>
 
             <div style="text-align: center;">
-                <a href="https://smdr-mks.com" 
-                    style="background-color: #ED1C24; 
-                        color: white; 
-                        padding: 12px 24px; 
-                        text-decoration: none; 
+                <a href="https://smdr-mks.com"
+                    style="background-color: #ED1C24;
+                        color: white;
+                        padding: 12px 24px;
+                        text-decoration: none;
                         border-radius: 5px;
                         font-weight: bold;
                         display: inline-block;">
@@ -199,16 +202,22 @@ const sendEmail = async (to, subject, htmlContent = null) => {
 exports.notifyReviewer1OnCreateBS = onDocumentCreated("bonSementara/{docId}", async (event) => {
     const newData = event.data.data();
     if (!newData?.user?.reviewer1?.[0]) return;
+    
+    // Perbarui dokumen dengan field currentApproverUid dan lastStatusChange
+    await db.collection("bonSementara").doc(event.params.docId).update({
+        currentApproverUid: newData.user.reviewer1[0],
+        lastStatusChange: new Date().toISOString()
+    });
 
     const [reviewer1Data, submitterData] = await Promise.all([
         getUserData(newData.user.reviewer1[0]),
         getUserData(newData.user.uid)
     ]);
-    
+
     if (!reviewer1Data?.email) return;
 
     const subject = `Permintaan Approval BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
-    
+
     const emailContent = `
         Dear <strong>${reviewer1Data.nama}</strong>,
         <br><br>Mohon untuk melakukan approval atas pengajuan BS berikut:
@@ -217,7 +226,7 @@ exports.notifyReviewer1OnCreateBS = onDocumentCreated("bonSementara/{docId}", as
     await sendEmail(
         reviewer1Data.email,
         subject,
-        createEmailTemplate(emailContent, submitterData, newData, 'approval')
+        createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
     );
 });
 
@@ -228,9 +237,15 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
 
     if (!newData || !oldData || newData.status === oldData.status) return;
 
+    // Perbarui dokumen dengan lastStatusChange
+    const docRef = db.collection("bonSementara").doc(event.params.docId);
+    await docRef.update({
+        lastStatusChange: new Date().toISOString()
+    });
+
     const [reviewer1Data, reviewer2Data, submitterData] = await Promise.all([
         getUserData(newData.user.reviewer1[0]),
-        getUserData(newData.user.reviewer2[0]),
+        getUserData(newData.user.reviewer2?.[0]),
         getUserData(newData.user.uid)
     ]);
 
@@ -248,11 +263,12 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
     };
 
     if (newData.status === "Ditolak") {
+        await docRef.update({ currentApproverUid: null }); // Hapus current approver
         const subject = `Pengajuan BS Ditolak - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
-        const rejectorName = actorData?.nama || 
-            (latestStatus?.actor === reviewer1Data?.uid ? reviewer1Data?.nama : reviewer2Data?.nama) || 
+        const rejectorName = actorData?.nama ||
+            (latestStatus?.actor === reviewer1Data?.uid ? reviewer1Data?.nama : reviewer2Data?.nama) ||
             'Reviewer';
-        const rejectReason = newData.rejectReason
+        const rejectReason = newData.rejectReason;
         const emailContent = `
             Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
             <br><br>Dokumen pengajuan BS anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
@@ -273,33 +289,35 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
     }
 
     if (newData.status === "Diproses" && oldData.status === "Diajukan") {
+        await docRef.update({ currentApproverUid: newData.user.reviewer2?.[0] || null });
         const subject = `Permintaan Approval BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const approverInfo = await getApproverInfo(latestStatus);
-        const approverName = approverInfo.isSuperAdmin ? 
-            `${approverInfo.name}` : 
+        const approverName = approverInfo.isSuperAdmin ?
+            `${approverInfo.name}` :
             (reviewer1Data?.nama || 'Reviewer 1');
         if (reviewer2Data?.email) {
             const emailContent = `
                 Dear <strong>${reviewer2Data.nama}</strong>,
-                <br><br>Dokumen ini telah disetujui oleh ${approverName} 
+                <br><br>Dokumen ini telah disetujui oleh ${approverName}
                 <br>Mohon untuk melakukan approval atas pengajuan BS berikut:
             `;
             await sendEmail(
                 reviewer2Data.email,
                 subject,
-                createEmailTemplate(emailContent, submitterData, newData, 'approval')
+                createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
             );
         }
     }
 
     if (newData.status === "Disetujui" && oldData.status === "Diproses") {
+        await docRef.update({ currentApproverUid: null }); // Hapus current approver
         const subject = `Pengajuan BS Disetujui - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const firstApproval = newData.statusHistory.find(
-            status => status.status.includes('Disetujui') && 
+            status => status.status.includes('Disetujui') &&
             (status.status.includes('Reviewer 1') || status.status.includes('Super Admin (Pengganti Reviewer 1)'))
         );
         const secondApproval = newData.statusHistory.find(
-            status => status.status.includes('Disetujui') && 
+            status => status.status.includes('Disetujui') &&
             (status.status.includes('Reviewer 2') || status.status.includes('Super Admin (Pengganti Reviewer 2)'))
         );
         const [firstApproverInfo, secondApproverInfo] = await Promise.all([
@@ -336,6 +354,13 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
 exports.notifyValidatorOnCreateRBS = onDocumentCreated("reimbursement/{docId}", async (event) => {
     const newData = event.data.data();
     if (!newData?.user?.validator?.length) return;
+
+    // Perbarui dokumen dengan currentApproverUid dan lastStatusChange
+    await db.collection("reimbursement").doc(event.params.docId).update({
+        currentApproverUid: newData.user.validator[0],
+        lastStatusChange: new Date().toISOString()
+    });
+
     const submitterData = await getUserData(newData.user.uid);
     const validatorPromises = newData.user.validator.map(validatorId => getUserData(validatorId));
     const validatorsData = await Promise.all(validatorPromises);
@@ -350,7 +375,7 @@ exports.notifyValidatorOnCreateRBS = onDocumentCreated("reimbursement/{docId}", 
             return sendEmail(
                 validatorData.email,
                 subject,
-                createEmailTemplate(emailContent, submitterData, newData, 'approval')
+                createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
             );
         });
     await Promise.all(emailPromises);
@@ -361,17 +386,26 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
     if (!newData || !oldData || newData.status === oldData.status) return;
+
+    // Perbarui dokumen dengan lastStatusChange
+    const docRef = db.collection("reimbursement").doc(event.params.docId);
+    await docRef.update({
+        lastStatusChange: new Date().toISOString()
+    });
+
     const [reviewer1Data, reviewer2Data, submitterData] = await Promise.all([
-        getUserData(newData.user.reviewer1[0]),
-        getUserData(newData.user.reviewer2[0]),
+        getUserData(newData.user.reviewer1?.[0]),
+        getUserData(newData.user.reviewer2?.[0]),
         getUserData(newData.user.uid)
     ]);
     const latestStatus = newData.statusHistory?.[newData.statusHistory.length - 1];
     const actorData = latestStatus?.actor ? await getUserData(latestStatus.actor) : null;
+
     if (newData.status === "Ditolak") {
+        await docRef.update({ currentApproverUid: null });
         const subject = `Pengajuan Reimbursement Ditolak - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const rejectorName = actorData?.nama || 'Reviewer';
-        const rejectReason = newData.rejectReason
+        const rejectReason = newData.rejectReason;
         const emailContent = `
             Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
             <br><br>Dokumen pengajuan Reimbursement anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
@@ -390,22 +424,24 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
     }
     const latestStatusType = latestStatus?.status;
     const statusHistory = newData.statusHistory || [];
+    let nextApproverUid = null;
+
     if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Validator)" && reviewer1Data?.email) {
+        nextApproverUid = newData.user.reviewer1[0];
         const subject = `Permintaan Approval Reimbursement - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer1Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Super Admin'} 
+            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Super Admin'}
             <br>Mohon untuk melakukan approval atas pengajuan Reimbursement berikut:
         `;
         await sendEmail(
             reviewer1Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-        return;
-    }
-    if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 1)" && reviewer2Data?.email) {
-        const validatorStatus = statusHistory.find(status => 
+    } else if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 1)" && reviewer2Data?.email) {
+        nextApproverUid = newData.user.reviewer2[0];
+        const validatorStatus = statusHistory.find(status =>
             status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
         );
         const isSameSuperAdmin = validatorStatus && validatorStatus.actor === latestStatus.actor;
@@ -421,46 +457,44 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
             const validatorData = validatorStatus?.actor ? await getUserData(validatorStatus.actor) : null;
             emailContent = `
                 Dear <strong>${reviewer2Data.nama}</strong>,
-                <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${actorData?.nama || 'Super Admin'} 
+                <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${actorData?.nama || 'Super Admin'}
                 <br>Mohon untuk melakukan approval atas pengajuan Reimbursement berikut:
             `;
         }
         await sendEmail(
             reviewer2Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-        return;
-    }
-    if (latestStatusType === "Disetujui oleh Reviewer 1 Sekaligus Validator" && reviewer2Data?.email) {
+    } else if (latestStatusType === "Disetujui oleh Reviewer 1 Sekaligus Validator" && reviewer2Data?.email) {
+        nextApproverUid = newData.user.reviewer2[0];
         const subject = `Permintaan Approval Reimbursement - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer2Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi dan disetujui oleh ${actorData?.nama || 'Validator & Reviewer 1'} 
+            <br><br>Dokumen ini telah divalidasi dan disetujui oleh ${actorData?.nama || 'Validator & Reviewer 1'}
             <br>Mohon untuk melakukan approval atas pengajuan Reimbursement berikut:
         `;
         await sendEmail(
             reviewer2Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-        return;
-    }
-    if (latestStatusType === "Disetujui oleh Validator" && reviewer1Data?.email) {
+    } else if (latestStatusType === "Disetujui oleh Validator" && reviewer1Data?.email) {
+        nextApproverUid = newData.user.reviewer1[0];
         const subject = `Permintaan Approval Reimbursement - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer1Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Validator'} 
+            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Validator'}
             <br>Mohon untuk melakukan approval atas pengajuan Reimbursement berikut:
         `;
         await sendEmail(
             reviewer1Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-    }
-    if (latestStatusType === "Disetujui oleh Reviewer 1" && reviewer2Data?.email) {
-        const validatorStatus = newData.statusHistory?.find(status => 
+    } else if (latestStatusType === "Disetujui oleh Reviewer 1" && reviewer2Data?.email) {
+        nextApproverUid = newData.user.reviewer2[0];
+        const validatorStatus = newData.statusHistory?.find(status =>
             status.status === "Disetujui oleh Validator" ||
             status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
         );
@@ -468,25 +502,25 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
         const subject = `Permintaan Approval Reimbursement - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer2Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'} 
+            <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'}
             <br>Mohon untuk melakukan approval atas pengajuan Reimbursement berikut:
         `;
         await sendEmail(
             reviewer2Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-    }
-    if ((latestStatusType === "Disetujui oleh Reviewer 2" || latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)") 
+    } else if ((latestStatusType === "Disetujui oleh Reviewer 2" || latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)")
         && newData.status === "Disetujui") {
+        nextApproverUid = null; // Approval selesai, tidak ada lagi approver
         const subject = `Pengajuan Reimbursement Disetujui - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
-        const hasValidatorReviewer1Status = statusHistory.some(status => 
+        const hasValidatorReviewer1Status = statusHistory.some(status =>
             status.status === "Disetujui oleh Reviewer 1 Sekaligus Validator"
         );
-        const allSuperAdminApprovals = 
-            statusHistory.some(status => status.status === "Disetujui oleh Super Admin (Pengganti Validator)") &&
-            statusHistory.some(status => status.status === "Disetujui oleh Super Admin (Pengganti Reviewer 1)") &&
-            statusHistory.some(status => status.status === "Disetujui oleh Super Admin (Pengganti Reviewer 2)");
+        const allSuperAdminApprovals =
+            statusHistory.some(status => status.status.includes("Super Admin (Pengganti Validator)")) &&
+            statusHistory.some(status => status.status.includes("Super Admin (Pengganti Reviewer 1)")) &&
+            statusHistory.some(status => status.status.includes("Super Admin (Pengganti Reviewer 2)"));
         let emailContent;
         if (allSuperAdminApprovals) {
             const superAdminData = actorData;
@@ -495,15 +529,15 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
                 <br><br>Dokumen pengajuan Reimbursement anda telah sepenuhnya disetujui oleh ${superAdminData?.nama || 'Super Admin'}
             `;
         } else if (hasValidatorReviewer1Status) {
-            const lastApprover = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ? 
-                actorData?.nama || 'Super Admin' : 
+            const lastApprover = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ?
+                actorData?.nama || 'Super Admin' :
                 reviewer2Data?.nama || 'Reviewer 2';
             emailContent = `
                 Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
                 <br><br>Dokumen pengajuan Reimbursement anda telah divalidasi dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'} serta ${lastApprover}
             `;
         } else {
-            const validatorStatus = statusHistory.find(status => 
+            const validatorStatus = statusHistory.find(status =>
                 status.status === "Disetujui oleh Validator" ||
                 status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
             );
@@ -518,22 +552,22 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
                 reviewer1Status?.status.includes("Super Admin");
             if (isSameSuperAdmin) {
                 const superAdminData = validatorData;
-                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ? 
-                    `${actorData?.nama || 'Super Admin'}` : 
+                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ?
+                    `${actorData?.nama || 'Super Admin'}` :
                     `${reviewer2Data?.nama || 'Reviewer 2'}`;
                 emailContent = `
                     Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
                     <br><br>Dokumen pengajuan Reimbursement anda telah divalidasi dan disetujui oleh ${superAdminData?.nama || 'Super Admin'} serta ${reviewer2Name}
                 `;
             } else {
-                const validatorName = validatorStatus?.status.includes("Super Admin") ? 
-                    `${validatorData?.nama || 'Super Admin'}` : 
+                const validatorName = validatorStatus?.status.includes("Super Admin") ?
+                    `${validatorData?.nama || 'Super Admin'}` :
                     `${validatorData?.nama || 'Validator'}`;
-                const reviewer1Name = reviewer1Status?.status.includes("Super Admin") ? 
-                    `${reviewer1ActorData?.nama || 'Super Admin'}` : 
+                const reviewer1Name = reviewer1Status?.status.includes("Super Admin") ?
+                    `${reviewer1ActorData?.nama || 'Super Admin'}` :
                     `${reviewer1Data?.nama || 'Reviewer 1'}`;
-                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ? 
-                    `${actorData?.nama || 'Super Admin'}` : 
+                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ?
+                    `${actorData?.nama || 'Super Admin'}` :
                     `${reviewer2Data?.nama || 'Reviewer 2'}`;
                 emailContent = `
                     Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
@@ -549,12 +583,23 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
             );
         }
     }
+    // Perbarui dokumen dengan currentApproverUid yang baru
+    if (nextApproverUid !== undefined) {
+        await docRef.update({ currentApproverUid: nextApproverUid });
+    }
 });
 
 // Trigger saat LPJ pertama kali dibuat
 exports.notifyValidatorOnCreateLPJ = onDocumentCreated("lpj/{docId}", async (event) => {
     const newData = event.data.data();
     if (!newData?.user?.validator?.length) return;
+
+    // Perbarui dokumen dengan currentApproverUid dan lastStatusChange
+    await db.collection("lpj").doc(event.params.docId).update({
+        currentApproverUid: newData.user.validator[0],
+        lastStatusChange: new Date().toISOString()
+    });
+
     const submitterData = await getUserData(newData.user.uid);
     const validatorPromises = newData.user.validator.map(validatorId => getUserData(validatorId));
     const validatorsData = await Promise.all(validatorPromises);
@@ -569,7 +614,7 @@ exports.notifyValidatorOnCreateLPJ = onDocumentCreated("lpj/{docId}", async (eve
             return sendEmail(
                 validatorData.email,
                 subject,
-                createEmailTemplate(emailContent, submitterData, newData, 'approval')
+                createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
             );
         });
     await Promise.all(emailPromises);
@@ -580,17 +625,27 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
     if (!newData || !oldData || newData.status === oldData.status) return;
+
+    // Perbarui dokumen dengan lastStatusChange
+    const docRef = db.collection("lpj").doc(event.params.docId);
+    await docRef.update({
+        lastStatusChange: new Date().toISOString()
+    });
+
     const [reviewer1Data, reviewer2Data, submitterData] = await Promise.all([
-        getUserData(newData.user.reviewer1[0]),
-        getUserData(newData.user.reviewer2[0]),
+        getUserData(newData.user.reviewer1?.[0]),
+        getUserData(newData.user.reviewer2?.[0]),
         getUserData(newData.user.uid)
     ]);
     const latestStatus = newData.statusHistory?.[newData.statusHistory.length - 1];
     const actorData = latestStatus?.actor ? await getUserData(latestStatus.actor) : null;
+    let nextApproverUid = null;
+
     if (newData.status === "Ditolak") {
+        await docRef.update({ currentApproverUid: null });
         const subject = `Pengajuan LPJ BS Ditolak - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const rejectorName = actorData?.nama || 'Reviewer';
-        const rejectReason = newData.rejectReason
+        const rejectReason = newData.rejectReason;
         const emailContent = `
             Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
             <br><br>Dokumen pengajuan LPJ BS anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
@@ -610,21 +665,21 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
     const latestStatusType = latestStatus?.status;
     const statusHistory = newData.statusHistory || [];
     if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Validator)" && reviewer1Data?.email) {
+        nextApproverUid = newData.user.reviewer1[0];
         const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer1Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Super Admin'} 
+            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Super Admin'}
             <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
         `;
         await sendEmail(
             reviewer1Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-        return;
-    }
-    if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 1)" && reviewer2Data?.email) {
-        const validatorStatus = statusHistory.find(status => 
+    } else if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 1)" && reviewer2Data?.email) {
+        nextApproverUid = newData.user.reviewer2[0];
+        const validatorStatus = statusHistory.find(status =>
             status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
         );
         const isSameSuperAdmin = validatorStatus && validatorStatus.actor === latestStatus.actor;
@@ -640,46 +695,44 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
             const validatorData = validatorStatus?.actor ? await getUserData(validatorStatus.actor) : null;
             emailContent = `
                 Dear <strong>${reviewer2Data.nama}</strong>,
-                <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${actorData?.nama || 'Super Admin'} 
+                <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${actorData?.nama || 'Super Admin'}
                 <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
             `;
         }
         await sendEmail(
             reviewer2Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-        return;
-    }
-    if (latestStatusType === "Disetujui oleh Reviewer 1 Sekaligus Validator" && reviewer2Data?.email) {
+    } else if (latestStatusType === "Disetujui oleh Reviewer 1 Sekaligus Validator" && reviewer2Data?.email) {
+        nextApproverUid = newData.user.reviewer2[0];
         const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer2Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi dan disetujui oleh ${actorData?.nama || 'Validator & Reviewer 1'} 
+            <br><br>Dokumen ini telah divalidasi dan disetujui oleh ${actorData?.nama || 'Validator & Reviewer 1'}
             <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
         `;
         await sendEmail(
             reviewer2Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-        return;
-    }
-    if (latestStatusType === "Disetujui oleh Validator" && reviewer1Data?.email) {
+    } else if (latestStatusType === "Disetujui oleh Validator" && reviewer1Data?.email) {
+        nextApproverUid = newData.user.reviewer1[0];
         const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer1Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Validator'} 
+            <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Validator'}
             <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
         `;
         await sendEmail(
             reviewer1Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-    }
-    if (latestStatusType === "Disetujui oleh Reviewer 1" && reviewer2Data?.email) {
-        const validatorStatus = newData.statusHistory?.find(status => 
+    } else if (latestStatusType === "Disetujui oleh Reviewer 1" && reviewer2Data?.email) {
+        nextApproverUid = newData.user.reviewer2[0];
+        const validatorStatus = newData.statusHistory?.find(status =>
             status.status === "Disetujui oleh Validator" ||
             status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
         );
@@ -687,25 +740,25 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
         const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer2Data.nama}</strong>,
-            <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'} 
+            <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'}
             <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
         `;
         await sendEmail(
             reviewer2Data.email,
             subject,
-            createEmailTemplate(emailContent, submitterData, newData, 'approval')
+            createEmailTemplate(emailContent, submitterData, newData, true, 'approval')
         );
-    }
-    if ((latestStatusType === "Disetujui oleh Reviewer 2" || latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)") 
+    } else if ((latestStatusType === "Disetujui oleh Reviewer 2" || latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)")
         && newData.status === "Disetujui") {
+        nextApproverUid = null;
         const subject = `Pengajuan LPJ BS Disetujui - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
-        const hasValidatorReviewer1Status = statusHistory.some(status => 
+        const hasValidatorReviewer1Status = statusHistory.some(status =>
             status.status === "Disetujui oleh Reviewer 1 Sekaligus Validator"
         );
-        const allSuperAdminApprovals = 
-            statusHistory.some(status => status.status === "Disetujui oleh Super Admin (Pengganti Validator)") &&
-            statusHistory.some(status => status.status === "Disetujui oleh Super Admin (Pengganti Reviewer 1)") &&
-            statusHistory.some(status => status.status === "Disetujui oleh Super Admin (Pengganti Reviewer 2)");
+        const allSuperAdminApprovals =
+            statusHistory.some(status => status.status.includes("Super Admin (Pengganti Validator)")) &&
+            statusHistory.some(status => status.status.includes("Super Admin (Pengganti Reviewer 1)")) &&
+            statusHistory.some(status => status.status.includes("Super Admin (Pengganti Reviewer 2)"));
         let emailContent;
         if (allSuperAdminApprovals) {
             const superAdminData = actorData;
@@ -714,15 +767,15 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
                 <br><br>Dokumen pengajuan LPJ BS anda telah sepenuhnya disetujui oleh ${superAdminData?.nama || 'Super Admin'}
             `;
         } else if (hasValidatorReviewer1Status) {
-            const lastApprover = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ? 
-                actorData?.nama || 'Super Admin' : 
+            const lastApprover = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ?
+                actorData?.nama || 'Super Admin' :
                 reviewer2Data?.nama || 'Reviewer 2';
             emailContent = `
                 Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
                 <br><br>Dokumen pengajuan LPJ BS anda telah divalidasi dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'} serta ${lastApprover}
             `;
         } else {
-            const validatorStatus = statusHistory.find(status => 
+            const validatorStatus = statusHistory.find(status =>
                 status.status === "Disetujui oleh Validator" ||
                 status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
             );
@@ -737,22 +790,22 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
                 reviewer1Status?.status.includes("Super Admin");
             if (isSameSuperAdmin) {
                 const superAdminData = validatorData;
-                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ? 
-                    `${actorData?.nama || 'Super Admin'}` : 
+                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ?
+                    `${actorData?.nama || 'Super Admin'}` :
                     `${reviewer2Data?.nama || 'Reviewer 2'}`;
                 emailContent = `
                     Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
                     <br><br>Dokumen pengajuan LPJ BS anda telah divalidasi dan disetujui oleh ${superAdminData?.nama || 'Super Admin'} serta ${reviewer2Name}
                 `;
             } else {
-                const validatorName = validatorStatus?.status.includes("Super Admin") ? 
-                    `${validatorData?.nama || 'Super Admin'}` : 
+                const validatorName = validatorStatus?.status.includes("Super Admin") ?
+                    `${validatorData?.nama || 'Super Admin'}` :
                     `${validatorData?.nama || 'Validator'}`;
-                const reviewer1Name = reviewer1Status?.status.includes("Super Admin") ? 
-                    `${reviewer1ActorData?.nama || 'Super Admin'}` : 
+                const reviewer1Name = reviewer1Status?.status.includes("Super Admin") ?
+                    `${reviewer1ActorData?.nama || 'Super Admin'}` :
                     `${reviewer1Data?.nama || 'Reviewer 1'}`;
-                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ? 
-                    `${actorData?.nama || 'Super Admin'}` : 
+                const reviewer2Name = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ?
+                    `${actorData?.nama || 'Super Admin'}` :
                     `${reviewer2Data?.nama || 'Reviewer 2'}`;
                 emailContent = `
                     Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
@@ -768,23 +821,27 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
             );
         }
     }
+    // Perbarui dokumen dengan currentApproverUid yang baru
+    if (nextApproverUid !== undefined) {
+        await docRef.update({ currentApproverUid: nextApproverUid });
+    }
 });
-
 
 // -----------------------------------------------------------------------------------
 // ---- FUNGSI TERJADWAL UNTUK PENGINGAT (REMINDER) - BARU DITAMBAHKAN ----
 // -----------------------------------------------------------------------------------
 
 /**
- * Fungsi ini akan berjalan setiap jam untuk memeriksa dokumen yang belum di-approve
- * selama lebih dari 24 jam.
+ * Fungsi ini akan berjalan setiap hari pada pukul 09:00 WIB.
  */
-exports.sendApprovalReminders = onSchedule("every 60 minutes", async (event) => {
+exports.sendApprovalReminders = onSchedule("0 9 * * *", async (event) => {
     console.log("Mulai pengecekan pengajuan yang membutuhkan pengingat...");
 
     const now = new Date();
-    // Hitung waktu 24 jam yang lalu
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000); 
+    // Tentukan waktu kemarin pada pukul 23:59
+    const yesterdayAt2359 = new Date(now);
+    yesterdayAt2359.setDate(now.getDate() - 1);
+    yesterdayAt2359.setHours(23, 59, 59, 999);
 
     const documentTypes = [
         { collection: "bonSementara", type: "BS" },
@@ -794,9 +851,9 @@ exports.sendApprovalReminders = onSchedule("every 60 minutes", async (event) => 
 
     for (const docType of documentTypes) {
         try {
+            // Ambil semua dokumen yang statusnya belum selesai
             const querySnapshot = await db.collection(docType.collection)
                 .where('status', 'not-in', ['Disetujui', 'Ditolak'])
-                .where('tanggalPengajuan', '<', twentyFourHoursAgo.toISOString())
                 .get();
 
             if (querySnapshot.empty) {
@@ -806,80 +863,35 @@ exports.sendApprovalReminders = onSchedule("every 60 minutes", async (event) => 
 
             for (const doc of querySnapshot.docs) {
                 const newData = doc.data();
-                const submitterData = await getUserData(newData.user.uid);
-                let reviewerId, reviewerName;
-                let subject, emailContent;
+                const docId = doc.id;
+                const lastStatusChangeDate = newData.lastStatusChange ? new Date(newData.lastStatusChange) : new Date(newData.tanggalPengajuan);
+                const lastReminderSentDate = newData.lastReminderSent ? new Date(newData.lastReminderSent) : null;
 
-                // Logika untuk menentukan siapa reviewer/validator berikutnya
-                if (docType.type === 'BS') {
-                    if (newData.status === 'Diajukan' && newData.user.reviewer1?.[0]) {
-                        reviewerId = newData.user.reviewer1[0];
-                        const reviewerData = await getUserData(reviewerId);
-                        reviewerName = reviewerData?.nama || 'Reviewer 1';
-                        subject = `PENGINGAT: Mohon Approval BS - ${newData.displayId}`;
-                        emailContent = `
-                            Dear <strong>${reviewerName}</strong>,
-                            <br><br>Pengajuan BS dengan nomor <strong>${newData.displayId}</strong> sudah diajukan lebih dari 24 jam yang lalu dan belum disetujui. Mohon segera dicek.
-                        `;
-                    } else if (newData.status === 'Diproses' && newData.user.reviewer2?.[0]) {
-                        reviewerId = newData.user.reviewer2[0];
-                        const reviewerData = await getUserData(reviewerId);
-                        reviewerName = reviewerData?.nama || 'Reviewer 2';
-                        subject = `PENGINGAT: Mohon Approval BS - ${newData.displayId}`;
-                        emailContent = `
-                            Dear <strong>${reviewerName}</strong>,
-                            <br><br>Pengajuan BS dengan nomor <strong>${newData.displayId}</strong> sudah disetujui oleh Reviewer sebelumnya dan menunggu approval Anda.
-                        `;
-                    }
-                } else { // Untuk LPJ dan RBS
-                    const statusHistory = newData.statusHistory || [];
-                    const isValidatorApproved = statusHistory.some(status =>
-                        status.status.includes("Validator") || status.status.includes("Super Admin (Pengganti Validator)")
-                    );
-                    const isReviewer1Approved = statusHistory.some(status =>
-                        status.status.includes("Reviewer 1") || status.status.includes("Super Admin (Pengganti Reviewer 1)")
-                    );
-
-                    if (!isValidatorApproved && newData.user.validator?.[0]) {
-                        const validatorPromises = newData.user.validator.map(id => getUserData(id));
-                        const validators = await Promise.all(validatorPromises);
-                        const validatorEmails = validators.filter(v => v?.email).map(v => v.email);
-                        
-                        if (validatorEmails.length > 0) {
-                            const subject = `PENGINGAT: Mohon Validasi ${docType.type} - ${newData.displayId}`;
-                            const emailContent = `
-                                Kepada para Validator,
-                                <br><br>Pengajuan ${docType.type} dengan nomor <strong>${newData.displayId}</strong> sudah diajukan lebih dari 24 jam yang lalu. Mohon segera melakukan validasi.
-                            `;
-                            await sendEmail(validatorEmails, subject, createEmailTemplate(emailContent, submitterData, newData));
-                        }
+                // Cek apakah dokumen sudah tertunda sejak kemarin pukul 23:59
+                // Dan belum ada reminder yang dikirim hari ini
+                if (lastStatusChangeDate < yesterdayAt2359 && (!lastReminderSentDate || lastReminderSentDate.toDateString() !== now.toDateString())) {
+                    const approverUid = newData.currentApproverUid;
+                    if (!approverUid) {
+                        console.log(`Dokumen ${docId} tidak memiliki currentApproverUid.`);
                         continue;
-                    } else if (!isReviewer1Approved && newData.user.reviewer1?.[0]) {
-                        reviewerId = newData.user.reviewer1[0];
-                        const reviewerData = await getUserData(reviewerId);
-                        reviewerName = reviewerData?.nama || 'Reviewer 1';
-                        subject = `PENGINGAT: Mohon Approval ${docType.type} - ${newData.displayId}`;
-                        emailContent = `
-                            Dear <strong>${reviewerName}</strong>,
-                            <br><br>Pengajuan ${docType.type} dengan nomor <strong>${newData.displayId}</strong> sudah divalidasi dan menunggu approval Anda.
-                        `;
-                    } else if (isReviewer1Approved && newData.user.reviewer2?.[0] && newData.status !== 'Disetujui') {
-                        reviewerId = newData.user.reviewer2[0];
-                        const reviewerData = await getUserData(reviewerId);
-                        reviewerName = reviewerData?.nama || 'Reviewer 2';
-                        subject = `PENGINGAT: Mohon Approval ${docType.type} - ${newData.displayId}`;
-                        emailContent = `
-                            Dear <strong>${reviewerName}</strong>,
-                            <br><br>Pengajuan ${docType.type} dengan nomor <strong>${newData.displayId}</strong> sudah disetujui oleh Reviewer sebelumnya dan menunggu approval Anda.
-                        `;
                     }
-                }
 
-                // Kirim email hanya jika reviewer/validator berikutnya ditemukan
-                if (reviewerId) {
-                    const reviewerData = await getUserData(reviewerId);
-                    if (reviewerData?.email) {
-                        await sendEmail(reviewerData.email, subject, createEmailTemplate(emailContent, submitterData, newData));
+                    const approverData = await getUserData(approverUid);
+                    if (approverData?.email) {
+                        const submitterData = await getUserData(newData.user.uid);
+                        const subject = `PENGINGAT: Mohon Approval Dokumen ${docType.type} - ${newData.displayId}`;
+                        const emailContent = `
+                            Dear <strong>${approverData.nama}</strong>,
+                            <br><br>Dokumen ${docType.type} dengan nomor <strong>${newData.displayId}</strong> sudah menunggu persetujuan Anda. Mohon segera dicek.
+                        `;
+
+                        await sendEmail(approverData.email, subject, createEmailTemplate(emailContent, submitterData, newData, true, 'reminder'));
+
+                        // Perbarui dokumen dengan timestamp reminder terakhir
+                        await db.collection(docType.collection).doc(docId).update({
+                            lastReminderSent: now.toISOString()
+                        });
+                        console.log(`✅ Pengingat berhasil dikirim untuk dokumen ${docId} ke ${approverData.email}.`);
                     }
                 }
             }

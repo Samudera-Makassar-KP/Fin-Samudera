@@ -8,7 +8,7 @@ import Modal from './Modal'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
-import BsTimerDisplay from './BsTimerDisplay'
+import BsTimerDisplay from './bsTimerDisplay'
 
 const BsTable = () => {
     const [data, setData] = useState({ bonSementara: [] })

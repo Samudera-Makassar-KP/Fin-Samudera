@@ -7,7 +7,7 @@ import CreateBsTable from '../components/BsTable'
 import ReportCard from '../components/ReportCard'
 import Layout from './Layout'
 import GAUPieChart from '../components/GAUPieChart'
-import BsAlerts from '../components/BsAlerts'
+import BsAlerts from '../components/BSAlerts'
 import DefaultBankModal from '../components/DefaultBankModal'
 
 const DEFAULT_BANK = {
