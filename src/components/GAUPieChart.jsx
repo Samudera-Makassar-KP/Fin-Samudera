@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { collection, getDocs, query, where } from "firebase/firestore";
@@ -13,6 +13,7 @@ import 'react-loading-skeleton/dist/skeleton.css';
 ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
 const GAUPieChart = () => {
+    // State untuk mengelola data dan tampilan
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [chartData, setChartData] = useState(null);
     const [rawData, setRawData] = useState([]);
@@ -26,8 +27,9 @@ const GAUPieChart = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
     const [showLPJ, setShowLPJ] = useState(false);
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(true);
 
+    // Opsi untuk filter bulan dan unit bisnis
     const months = [
         { value: "all", label: "Semua Bulan" },
         { value: "1", label: "Januari" },
@@ -45,6 +47,7 @@ const GAUPieChart = () => {
     ];
 
     const unitOptions = [
+        { value: 'all', label: 'Semua Unit Bisnis' },
         { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
         { value: 'PT Samudera Makassar Logistik', label: 'PT Samudera Makassar Logistik' },
         { value: 'PT Kendari Jaya Samudera', label: 'PT Kendari Jaya Samudera' },
@@ -52,10 +55,10 @@ const GAUPieChart = () => {
         { value: 'PT Samudera Agencies Indonesia', label: 'PT Samudera Agencies Indonesia' },
         { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
         { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
-        { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
         { value: 'Samudera', label: 'Samudera' }
-    ]
+    ];
 
+    // Handler untuk klik pada grafik pie
     const handleChartClick = (event) => {
         const chart = event.chart;
         const activePoints = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true });
@@ -69,6 +72,7 @@ const GAUPieChart = () => {
         }
     };
 
+    // Warna yang sudah ditentukan sebelumnya untuk tipe pengeluaran
     const predefinedTypes = {
         ATK: "rgba(255, 99, 132, 1)",
         RTG: "rgba(54, 162, 235, 1)",
@@ -79,11 +83,10 @@ const GAUPieChart = () => {
         "Jenis Lain": "rgba(201, 203, 207, 1)",
     };
 
-    // Function to normalize type names
+    // Fungsi untuk menormalisasi nama tipe
     const normalizeTypeName = (type) => {
         if (!type) return "Jenis Lain";
 
-        // If it's a predefined type (case-insensitive check)
         const predefinedType = Object.keys(predefinedTypes).find(
             key => key.toLowerCase() === type.toLowerCase()
         );
@@ -91,15 +94,15 @@ const GAUPieChart = () => {
 
         return type
             .toLowerCase()
-            .replace(/\s+/g, ' ')    // Replace multiple spaces with single space
+            .replace(/\s+/g, ' ')
             .trim()
             .split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
     };
 
-    const getColor = (type, index) => {
-        // First check if it's a predefined type (case-insensitive)
+    // Fungsi untuk mendapatkan warna berdasarkan tipe
+    const getColor = useCallback((type, index) => {
         const predefinedType = Object.keys(predefinedTypes).find(
             key => key.toLowerCase() === type.toLowerCase()
         );
@@ -107,7 +110,6 @@ const GAUPieChart = () => {
             return predefinedTypes[predefinedType];
         }
 
-        // For custom types, use the baseColors array
         const baseColors = [
             "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#FF9F40", "#9966FF",
             "#FFB6C1", "#8B4513", "#00BFFF", "#32CD32", "#FFD700", "#8A2BE2",
@@ -118,16 +120,14 @@ const GAUPieChart = () => {
             "#20B2AA", "#5F9EA0", "#FFDAB9", "#EE82EE", "#F08080", "#98FB98"
         ];
         return baseColors[index % baseColors.length];
-    };
+    }, [predefinedTypes]);
 
-    const updateChartData = (month, year, unit) => {
+    // Fungsi untuk memperbarui data chart berdasarkan filter
+    const updateChartData = useCallback((month, year, unit) => {
         const dataItems = showLPJ ? lpjData : reimbursementData;
 
         if (!dataItems.length) {
-            setChartData({
-                labels: [],
-                datasets: [],
-            });
+            setChartData({ labels: [], datasets: [] });
             return;
         }
 
@@ -146,30 +146,23 @@ const GAUPieChart = () => {
         });
 
         if (!filteredData.length) {
-            setChartData({
-                labels: [],
-                datasets: [],
-            });
+            setChartData({ labels: [], datasets: [] });
             return;
         }
 
         let groupedData;
-
         if (showLPJ) {
-            // Process LPJ data
             groupedData = filteredData.reduce((acc, item) => {
                 if (!item.lpj?.length) return acc;
                 item.lpj.forEach(lpjItem => {
                     const normalizedItem = normalizeTypeName(lpjItem.namaItem);
                     const jumlah = lpjItem.jumlah || 1;
-
                     if (!acc[normalizedItem]) acc[normalizedItem] = 0;
                     acc[normalizedItem] += jumlah;
                 });
                 return acc;
             }, {});
         } else {
-            // Process reimbursement data
             groupedData = filteredData.reduce((acc, item) => {
                 if (!item.reimbursements?.length) return acc;
                 item.reimbursements.forEach(reimb => {
@@ -183,12 +176,7 @@ const GAUPieChart = () => {
 
         const labels = Object.keys(groupedData);
         const values = Object.values(groupedData);
-
-        const labelWithCount = labels.map((label, index) => {
-            const count = values[index];
-            return `${label} (${count})`;
-        });
-
+        const labelWithCount = labels.map((label, index) => `${label} (${values[index]})`);
         const backgroundColors = labels.map((label, index) => getColor(label, index));
 
         setChartData({
@@ -203,91 +191,64 @@ const GAUPieChart = () => {
                 },
             ],
         });
-    };
+    }, [showLPJ, lpjData, reimbursementData, getColor]);
 
+    // Efek untuk mengambil data dari Firestore saat komponen dimuat
     useEffect(() => {
         const fetchData = async () => {
-            setLoading(true)
-
+            setLoading(true);
             try {
-                // Fetch reimbursement data (hanya yang Disetujui)
-                const reimbQuery = query(collection(db, "reimbursement"), where("status", "==", "Disetujui"));
-                const reimbQuerySnapshot = await getDocs(reimbQuery);
-                const reimbData = reimbQuerySnapshot.docs.map(doc => ({
-                    ...doc.data(),
-                    id: doc.id
-                }));
-                setReimbursementData(reimbData);
+                const [reimbQuerySnapshot, lpjQuerySnapshot] = await Promise.all([
+                    getDocs(query(collection(db, "reimbursement"), where("status", "==", "Disetujui"))),
+                    getDocs(query(collection(db, "lpj"), where("status", "==", "Disetujui")))
+                ]);
 
-                // Fetch LPJ data (hanya yang Disetujui)
-                const lpjQuery = query(collection(db, "lpj"), where("status", "==", "Disetujui"));
-                const lpjQuerySnapshot = await getDocs(lpjQuery);
-                const lpjFetchedData = lpjQuerySnapshot.docs.map(doc => ({
-                    ...doc.data(),
-                    id: doc.id
-                }));
+                const reimbData = reimbQuerySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                const lpjFetchedData = lpjQuerySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+
+                setReimbursementData(reimbData);
                 setLpjData(lpjFetchedData);
 
                 const combinedData = [...reimbData, ...lpjFetchedData];
-
                 const years = [...new Set(combinedData.map(item =>
                     new Date(item.tanggalPengajuan).getFullYear()
                 ))].sort((a, b) => b - a);
-
+                
                 const yearOptions = years.map(year => ({
                     value: year.toString(),
                     label: year.toString(),
                 }));
-
                 setAvailableYears(yearOptions);
-                setRawData(combinedData)
+                
+                setRawData(combinedData);
 
-                if (years.length > 0) {
-                    const initialYear = yearOptions[0];
-                    setSelectedYear(initialYear);
-                    updateChartData(selectedMonth, selectedUnit, initialYear);
+                // Atur tahun terpilih awal
+                if (yearOptions.length > 0) {
+                    setSelectedYear(yearOptions[0]);
                 }
             } catch (error) {
                 console.error("Error fetching data:", error);
             } finally {
-                setLoading(false)
+                setLoading(false);
             }
         };
 
         fetchData();
-    }, []);
+    }, []); // Dependency kosong karena hanya dijalankan sekali
 
+    // Efek untuk memanggil updateChartData saat filter atau data berubah
     useEffect(() => {
-        if (selectedMonth && selectedYear && selectedUnit) {
+        if (!loading) {
             updateChartData(selectedMonth, selectedYear, selectedUnit);
         }
-    }, [selectedMonth, selectedYear, selectedUnit, showLPJ, reimbursementData, lpjData]);
+    }, [selectedMonth, selectedYear, selectedUnit, showLPJ, loading, updateChartData]);
 
-    useEffect(() => {
-        const years = reimbursementData.concat(lpjData).reduce((acc, item) => {
-            const date = new Date(item.tanggalPengajuan);
-            const year = date.getFullYear();
-            if (!acc.includes(year)) acc.push(year);
-            return acc;
-        }, []);
-        setAvailableYears(years.map((year) => ({ value: year.toString(), label: year.toString() })));
-    }, [reimbursementData, lpjData]);
+    // Handler perubahan filter
+    const handleMonthChange = (option) => setSelectedMonth(option);
+    const handleYearChange = (option) => setSelectedYear(option);
+    const handleUnitChange = (option) => setSelectedUnit(option);
 
-    const handleMonthChange = (option) => {
-        setSelectedMonth(option);
-        updateChartData(option, selectedYear, selectedUnit);
-    };
-
-    const handleYearChange = (option) => {
-        setSelectedYear(option);
-        updateChartData(selectedMonth, option, selectedUnit);
-    };
-
-    const handleUnitChange = (option) => {
-        setSelectedUnit(option);
-        updateChartData(selectedMonth, selectedYear, option);
-    };
-
+    // Style untuk select
     const selectStyles = {
         control: (base) => ({
             ...base,
@@ -304,10 +265,7 @@ const GAUPieChart = () => {
             },
             borderRadius: '8px'
         }),
-        menu: (base) => ({
-            ...base,
-            zIndex: 100
-        }),
+        menu: (base) => ({ ...base, zIndex: 100 }),
         option: (base) => ({
             ...base,
             fontSize: '12px',
@@ -326,8 +284,7 @@ const GAUPieChart = () => {
                     >
                         {showLPJ ? "Pengajuan GA/Umum (LPJ BS)" : "Pengajuan GA/Umum (Reimbursement)"}
                         <svg
-                            className={`w-6 h-6 md:w-5 md:h-5 transition-transform duration-200 flex-shrink-0 ${isDropdownOpen ? "rotate-180" : ""
-                                }`}
+                            className={`w-6 h-6 md:w-5 md:h-5 transition-transform duration-200 flex-shrink-0 ${isDropdownOpen ? "rotate-180" : ""}`}
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -550,9 +507,7 @@ const GAUPieChart = () => {
                     <div className="bg-white rounded-lg shadow-lg px-4 lg:px-6 py-4 md:py-6 relative w-11/12 max-w-6xl">
                         <GAUComparisonChart
                             rawData={rawData}
-                            selectedYear={selectedYear}
                             onClose={() => setIsComparisonModalOpen(false)}
-                            data={{ reimbursementData, lpjData }}
                             showLPJ={showLPJ}
                         />
                     </div>
@@ -576,6 +531,8 @@ const GAUPieChart = () => {
                             selectedYear={selectedYear}
                             onClose={() => setIsModalOpen(false)}
                             months={months}
+                            rawData={showLPJ ? lpjData : reimbursementData}
+                            showLPJ={showLPJ}
                         />
                     </div>
                 </div>
