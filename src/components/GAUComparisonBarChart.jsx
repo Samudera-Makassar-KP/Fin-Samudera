@@ -1,9 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Bar } from 'react-chartjs-2';
 import Select from 'react-select';
 import { ClipLoader } from 'react-spinners';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend
+} from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+
+// Daftarkan komponen Chart.js dan plugin
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ChartDataLabels
+);
 
 const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
+    // State untuk mengelola tampilan grafik dan data
     const [viewType, setViewType] = useState('monthly');
     const [chartData, setChartData] = useState(null);
     const [selectedYears, setSelectedYears] = useState([]);
@@ -11,52 +33,24 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [legendItems, setLegendItems] = useState([]);
 
-    useEffect(() => {        
+    // Atur overflow body untuk modal
+    useEffect(() => {
         if (onClose) {
             document.body.style.overflow = 'hidden';
-                        
+
             return () => {
                 document.body.style.overflow = '';
             };
         }
     }, [onClose]);
 
+    // Daftar bulan untuk label sumbu X
     const months = [
         "Januari", "Februari", "Maret", "April", "Mei", "Juni",
         "Juli", "Agustus", "September", "Oktober", "November", "Desember"
     ];
 
-    useEffect(() => {
-        if (rawData && rawData.length) {
-            setIsLoading(true);
-            const years = [...new Set(rawData
-                .filter(item => item.kategori === "GA/Umum")
-                .map(item => new Date(item.tanggalPengajuan).getFullYear())
-            )].sort((a, b) => b - a);
-
-            const yearOptions = years.map(year => ({
-                value: year.toString(),
-                label: year.toString()
-            }));
-
-            setAvailableYears(yearOptions);
-            if (yearOptions.length >= 2) {
-                setSelectedYears([yearOptions[0], yearOptions[1]]);
-            } else if (yearOptions.length === 1) {
-                setSelectedYears([yearOptions[0]]);
-            }
-            setIsLoading(false);
-        }
-    }, [rawData]);
-
-    useEffect(() => {
-        if (selectedYears.length > 0) {
-            setIsLoading(true);
-            prepareChartData();
-            setIsLoading(false);
-        }
-    }, [rawData, viewType, selectedYears]);
-
+    // Daftar warna predefined untuk tipe pengeluaran
     const predefinedTypes = {
         "ATK": "rgba(255, 99, 132, 1)",
         "RTG": "rgba(54, 162, 235, 1)",
@@ -67,10 +61,10 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
         "Jenis Lain": "rgba(201, 203, 207, 1)",
     };
 
+    // Fungsi untuk menormalisasi nama tipe
     const normalizeTypeName = (type) => {
         if (!type) return "Jenis Lain";
 
-        // If it's a predefined type (case-insensitive check)
         const predefinedType = Object.keys(predefinedTypes).find(
             key => key.toLowerCase() === type.toLowerCase()
         );
@@ -78,14 +72,15 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
 
         return type
             .toLowerCase()
-            .replace(/\s+/g, ' ')    
+            .replace(/\s+/g, ' ')
             .trim()
             .split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
     };
 
-    const getMonthlyColor = (index) => {
+    // Fungsi untuk mendapatkan warna berdasarkan indeks
+    const getMonthlyColor = useCallback((index) => {
         const baseColors = [
             "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#FF9F40", "#9966FF",
             "#FFB6C1", "#8B4513", "#00BFFF", "#32CD32", "#FFD700", "#8A2BE2",
@@ -96,21 +91,21 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             "#20B2AA", "#5F9EA0", "#FFDAB9", "#EE82EE", "#F08080", "#98FB98"
         ];
         return baseColors[index % baseColors.length];
-    };
+    }, []);
 
-    const getYearlyColor = (jenis, index) => {
-        // First check if it's a predefined type (case-insensitive)
+    // Fungsi untuk mendapatkan warna tahunan
+    const getYearlyColor = useCallback((jenis, index) => {
         const predefinedType = Object.keys(predefinedTypes).find(
             key => key.toLowerCase() === jenis.toLowerCase()
         );
         if (predefinedType) {
             return predefinedTypes[predefinedType];
         }
-        // For custom types, use the color generation function
         return getMonthlyColor(index);
-    };
+    }, [predefinedTypes, getMonthlyColor]);
 
-    const updateLegendItems = () => {
+    // Fungsi untuk memperbarui item legend
+    const updateLegendItems = useCallback(() => {
         if (!chartData || !chartData.datasets) return;
 
         const uniqueItems = new Set();
@@ -120,7 +115,7 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             }
         });
 
-        const items = Array.from(uniqueItems).map((itemId, index) => {
+        const items = Array.from(uniqueItems).map((itemId) => {
             const dataset = chartData.datasets.find(ds => ds.itemId === itemId);
             const isHidden = chartData.datasets
                 .filter(ds => ds.itemId === itemId)
@@ -133,10 +128,11 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
                 hidden: isHidden
             };
         });
-        
-        setLegendItems(items);
-    };
 
+        setLegendItems(items);
+    }, [chartData]);
+
+    // Handler klik legend
     const handleLegendClick = (clickedItem) => {
         if (!chartData) return;
 
@@ -151,13 +147,8 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
         updateLegendItems();
     };
 
-    useEffect(() => {
-        if (chartData) {
-            updateLegendItems();
-        }
-    }, [chartData]);
-
-    const prepareMonthlyData = () => {
+    // Logika untuk menyiapkan data bulanan
+    const prepareMonthlyData = useCallback(() => {
         const allItems = new Set();
         rawData.forEach(item => {
             if (item.kategori === "GA/Umum") {
@@ -178,7 +169,6 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
         });
         const items = Array.from(allItems);
 
-        // Initialize data structure
         const monthlyData = {};
         selectedYears.forEach(yearOption => {
             const year = yearOption.value;
@@ -187,7 +177,6 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             );
         });
 
-        // Fill the data
         rawData.forEach(item => {
             if (item.kategori !== "GA/Umum") return;
 
@@ -214,7 +203,6 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             }
         });
 
-        // Create datasets
         const datasets = [];
         items.forEach((item, colorIndex) => {
             selectedYears.forEach(yearOption => {
@@ -242,9 +230,10 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             labels: months,
             datasets: datasets
         });
-    };
+    }, [rawData, showLPJ, selectedYears, getMonthlyColor]);
 
-    const prepareYearlyData = () => {
+    // Logika untuk menyiapkan data tahunan
+    const prepareYearlyData = useCallback(() => {
         const allTypes = new Set();
         rawData.forEach(item => {
             if (item.kategori === "GA/Umum") {
@@ -265,7 +254,6 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
         });
         const types = Array.from(allTypes);
 
-        // Count items by year and type
         const yearlyTotals = {};
         selectedYears.forEach(yearOption => {
             const year = parseInt(yearOption.value);
@@ -315,9 +303,10 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             labels: selectedYears.map(year => `${year.value}`),
             datasets: datasets
         });
-    };
+    }, [rawData, showLPJ, selectedYears, getYearlyColor]);
 
-    const prepareChartData = () => {
+    // Fungsi utama untuk menyiapkan data chart
+    const prepareChartData = useCallback(() => {
         if (!rawData || !rawData.length || selectedYears.length === 0) return;
 
         if (viewType === 'monthly') {
@@ -325,8 +314,139 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
         } else {
             prepareYearlyData();
         }
+    }, [rawData, selectedYears, viewType, prepareMonthlyData, prepareYearlyData]);
+
+    // Efek untuk mengambil data dan mengatur tahun yang tersedia
+    useEffect(() => {
+        if (rawData && rawData.length) {
+            setIsLoading(true);
+            const years = [...new Set(rawData
+                .filter(item => item.kategori === "GA/Umum")
+                .map(item => new Date(item.tanggalPengajuan).getFullYear())
+            )].sort((a, b) => b - a);
+
+            const yearOptions = years.map(year => ({
+                value: year.toString(),
+                label: year.toString()
+            }));
+
+            setAvailableYears(yearOptions);
+            if (yearOptions.length >= 2) {
+                setSelectedYears([yearOptions[0], yearOptions[1]]);
+            } else if (yearOptions.length === 1) {
+                setSelectedYears([yearOptions[0]]);
+            }
+            setIsLoading(false);
+        }
+    }, [rawData]);
+
+    // Efek untuk menyiapkan data chart ketika dependensi berubah
+    useEffect(() => {
+        if (selectedYears.length > 0) {
+            setIsLoading(true);
+            prepareChartData();
+            setIsLoading(false);
+        }
+    }, [prepareChartData, selectedYears]);
+
+    // Efek untuk memperbarui legend ketika data chart berubah
+    useEffect(() => {
+        if (chartData) {
+            updateLegendItems();
+        }
+    }, [chartData, updateLegendItems]);
+
+    // Opsi chart
+    const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                grid: { display: false },
+                title: {
+                    display: true,
+                    text: viewType === 'monthly' ? 'Bulan' : 'Tahun',
+                    font: { size: 10 }
+                },
+                ticks: {
+                    maxRotation: 45,
+                    font: { size: 10 }
+                }
+            },
+            y: {
+                stacked: true,
+                title: {
+                    display: true,
+                    text: showLPJ ? 'Jumlah Item' : 'Jumlah Pengajuan',
+                    font: { size: 10 }
+                },
+                ticks: {
+                    stepSize: 2,
+                    precision: 0,
+                    font: { size: 10 }
+                }
+            }
+        },
+        plugins: {
+            legend: { display: false },
+            datalabels: {
+                display: (context) => {
+                    if (viewType !== 'monthly') return false;
+                    const stack = context.dataset.stack;
+                    const dataIndex = context.dataIndex;
+                    const stackDatasets = context.chart.data.datasets.filter(
+                        ds => ds.stack === stack && !ds.hidden
+                    );
+
+                    if (stackDatasets.length === 0) {
+                        const allStackDatasets = context.chart.data.datasets.filter(
+                            ds => ds.stack === stack
+                        );
+                        return context.dataset === allStackDatasets[0];
+                    }
+
+                    const stackTotal = stackDatasets.reduce((sum, dataset) => {
+                        return sum + (dataset.data[dataIndex] || 0);
+                    }, 0);
+
+                    let closestDataset = null;
+                    let smallestDistance = Infinity;
+
+                    stackDatasets.forEach((dataset, idx) => {
+                        const sumBefore = stackDatasets
+                            .slice(0, idx)
+                            .reduce((sum, d) => sum + (d.data[dataIndex] || 0), 0);
+                        const value = dataset.data[dataIndex] || 0;
+                        const middlePoint = sumBefore + (value / 2);
+                        const distance = Math.abs((stackTotal / 2) - middlePoint);
+
+                        if (distance < smallestDistance) {
+                            closestDataset = dataset;
+                            smallestDistance = distance;
+                        }
+                    });
+                    return context.dataset === closestDataset;
+                },
+                formatter: (value, context) => {
+                    if (viewType === 'monthly') {
+                        return context.dataset.stack;
+                    }
+                    return '';
+                },
+                font: {
+                    size: 12,
+                    weight: 'bold'
+                },
+                color: '#FFF',
+                anchor: 'center',
+                align: 'center',
+                rotation: -90,
+                offset: 4
+            }
+        }
     };
 
+    // Style untuk select
     const selectStyles = {
         control: (base) => ({
             ...base,
@@ -435,14 +555,14 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
                     className="grid grid-rows-2 landscape:grid-rows-auto gap-2 overflow-x-auto scrollbar pb-1 sm-landscape:grid-rows-1 sm-landscape:grid-cols-auto"
                     style={{ gridAutoFlow: 'column' }}
                 >
-                    {legendItems.map((item, index) => (
+                    {legendItems.map((item) => (
                         <button
                             key={item.id}
                             onClick={() => handleLegendClick(item)}
                             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-all duration-200 ${item.hidden
                                 ? 'bg-gray-100 text-gray-500'
                                 : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                                }`}
+                            }`}
                         >
                             <span
                                 className="w-2 h-2 rounded-full flex-shrink-0"
@@ -462,108 +582,7 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
                 <div className="min-h-[380px] md:min-h-[340px] h-full">
                     <Bar
                         data={chartData}
-                        options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                x: {
-                                    grid: {
-                                        display: false
-                                    },
-                                    title: {
-                                        display: true,
-                                        text: viewType === 'monthly' ? 'Bulan' : 'Tahun',
-                                        font: {
-                                            size: 10,
-                                        }
-                                    },
-                                    ticks: {
-                                        maxRotation: 45,
-                                        font: {
-                                            size: 10,
-                                        }
-                                    }
-                                },
-                                y: {
-                                    stacked: true,
-                                    title: {
-                                        display: true,
-                                        text: showLPJ ? 'Jumlah Item' : 'Jumlah Pengajuan',
-                                        font: {
-                                            size: 10,
-                                        }
-                                    },
-                                    ticks: {
-                                        stepSize: 2,
-                                        precision: 0,
-                                        font: {
-                                            size: 10,
-                                        }
-                                    }
-                                }
-                            },
-                            plugins: {
-                                legend: {
-                                    display: false
-                                },
-                                datalabels: {
-                                    display: (context) => {
-                                        if (viewType !== 'monthly') return false;
-                                        const stack = context.dataset.stack;
-                                        const dataIndex = context.dataIndex;
-
-                                        const stackDatasets = context.chart.data.datasets.filter(
-                                            ds => ds.stack === stack && !ds.hidden
-                                        );
-
-                                        if (stackDatasets.length === 0) {
-                                            const allStackDatasets = context.chart.data.datasets.filter(
-                                                ds => ds.stack === stack
-                                            );
-                                            return context.dataset === allStackDatasets[0];
-                                        }
-
-                                        const stackTotal = stackDatasets.reduce((sum, dataset) => {
-                                            return sum + (dataset.data[dataIndex] || 0);
-                                        }, 0);
-
-                                        let closestDataset = null;
-                                        let smallestDistance = Infinity;
-
-                                        stackDatasets.forEach((dataset, idx) => {
-                                            const sumBefore = stackDatasets
-                                                .slice(0, idx)
-                                                .reduce((sum, d) => sum + (d.data[dataIndex] || 0), 0);
-                                            const value = dataset.data[dataIndex] || 0;
-                                            const middlePoint = sumBefore + (value / 2);
-                                            const distance = Math.abs((stackTotal / 2) - middlePoint);
-
-                                            if (distance < smallestDistance) {
-                                                closestDataset = dataset;
-                                                smallestDistance = distance;
-                                            }
-                                        });
-
-                                        return context.dataset === closestDataset;
-                                    },
-                                    formatter: (value, context) => {
-                                        if (viewType === 'monthly') {
-                                            return context.dataset.stack;
-                                        }
-                                        return '';
-                                    },
-                                    font: {
-                                        size: 12,
-                                        weight: 'bold'
-                                    },
-                                    color: '#FFF',
-                                    anchor: 'center',
-                                    align: 'center',
-                                    rotation: -90,
-                                    offset: 4
-                                }
-                            }
-                        }}
+                        options={options}
                     />
                 </div>
             </div>
