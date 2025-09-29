@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, or } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
+// --- PERUBAHAN 1: Impor fungsi 'doc' dan 'deleteDoc' dari Firestore ---
+import { collection, query, where, getDocs, or, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import Select from 'react-select';
 import Skeleton from 'react-loading-skeleton';
@@ -148,6 +149,35 @@ const ReportExport = () => {
         filterDocuments();
     }, [filters, data]);
 
+    // --- PERUBAHAN 2: Fungsi untuk menghapus dokumen ---
+    const handleDelete = async (docId, collectionName) => {
+        // Tampilkan dialog konfirmasi sebelum menghapus
+        const isConfirmed = window.confirm("Apakah Anda yakin ingin menghapus dokumen ini? Tindakan ini tidak dapat dibatalkan.");
+
+        if (isConfirmed) {
+            try {
+                // Hapus dokumen dari Firestore
+                await deleteDoc(doc(db, collectionName, docId));
+
+                // Perbarui state lokal untuk menghapus item dari UI secara real-time
+                setData(prevData => {
+                    const updatedCollection = prevData[collectionName].filter(item => item.id !== docId);
+                    return {
+                        ...prevData,
+                        [collectionName]: updatedCollection
+                    };
+                });
+
+                alert("Dokumen berhasil dihapus!");
+
+            } catch (error) {
+                console.error("Error deleting document: ", error);
+                alert("Gagal menghapus dokumen. Silakan coba lagi.");
+            }
+        }
+    };
+
+
     const getApproverName = (statusHistory) => {
         const lastEntry = statusHistory[statusHistory.length - 1];
         return approvers[lastEntry?.actor] || 'Unknown';
@@ -207,7 +237,6 @@ const ReportExport = () => {
         let sheetName;
         let fileName;
 
-        // Create unit suffix for filename if a specific unit is selected
         const unitSuffix = filters.unit.value !== "all"
             ? `${filters.unit.value}_`
             : '';
@@ -235,7 +264,6 @@ const ReportExport = () => {
 
         const ws = XLSX.utils.json_to_sheet(sheetData);
 
-        // Set column widths
         ws['!cols'] = [
             { wch: 25 }, // Nomor Dokumen
             { wch: 20 }, // Nama
@@ -663,7 +691,7 @@ const ReportExport = () => {
                                         <Select
                                             value={filters.unit}
                                             onChange={(option) => handleFilterChange('unit', option)}
-                                            options={unitOptions}
+                                            options={[{ value: 'all', label: 'Semua Unit Bisnis' }, ...unitOptions]}
                                             className="w-full"
                                             styles={selectStyles}
                                             placeholder="Pilih Unit Bisnis"
@@ -704,9 +732,9 @@ const ReportExport = () => {
                                             (documentType === 'lpj' && filteredData.lpj.length === 0)
                                         }
                                         className="flex items-center justify-center px-4 py-2 bg-red-600 text-white rounded 
-                hover:bg-red-700 hover:text-gray-200 
-                disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed 
-                flex-shrink-0 w-full xl:w-auto"
+                                         hover:bg-red-700 hover:text-gray-200 
+                                         disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed 
+                                         flex-shrink-0 w-full xl:w-auto"
                                     >
                                         <svg
                                             className="w-4 h-4 mr-2"
@@ -773,6 +801,8 @@ const ReportExport = () => {
                                                         <th className="px-4 py-2 border">Tanggal Disetujui/Dibatalkan</th>
                                                         <th className="px-4 py-2 border">Disetujui/Dibatalkan Oleh</th>
                                                         <th className="p-2 border text-center">Status</th>
+                                                        {/* --- PERUBAHAN 3: Tambah kolom Aksi --- */}
+                                                        <th className="p-2 border text-center">Aksi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -812,13 +842,25 @@ const ReportExport = () => {
                                                                     {item.status}
                                                                 </span>
                                                             </td>
+                                                            {/* --- PERUBAHAN 4: Tambah tombol Edit dan Hapus --- */}
+                                                            <td className="p-2 border text-center">
+                                                                <div className="flex justify-center items-center gap-2">
+                                                                    {/* Tombol Edit: Arahkan ke halaman edit, misalnya /edit-reimbursement/id */}
+                                                                    <Link to={`/edit-reimbursement/${item.id}`} className="text-blue-600 hover:text-blue-800" title="Edit">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
+                                                                    </Link>
+                                                                    {/* Tombol Hapus: Panggil fungsi handleDelete */}
+                                                                    <button onClick={() => handleDelete(item.id, 'reimbursements')} className="text-red-600 hover:text-red-800" title="Hapus">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                                                                    </button>
+                                                                </div>
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         </div>
                                     </div>
-
                                     <PaginationControls
                                         currentPage={currentPage}
                                         totalPages={getTotalPages()}
@@ -845,6 +887,7 @@ const ReportExport = () => {
                                                         <th className="px-4 py-2 border">Tanggal Disetujui/Dibatalkan</th>
                                                         <th className="px-4 py-2 border">Disetujui/Dibatalkan Oleh</th>
                                                         <th className="p-2 border text-center">Status</th>
+                                                        <th className="p-2 border text-center">Aksi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -884,13 +927,22 @@ const ReportExport = () => {
                                                                     {bs.status}
                                                                 </span>
                                                             </td>
+                                                            <td className="p-2 border text-center">
+                                                                <div className="flex justify-center items-center gap-2">
+                                                                    <Link to={`/edit-bon-sementara/${bs.id}`} className="text-blue-600 hover:text-blue-800" title="Edit">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
+                                                                    </Link>
+                                                                    <button onClick={() => handleDelete(bs.id, 'bonSementara')} className="text-red-600 hover:text-red-800" title="Hapus">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                                                                    </button>
+                                                                </div>
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         </div>
                                     </div>
-
                                     <PaginationControls
                                         currentPage={currentPage}
                                         totalPages={getTotalPages()}
@@ -917,6 +969,7 @@ const ReportExport = () => {
                                                         <th className="px-4 py-2 border">Tanggal Disetujui/Dibatalkan</th>
                                                         <th className="px-4 py-2 border">Disetujui/Dibatalkan Oleh</th>
                                                         <th className="p-2 border text-center">Status</th>
+                                                        <th className="p-2 border text-center">Aksi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -956,13 +1009,22 @@ const ReportExport = () => {
                                                                     {item.status}
                                                                 </span>
                                                             </td>
+                                                            <td className="p-2 border text-center">
+                                                                <div className="flex justify-center items-center gap-2">
+                                                                    <Link to={`/edit-lpj/${item.id}`} className="text-blue-600 hover:text-blue-800" title="Edit">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
+                                                                    </Link>
+                                                                    <button onClick={() => handleDelete(item.id, 'lpj')} className="text-red-600 hover:text-red-800" title="Hapus">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                                                                    </button>
+                                                                </div>
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         </div>
                                     </div>
-
                                     <PaginationControls
                                         currentPage={currentPage}
                                         totalPages={getTotalPages()}
