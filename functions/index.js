@@ -841,7 +841,7 @@ exports.sendApprovalReminders = onSchedule("0 9 * * *", async (event) => {
     // Tentukan waktu kemarin pada pukul 23:59
     const yesterdayAt2359 = new Date(now);
     yesterdayAt2359.setDate(now.getDate() - 1);
-    yesterdayAt2359.setHours(23, 59, 59, 999);
+    yesterdayAt2359.setHours(12, 59, 59, 999);
 
     const documentTypes = [
         { collection: "bonSementara", type: "BS" },

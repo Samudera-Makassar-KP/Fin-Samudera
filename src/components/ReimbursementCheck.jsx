@@ -84,24 +84,11 @@ const ReimbursementCheck = () => {
                         where('status', 'in', ['Divalidasi', 'Diproses', 'Disetujui'])
                     )
                     const approvedSnapshot = await getDocs(approvedQ)
-                    approvedReimbursements = approvedSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
-                        .filter((doc) =>
-                            doc.statusHistory.some(
-                                (history) =>
-                                    history.actor === uid &&
-                                    [
-                                        'Disetujui oleh Super Admin (Pengganti Validator)',
-                                        'Disetujui oleh Super Admin (Pengganti Reviewer 1)',
-                                        'Disetujui oleh Super Admin (Pengganti Reviewer 2)',
-                                        'Disetujui oleh Super Admin'
-                                    ].includes(history.status)
-                            )
-                        )
+                    approvedReimbursements = approvedSnapshot.docs.map((doc) => ({
+                        id: doc.id,
+                        displayId: doc.data().displayId,
+                        ...doc.data()
+                    }))
                 } else {
                     // Get all documents where user is assigned in any role
                     const [validatorDocs, reviewer1Docs, reviewer2Docs] = await Promise.all([
@@ -209,17 +196,33 @@ const ReimbursementCheck = () => {
 
                 // Sort approved reimbursements by the latest statusHistory timestamp
                 approvedReimbursements.sort((a, b) => {
-                    const latestA = Math.max(
-                        ...a.statusHistory
-                            .filter((history) => history.actor === uid)
-                            .map((history) => new Date(history.timestamp))
-                    )
-                    const latestB = Math.max(
-                        ...b.statusHistory
-                            .filter((history) => history.actor === uid)
-                            .map((history) => new Date(history.timestamp))
-                    )
-                    return latestB - latestA
+                    if (userRole === 'Super Admin') {
+                        // Untuk Super Admin, sort berdasarkan statusHistory terakhir yang approved
+                        const latestA = Math.max(
+                            ...a.statusHistory
+                                .filter((history) => history.status.includes('Disetujui'))
+                                .map((history) => new Date(history.timestamp))
+                        )
+                        const latestB = Math.max(
+                            ...b.statusHistory
+                                .filter((history) => history.status.includes('Disetujui'))
+                                .map((history) => new Date(history.timestamp))
+                        )
+                        return latestB - latestA
+                    } else {
+                        // Untuk user biasa, sort berdasarkan approval mereka sendiri
+                        const latestA = Math.max(
+                            ...a.statusHistory
+                                .filter((history) => history.actor === uid)
+                                .map((history) => new Date(history.timestamp))
+                        )
+                        const latestB = Math.max(
+                            ...b.statusHistory
+                                .filter((history) => history.actor === uid)
+                                .map((history) => new Date(history.timestamp))
+                        )
+                        return latestB - latestA
+                    }
                 })
 
                 // Sort canceled reimbursements by the latest statusHistory timestamp
@@ -233,14 +236,21 @@ const ReimbursementCheck = () => {
 
                 const existingYears = new Set(
                     approvedReimbursements
-                        .map(
-                            (item) =>
-                                item.statusHistory
+                        .map((item) => {
+                            if (userRole === 'Super Admin') {
+                                // Untuk Super Admin, ambil dari semua approval
+                                return item.statusHistory
+                                    .filter((status) => status.status.includes('Disetujui'))
+                                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+                            } else {
+                                // Untuk user biasa, filter berdasarkan actor
+                                return item.statusHistory
                                     .filter((status) => status.actor === uid && status.status.includes('Disetujui'))
                                     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
-                        )
-                        .filter(Boolean) // Hilangkan nilai undefined jika tidak ada tanggal
-                        .map((timestamp) => new Date(timestamp).getFullYear()) // Ambil tahun dari timestamp
+                            }
+                        })
+                        .filter(Boolean)
+                        .map((timestamp) => new Date(timestamp).getFullYear())
                 )
 
                 const updatedYearOptions = Array.from(existingYears)
@@ -635,11 +645,21 @@ const ReimbursementCheck = () => {
     useEffect(() => {
         const filterData = () => {
             const filtered = approvedData.reimbursements.filter(item => {
-                const approvedTimestamp = item.statusHistory
-                    .filter(status => status.actor === uid && status.status.includes('Disetujui'))
-                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+                let approvedTimestamp;
+                
+                if (userRole === 'Super Admin') {
+                    // Super Admin melihat semua approval, ambil timestamp terakhir yang approved
+                    approvedTimestamp = item.statusHistory
+                        .filter(status => status.status.includes('Disetujui'))
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+                } else {
+                    // User biasa hanya melihat approval mereka sendiri
+                    approvedTimestamp = item.statusHistory
+                        .filter(status => status.actor === uid && status.status.includes('Disetujui'))
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+                }
 
-                if (!approvedTimestamp) return false // Skip jika tidak ada tanggal disetujui
+                if (!approvedTimestamp) return false
 
                 const itemDate = new Date(approvedTimestamp)
                 const matchesMonth = filters.bulan
@@ -654,7 +674,7 @@ const ReimbursementCheck = () => {
             setFilteredApprovedData({ reimbursements: filtered })
         }
         filterData()
-    }, [filters.bulan, filters.tahun, approvedData, uid])
+    }, [filters.bulan, filters.tahun, approvedData, uid, userRole])
 
     const handleFilterChange = (field, selectedOption) => {
         setFilters((prev) => ({
