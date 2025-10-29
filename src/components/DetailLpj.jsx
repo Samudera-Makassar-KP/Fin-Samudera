@@ -20,6 +20,7 @@ const DetailLpj = () => {
 
     const { id } = useParams() // Get lpj ID from URL params
     const uid = localStorage.getItem('userUid')
+    const userRole = localStorage.getItem('userRole')
 
     useEffect(() => {
         const fetchData = async () => {
@@ -623,7 +624,8 @@ const DetailLpj = () => {
                         Lihat Lampiran
                     </button>
 
-                    {(userData?.uid === lpjDetail?.user.uid || lpjDetail?.user.validator?.includes(userData?.uid)) && (
+                    {(userData?.uid === lpjDetail?.user.uid || lpjDetail?.user.validator?.includes(userData?.uid) || 
+                    userRole === 'Super Admin') && (
                         <button
                             className={`w-full md:w-auto px-16 py-3 rounded ${lpjDetail?.status === 'Disetujui'
                                 ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'

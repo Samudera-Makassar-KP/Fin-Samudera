@@ -78,7 +78,7 @@ const LpjBsCheck = () => {
                         ...doc.data()
                     }))
 
-                    // Approved lpj for Super Admin
+                    // ✅ Approved lpj for Super Admin
                     const approvedQ = query(
                         collection(db, 'lpj'),
                         where('status', 'in', ['Divalidasi', 'Diproses', 'Disetujui'])
@@ -90,18 +90,13 @@ const LpjBsCheck = () => {
                             displayId: doc.data().displayId,
                             ...doc.data()
                         }))
-                        .filter((doc) =>
-                            doc.statusHistory.some(
+                        .filter((doc) => {
+                            return doc.statusHistory.some(
                                 (history) =>
-                                    history.actor === uid &&
-                                    [
-                                        'Disetujui oleh Super Admin (Pengganti Validator)',
-                                        'Disetujui oleh Super Admin (Pengganti Reviewer 1)',
-                                        'Disetujui oleh Super Admin (Pengganti Reviewer 2)',
-                                        'Disetujui oleh Super Admin'
-                                    ].includes(history.status)
+                                    history.status.includes('Disetujui') || 
+                                    history.status.includes('Divalidasi')
                             )
-                        )
+                        })
                 } else {
                     // Get all documents where user is assigned in any role
                     const [validatorDocs, reviewer1Docs, reviewer2Docs] = await Promise.all([
@@ -209,17 +204,35 @@ const LpjBsCheck = () => {
 
                 // Sort approved Lpj by the latest statusHistory timestamp
                 approvedLpj.sort((a, b) => {
-                    const latestA = Math.max(
-                        ...a.statusHistory
+                    let latestA, latestB;
+                    
+                    if (userRole === 'Super Admin') {
+                        // Untuk Super Admin, ambil timestamp terbaru dari semua approval
+                        const timestampsA = a.statusHistory
+                            .filter((history) => history.status.includes('Disetujui'))
+                            .map((history) => new Date(history.timestamp));
+                        
+                        const timestampsB = b.statusHistory
+                            .filter((history) => history.status.includes('Disetujui'))
+                            .map((history) => new Date(history.timestamp));
+                        
+                        latestA = timestampsA.length > 0 ? Math.max(...timestampsA) : 0;
+                        latestB = timestampsB.length > 0 ? Math.max(...timestampsB) : 0;
+                    } else {
+                        // Untuk role lain, ambil timestamp dari actor yang sama
+                        const timestampsA = a.statusHistory
                             .filter((history) => history.actor === uid)
-                            .map((history) => new Date(history.timestamp))
-                    )
-                    const latestB = Math.max(
-                        ...b.statusHistory
+                            .map((history) => new Date(history.timestamp));
+                        
+                        const timestampsB = b.statusHistory
                             .filter((history) => history.actor === uid)
-                            .map((history) => new Date(history.timestamp))
-                    )
-                    return latestB - latestA
+                            .map((history) => new Date(history.timestamp));
+                        
+                        latestA = timestampsA.length > 0 ? Math.max(...timestampsA) : 0;
+                        latestB = timestampsB.length > 0 ? Math.max(...timestampsB) : 0;
+                    }
+                    
+                    return latestB - latestA;
                 })
 
                 // Sort canceled lpj by the latest statusHistory timestamp
@@ -233,14 +246,25 @@ const LpjBsCheck = () => {
 
                 const existingYears = new Set(
                     approvedLpj
-                        .map(
-                            (item) =>
-                                item.statusHistory
+                        .map((item) => {
+                            let timestamps;
+                            
+                            if (userRole === 'Super Admin') {
+                                // Untuk Super Admin, ambil semua timestamp approval
+                                timestamps = item.statusHistory
+                                    .filter((status) => status.status.includes('Disetujui'))
+                                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                            } else {
+                                // Untuk role lain, filter berdasarkan actor
+                                timestamps = item.statusHistory
                                     .filter((status) => status.actor === uid && status.status.includes('Disetujui'))
-                                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
-                        )
-                        .filter(Boolean) // Hilangkan nilai undefined jika tidak ada tanggal
-                        .map((timestamp) => new Date(timestamp).getFullYear()) // Ambil tahun dari timestamp
+                                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                            }
+                            
+                            return timestamps[0]?.timestamp;
+                        })
+                        .filter(Boolean)
+                        .map((timestamp) => new Date(timestamp).getFullYear())
                 )
 
                 const updatedYearOptions = Array.from(existingYears)
@@ -633,11 +657,26 @@ const LpjBsCheck = () => {
     useEffect(() => {
         const filterData = () => {
             const filtered = approvedData.lpj.filter(item => {
-                const approvedTimestamp = item.statusHistory
-                    .filter(status => status.actor === uid && status.status.includes('Disetujui'))
-                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+                let approvedTimestamp;
+                
+                // ✅ PERBAIKAN: Bedakan cara filter untuk Super Admin
+                if (userRole === 'Super Admin') {
+                    // Untuk Super Admin, ambil timestamp approval terbaru tanpa filter actor
+                    const approvalHistory = item.statusHistory
+                        .filter(status => status.status.includes('Disetujui'))
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    approvedTimestamp = approvalHistory[0]?.timestamp;
+                } else {
+                    // Untuk role lain, filter berdasarkan actor
+                    const approvalHistory = item.statusHistory
+                        .filter(status => status.actor === uid && status.status.includes('Disetujui'))
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    approvedTimestamp = approvalHistory[0]?.timestamp;
+                }
 
-                if (!approvedTimestamp) return false // Skip jika tidak ada tanggal disetujui
+                if (!approvedTimestamp) return false
 
                 const itemDate = new Date(approvedTimestamp)
                 const matchesMonth = filters.bulan
@@ -652,7 +691,7 @@ const LpjBsCheck = () => {
             setFilteredApprovedData({ lpj: filtered })
         }
         filterData()
-    }, [filters.bulan, filters.tahun, approvedData, uid])
+    }, [filters.bulan, filters.tahun, approvedData, uid, userRole])
 
     const handleFilterChange = (field, selectedOption) => {
         setFilters((prev) => ({

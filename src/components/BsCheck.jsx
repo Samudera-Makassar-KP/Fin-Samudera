@@ -25,7 +25,7 @@ const BsCheck = () => {
     const [rejectReason, setRejectReason] = useState('')
     const [selectedReport, setselectedReport] = useState(null)
 
-    const uid = localStorage.getItem('userUid')
+    // const uid = localStorage.getItem('userUid')
 
     // Get current date
     const today = new Date()
@@ -85,22 +85,25 @@ const BsCheck = () => {
                         where('status', 'in', ['Diproses', 'Disetujui'])
                     )
                     const approvedSnapshot = await getDocs(approvedQ)
-                    approvedBonSementara = approvedSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data(),
-                        }))
-                        .filter((doc) =>
-                            doc.statusHistory.some((history) =>
-                                history.actor === uid &&
-                                [
-                                    'Disetujui oleh Super Admin (Pengganti Reviewer 1)',
-                                    'Disetujui oleh Super Admin (Pengganti Reviewer 2)',
-                                    'Disetujui oleh Super Admin',
-                                ].includes(history.status)
-                            )
-                        )
+                    approvedBonSementara = approvedSnapshot.docs.map((doc) => ({
+                        id: doc.id,
+                        displayId: doc.data().displayId,
+                        ...doc.data(),
+                    }))
+                    // ✨ TAMBAHAN: Super Admin juga bisa melihat semua canceled data
+                    const canceledQ = query(
+                        collection(db, 'bonSementara'),
+                        where('status', '==', 'Dibatalkan')
+                    )
+                    const canceledSnapshot = await getDocs(canceledQ)
+                    canceledBonSementara = canceledSnapshot.docs.map((doc) => ({
+                        id: doc.id,
+                        displayId: doc.data().displayId,
+                        ...doc.data()
+                    }))
+
+                    // Set bahwa Super Admin bisa melihat tab canceled
+                    setIsValidatorForAny(true)
                 } else {
                     // Get all documents where user is assigned in any role
                     const [reviewer1Docs, reviewer2Docs] = await Promise.all([
@@ -547,13 +550,25 @@ const BsCheck = () => {
 
     useEffect(() => {
         const uid = localStorage.getItem('userUid')
+        const userRole = localStorage.getItem('userRole')
+        
         const filterData = () => {
-            const filtered = approvedData.bonSementara.filter(item => {
-                const approvedTimestamp = item.statusHistory
-                    .filter(status => status.actor === uid && status.status.includes('Disetujui'))
-                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+            let filtered = approvedData.bonSementara.filter(item => {
+                let approvedTimestamp;
+                
+                if (userRole === 'Super Admin') {
+                    // Super Admin: ambil timestamp persetujuan terakhir dari SIAPA SAJA
+                    approvedTimestamp = item.statusHistory
+                        .filter(status => status.status.includes('Disetujui'))
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+                } else {
+                    // Reviewer: ambil timestamp persetujuan hanya dari dirinya sendiri
+                    approvedTimestamp = item.statusHistory
+                        .filter(status => status.actor === uid && status.status.includes('Disetujui'))
+                        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]?.timestamp
+                }
 
-                if (!approvedTimestamp) return false // Skip jika tidak ada tanggal disetujui
+                if (!approvedTimestamp) return false
 
                 const itemDate = new Date(approvedTimestamp)
                 const matchesMonth = filters.bulan
@@ -878,7 +893,6 @@ const BsCheck = () => {
                                                                 item.statusHistory
                                                                     .filter(
                                                                         (status) =>
-                                                                            status.actor === uid &&
                                                                             status.status.includes('Disetujui')
                                                                     )
                                                                     .sort(

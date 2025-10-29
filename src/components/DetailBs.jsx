@@ -503,7 +503,10 @@ const DetailBs = () => {
                         </button>
                     )}
 
-                    {(userData?.uid === bonSementaraDetail?.user.uid || bonSementaraDetail?.user.reviewer1?.includes(userData?.uid)) && (
+                    {(userData?.uid === bonSementaraDetail?.user.uid || 
+                    bonSementaraDetail?.user.reviewer1?.includes(userData?.uid) ||
+                    bonSementaraDetail?.user.reviewer2?.includes(userData?.uid) ||
+                    userData?.role === 'Super Admin') && (
                         <button
                             className={`px-16 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui'
                                 ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
