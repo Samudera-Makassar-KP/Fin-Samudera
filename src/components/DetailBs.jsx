@@ -354,7 +354,7 @@ const DetailBs = () => {
                         </div>
                     </div>
 
-                    {/* Mobile View (below 768px) */}
+                    {/* Mobile Vieww (below 768px) */}
                     <div className="md:hidden">
                         <div className="space-y-1 mb-4">
                             {[...Array(8)].map((_, index) => (
