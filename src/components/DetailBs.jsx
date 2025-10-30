@@ -72,6 +72,8 @@ const DetailBs = () => {
                 const validReviewerNames = [...reviewer1Names, ...reviewer2Names].filter((name) => name !== null)
                 setReviewers({
                     reviewerNames: validReviewerNames,
+                    reviewer1Names: reviewer1Names.filter((name) => name !== null),
+                    reviewer2Names: reviewer2Names.filter((name) => name !== null),
                 })
             } catch (error) {
                 console.error('Error fetching data:', error)
@@ -84,7 +86,88 @@ const DetailBs = () => {
         if (uid && id) {
             fetchData()
         }
-    }, [uid, id]) // Dependencies array to prevent infinite loop
+    }, [uid, id])
+
+    // Fungsi untuk mendapatkan status dengan informasi reviewer berikutnya
+    const getStatusWithNextReviewer = (bonSementara, reviewerNames) => {
+        if (!bonSementara) return { text: 'N/A', hasParenthesis: false }
+
+        const status = bonSementara.status
+        const reviewer2Array = bonSementara?.user?.reviewer2 || []
+        const reviewer2Exists = Array.isArray(reviewer2Array) && reviewer2Array.some((uid) => uid)
+
+        switch (status) {
+            case 'Menunggu Validasi':
+                // Menunggu validasi oleh reviewer pertama
+                if (reviewerNames.reviewer1Names && reviewerNames.reviewer1Names.length > 0) {
+                    return {
+                        mainText: 'Menunggu Validasi',
+                        parenthesisText: reviewerNames.reviewer1Names.join(', '),
+                        hasParenthesis: true
+                    }
+                }
+                return { text: 'Menunggu Validasi', hasParenthesis: false }
+
+            case 'Divalidasi':
+                // Sudah divalidasi, menunggu approval dari reviewer 1
+                if (reviewerNames.reviewer1Names && reviewerNames.reviewer1Names.length > 0) {
+                    return {
+                        mainText: 'Divalidasi',
+                        parenthesisText: `Menunggu Approval ${reviewerNames.reviewer1Names.join(', ')}`,
+                        hasParenthesis: true
+                    }
+                }
+                return { text: 'Divalidasi', hasParenthesis: false }
+
+            case 'Diproses':
+                // Sudah di-approve oleh reviewer 1
+                if (bonSementara.approvedByReviewer1) {
+                    // Jika ada reviewer 2, tampilkan nama reviewer 2
+                    if (reviewer2Exists && reviewerNames.reviewer2Names && reviewerNames.reviewer2Names.length > 0) {
+                        return {
+                            mainText: 'Diproses',
+                            parenthesisText: `Menunggu Approval ${reviewerNames.reviewer2Names.join(', ')}`,
+                            hasParenthesis: true
+                        }
+                    }
+                    // Jika tidak ada reviewer 2, menunggu Super Admin
+                    return {
+                        mainText: 'Diproses',
+                        parenthesisText: 'Menunggu Approval Super Admin',
+                        hasParenthesis: true
+                    }
+                }
+                return { text: 'Diproses', hasParenthesis: false }
+
+            case 'Disetujui':
+                return {
+                    mainText: 'Disetujui',
+                    parenthesisText: 'Selesai',
+                    hasParenthesis: true
+                }
+
+            case 'Ditolak':
+                return { text: 'Ditolak', hasParenthesis: false }
+
+            case 'Dibatalkan':
+                return { text: 'Dibatalkan', hasParenthesis: false }
+
+            default:
+                return { text: status || 'N/A', hasParenthesis: false }
+        }
+    }
+
+    // Fungsi untuk render status dengan styling
+    const renderStatus = (statusObj) => {
+        if (!statusObj.hasParenthesis) {
+            return statusObj.text
+        }
+        return (
+            <>
+                {statusObj.mainText} <span className="text-green-600 font-bold">({statusObj.parenthesisText})</span>
+            </>
+        )
+    }
 
     // Fungsi untuk mendapatkan status approval dengan nama reviewer
     const getDetailedApprovalStatus = (bonSementara, reviewerNames) => {
@@ -97,7 +180,6 @@ const DetailBs = () => {
 
         // Helper function to determine approver
         const determineApprover = (reviewerArray, roleIndexStart) => {
-            // Cari index reviewer di array reviewerNames berdasarkan UID actor
             const reviewerIndex = reviewerArray.findIndex((uid) => uid === actor)
             if (reviewerIndex !== -1 && reviewerNames.reviewerNames) {
                 return reviewerNames.reviewerNames[roleIndexStart + reviewerIndex] || 'N/A'
@@ -105,11 +187,8 @@ const DetailBs = () => {
             return '-'
         }
 
-        // Periksa Reviewer 1 dan Reviewer 2
         const reviewer1Array = bonSementara?.user?.reviewer1 || []
         const reviewer2Array = bonSementara?.user?.reviewer2 || []
-
-        // Logika untuk kasus reviewer2 kosong
         const reviewer2Exists = Array.isArray(reviewer2Array) && reviewer2Array.some((uid) => uid)
 
         // Cek status approval dari reviewer
@@ -163,7 +242,7 @@ const DetailBs = () => {
     }
 
     const formatDate = (dateString) => {
-        if (!dateString) return 'N/A' // Handle null/undefined
+        if (!dateString) return 'N/A'
         const date = new Date(dateString)
         return new Intl.DateTimeFormat('id-ID', {
             day: 'numeric',
@@ -176,7 +255,7 @@ const DetailBs = () => {
     const [modalTitle, setModalTitle] = useState('')
 
     const closePreview = () => {
-        setModalPdfUrl(null) // Reset URL untuk menutup preview
+        setModalPdfUrl(null)
         setModalTitle('')
     }
 
@@ -352,7 +431,6 @@ const DetailBs = () => {
                                     <p>Department</p>
                                     <p className="text-left">:</p>
                                     <p className="break-words">
-                                        {' '}
                                         {Array.isArray(bonSementaraDetail?.user?.department) &&
                                             bonSementaraDetail.user.department.length > 0
                                             ? bonSementaraDetail.user.department.join(', ')
@@ -387,7 +465,7 @@ const DetailBs = () => {
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>Status</p>
                                     <p className="text-left">:</p>
-                                    <p className="break-words">{bonSementaraDetail?.status ?? 'N/A'}</p>
+                                    <p className="break-words">{renderStatus(getStatusWithNextReviewer(bonSementaraDetail, reviewers))}</p>
                                 </div>
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>
@@ -427,7 +505,7 @@ const DetailBs = () => {
                         <p>Nomor Rekening</p>
                         <p>: {bonSementaraDetail?.user?.accountNumber ?? 'N/A'}</p>
                         <p>Status</p>
-                        <p>: {bonSementaraDetail?.status ?? 'N/A'}</p>
+                        <p>: {renderStatus(getStatusWithNextReviewer(bonSementaraDetail, reviewers))}</p>
                         <p>
                             {bonSementaraDetail?.status === 'Ditolak'
                                 ? 'Ditolak Oleh'
