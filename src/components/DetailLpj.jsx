@@ -18,7 +18,7 @@ const DetailLpj = () => {
     const [, setError] = useState(null)
     const [isLoading, setIsLoading] = useState(false)
 
-    const { id } = useParams() // Get lpj ID from URL params
+    const { id } = useParams()
     const uid = localStorage.getItem('userUid')
     const userRole = localStorage.getItem('userRole')
 
@@ -27,7 +27,6 @@ const DetailLpj = () => {
             try {
                 setIsLoading(true)
 
-                // Fetch user data
                 const userDocRef = doc(db, 'users', uid)
                 const userSnapshot = await getDoc(userDocRef)
 
@@ -35,7 +34,6 @@ const DetailLpj = () => {
                     throw new Error('User tidak ditemukan')
                 }
 
-                // Fetch lpj data
                 const lpjDocRef = doc(db, 'lpj', id)
                 const lpjSnapshot = await getDoc(lpjDocRef)
 
@@ -47,7 +45,6 @@ const DetailLpj = () => {
                 setUserData(userSnapshot.data())
                 setLpjDetail(lpjData)
 
-                // Helper function to fetch names of reviewers
                 const fetchReviewerNames = async (reviewerArray) => {
                     if (!Array.isArray(reviewerArray)) return []
                     const promises = reviewerArray.map(async (reviewerUid) => {
@@ -63,18 +60,18 @@ const DetailLpj = () => {
                     return Promise.all(promises)
                 }
 
-                // Fetch names for all reviewers in reviewer1 and reviewer2
                 const [reviewer1Names, reviewer2Names, validatorNames] = await Promise.all([
                     fetchReviewerNames(lpjData?.user?.reviewer1),
                     fetchReviewerNames(lpjData?.user?.reviewer2),
                     fetchReviewerNames(lpjData?.user?.validator)
                 ])
 
-                // Combine reviewer names and filter out null values
                 const validReviewerNames = [...reviewer1Names, ...reviewer2Names].filter((name) => name !== null)
                 setReviewers({
                     reviewerNames: validReviewerNames,
-                    validatorNames: validatorNames.filter((name) => name !== null)
+                    validatorNames: validatorNames.filter((name) => name !== null),
+                    reviewer1Names: reviewer1Names.filter((name) => name !== null),
+                    reviewer2Names: reviewer2Names.filter((name) => name !== null)
                 })
             } catch (error) {
                 console.error('Error fetching data:', error)
@@ -87,9 +84,43 @@ const DetailLpj = () => {
         if (uid && id) {
             fetchData()
         }
-    }, [uid, id]) // Dependencies array to prevent infinite loop
+    }, [uid, id])
 
-    // Fungsi untuk mendapatkan status approval dengan nama reviewer
+    // Fungsi untuk mendapatkan status dengan informasi next approver
+    const getStatusWithNextApprover = (lpj, reviewerData) => {
+        if (!lpj || !reviewerData) return lpjDetail?.status ?? 'N/A'
+
+        const { status } = lpj
+        const { validatorNames, reviewer1Names, reviewer2Names } = reviewerData
+
+        // Jika status Diajukan (menunggu validasi)
+        if (status === 'Diajukan' && validatorNames && validatorNames.length > 0) {
+            return `${status} (Menunggu Validasi: ${validatorNames.join(', ')})`
+        }
+
+        // Jika status Divalidasi (menunggu approval reviewer 1)
+        if (status === 'Divalidasi' && reviewer1Names && reviewer1Names.length > 0) {
+            return `${status} (Menunggu Approval: ${reviewer1Names.join(', ')})`
+        }
+
+        // Jika status Diproses (sudah diapprove reviewer 1, menunggu reviewer 2)
+        if (status === 'Diproses') {
+            if (reviewer2Names && reviewer2Names.length > 0) {
+                return `${status} (Menunggu Approval: ${reviewer2Names.join(', ')})`
+            }
+            // Jika tidak ada reviewer 2, berarti menunggu Super Admin
+            return `${status} (Menunggu Approval Super Admin)`
+        }
+
+        // Jika status Disetujui
+        if (status === 'Disetujui') {
+            return `${status} (Selesai)`
+        }
+
+        // Status lainnya (Ditolak, Dibatalkan, dll)
+        return status
+    }
+
     const getDetailedApprovalStatus = (lpj, reviewerNames) => {
         if (!lpj || !lpj.statusHistory || lpj.statusHistory.length === 0) {
             return '-'
@@ -98,9 +129,7 @@ const DetailLpj = () => {
         const lastStatus = lpj.statusHistory[lpj.statusHistory.length - 1]
         const { status, actor } = lastStatus
 
-        // Helper function to determine approver
         const determineApprover = (reviewerArray, roleIndexStart) => {
-            // Cari index reviewer di array reviewerNames berdasarkan UID actor
             const reviewerIndex = reviewerArray.findIndex((uid) => uid === actor)
             if (reviewerIndex !== -1 && reviewerNames.reviewerNames) {
                 return reviewerNames.reviewerNames[roleIndexStart + reviewerIndex] || 'N/A'
@@ -108,7 +137,6 @@ const DetailLpj = () => {
             return '-'
         }
 
-        // Helper function khusus untuk validator
         const determineValidator = (validatorArray, actor) => {
             const validatorIndex = validatorArray.findIndex((uid) => uid === actor)
             if (validatorIndex !== -1 && reviewers.validatorNames && reviewers.validatorNames[validatorIndex]) {
@@ -117,15 +145,12 @@ const DetailLpj = () => {
             return 'N/A'
         }
 
-        // Periksa Reviewer 1 dan Reviewer 2
         const reviewer1Array = lpj?.user?.reviewer1 || []
         const reviewer2Array = lpj?.user?.reviewer2 || []
         const validatorArray = lpj?.user?.validator || []
 
-        // Logika untuk kasus reviewer2 kosong
         const reviewer2Exists = Array.isArray(reviewer2Array) && reviewer2Array.some((uid) => uid)
 
-        // Cek status approval dari reviewer
         if (lpj.approvedByReviewer1Status === 'reviewer' && lpj.approvedByReviewer1) {
             const reviewer1 = determineApprover(reviewer1Array, 0)
             if (reviewer1 !== '-') return reviewer1
@@ -189,7 +214,7 @@ const DetailLpj = () => {
     }
 
     const formatDate = (dateString) => {
-        if (!dateString) return 'N/A' // Handle null/undefined
+        if (!dateString) return 'N/A'
         const date = new Date(dateString)
         return new Intl.DateTimeFormat('id-ID', {
             day: 'numeric',
@@ -203,7 +228,7 @@ const DetailLpj = () => {
 
     const handleViewAttachment = (lampiranUrl) => {
         if (lampiranUrl) {
-            setModalPdfUrl(lampiranUrl) // Set URL untuk preview
+            setModalPdfUrl(lampiranUrl)
             setModalTitle(`Lampiran ${lpjDetail.displayId}`)
         } else {
             toast.error('Lampiran tidak tersedia')
@@ -211,7 +236,7 @@ const DetailLpj = () => {
     }
 
     const closePreview = () => {
-        setModalPdfUrl(null) // Reset URL untuk menutup preview
+        setModalPdfUrl(null)
         setModalTitle('')
     }
 
@@ -240,7 +265,6 @@ const DetailLpj = () => {
                     Detail <span className="font-bold">LPJ Bon Sementara</span>
                 </h2>
                 <div className="bg-white p-4 md:p-6 rounded-lg mb-6 shadow-sm">
-                    {/* Desktop View (xl:1280px and above) */}
                     <div className="hidden xl:block">
                         <div className="grid grid-cols-2 gap-x-16 mb-4 font-medium">
                             <div className="grid grid-cols-[auto_1fr] gap-x-16">
@@ -262,7 +286,6 @@ const DetailLpj = () => {
                         </div>
                     </div>
 
-                    {/* Tablet/Laptop View (768px - 1279px) */}
                     <div className="hidden md:block xl:hidden">
                         <div className="grid grid-cols-2 gap-x-8 mb-4">
                             <div className="space-y-1">
@@ -284,7 +307,6 @@ const DetailLpj = () => {
                         </div>
                     </div>
 
-                    {/* Mobile View (below 768px) */}
                     <div className="md:hidden">
                         <div className="space-y-1 mb-4">
                             {[...Array(10)].map((_, index) => (
@@ -299,7 +321,6 @@ const DetailLpj = () => {
                         </div>
                     </div>
 
-                    {/* Table Skeleton - Responsive */}
                     <div className="overflow-x-auto -mx-4 md:mx-0 mb-8">
                         <div className="min-w-[640px] md:w-full">
                             <div className="bg-gray-100 grid grid-cols-7">
@@ -347,7 +368,6 @@ const DetailLpj = () => {
                         </div>
                     </div>
 
-                    {/* Action Buttons Skeleton - Responsive */}
                     <div className="flex flex-col md:flex-row md:justify-end space-y-2 md:space-y-0 md:space-x-2">
                         <div className="w-full md:w-[170px]">
                             <Skeleton height={45} className="w-full" />
@@ -368,12 +388,10 @@ const DetailLpj = () => {
             </h2>
 
             <div className="bg-white p-4 md:p-6 rounded-lg shadow">
-                {/* Responsive grid for user details */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 xl:gap-x-16 mb-6 font-medium">
-                    {/* Mobile dan Tablet view (up to xl breakpoint) */}
+                    {/* Mobile dan Tablet view */}
                     <div className="xl:hidden">
                         <div className="flex flex-wrap justify-between gap-1 md:gap-x-12">
-                            {/* First column */}
                             <div className="space-y-1 flex-1">
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>Nomor Dokumen</p>
@@ -426,7 +444,6 @@ const DetailLpj = () => {
                                 </div>
                             </div>
 
-                            {/* Second column */}
                             <div className="space-y-1 flex-1">
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>Kategori</p>
@@ -462,7 +479,7 @@ const DetailLpj = () => {
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>Status</p>
                                     <p className="text-left">:</p>
-                                    <p className="break-words">{lpjDetail?.status ?? 'N/A'}</p>
+                                    <p className="break-words">{getStatusWithNextApprover(lpjDetail, reviewers)}</p>
                                 </div>
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>
@@ -523,7 +540,7 @@ const DetailLpj = () => {
                             </>
                         )}
                         <p>Status</p>
-                        <p>: {lpjDetail?.status ?? 'N/A'}</p>
+                        <p>: {getStatusWithNextApprover(lpjDetail, reviewers)}</p>
                         <p>
                             {lpjDetail?.status === 'Ditolak'
                                 ? 'Ditolak Oleh'
@@ -537,7 +554,6 @@ const DetailLpj = () => {
                     </div>
                 </div>
 
-                {/* Responsive table wrapper */}
                 <div className="mb-8 overflow-x-auto -mx-4 md:mx-0">
                     <div className="min-w-[640px] md:w-full p-4 md:p-0">
                         <table className="w-full bg-white border rounded-lg text-sm">
