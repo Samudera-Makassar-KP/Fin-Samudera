@@ -112,7 +112,7 @@ const DetailLpj = () => {
             return `${status} (Menunggu Approval Super Admin)`
         }
 
-        // Jika status Disetujui
+        // Jika status Disetujuii
         if (status === 'Disetujui') {
             return `${status} (Selesai)`
         }

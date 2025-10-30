@@ -116,7 +116,7 @@ const DetailRbs = () => {
                 return 'Divalidasi'
 
             case 'Diproses':
-                // Jika ada reviewer2, berarti masih menunggu reviewer2
+                // Jika ada reviewer2, berarti masih menunggu reviewer2 222
                 if (reviewer2Names && reviewer2Names.length > 0) {
                     return `Diproses (Menunggu approval ${formatNames(reviewer2Names)})`
                 }
