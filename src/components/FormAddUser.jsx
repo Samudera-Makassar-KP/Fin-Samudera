@@ -22,11 +22,25 @@ const AddUserForm = () => {
         role: '',
         department: [],
         bankName: '',
-        accountNumber: ''
+        accountNumber: '',
+        lokasi: ''
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [reviewerOptions, setReviewerOptions] = useState([])
     const [validatorOptions, setValidatorOptions] = useState([])
+
+    // BAGIAN 2: Tambahkan options untuk lokasi (setelah posisiOptions, sekitar baris ~280)
+    const lokasiOptions = [
+        { value: 'Jakarta', label: 'Jakarta' },
+        { value: 'Makassar', label: 'Makassar' },
+        { value: 'Kendari', label: 'Kendari' },
+        { value: 'Surabaya', label: 'Surabaya' },
+        { value: 'Medan', label: 'Medan' },
+        { value: 'Palopo', label: 'Palopo' },
+        { value: 'Malili', label: 'Malili' },
+        { value: 'Bitung', label: 'Bitung' },
+        // Tambahkan lokasi lainnya sesuai kebutuhan
+    ]
 
     // Fetch reviewers from Firestore
     const fetchReviewers = async () => {
@@ -91,6 +105,7 @@ const AddUserForm = () => {
                 reviewer1: [],
                 reviewer2: [],
                 validator: [],
+                lokasi: [],
                 [field]: selectedOption.value
             })
         } else if (field === 'department') {
@@ -133,7 +148,8 @@ const AddUserForm = () => {
                     { name: 'role', label: 'Role' },
                     { name: 'department', label: 'Department' },
                     { name: 'bankName', label: 'Nama Bank' },
-                    { name: 'accountNumber', label: 'Nomor Rekening' }
+                    { name: 'accountNumber', label: 'Nomor Rekening' },
+                    { name: 'lokasi', label: 'Lokasi' }
                 ];
             } else {
                 fieldsToValidate = [
@@ -147,7 +163,8 @@ const AddUserForm = () => {
                     { name: 'accountNumber', label: 'Nomor Rekening' },
                     { name: 'reviewer1', label: 'Reviewer 1' },
                     { name: 'reviewer2', label: 'Reviewer 2' },
-                    { name: 'validator', label: 'Validator' }
+                    { name: 'validator', label: 'Validator' },
+                    { name: 'lokasi', label: 'Lokasi' }
                 ];
             }
 
@@ -203,6 +220,7 @@ const AddUserForm = () => {
                     reviewer1: formData.role === 'Super Admin' ? [] : formData.reviewer1,
                     reviewer2: formData.role === 'Super Admin' ? [] : formData.reviewer2,
                     validator: formData.role === 'Super Admin' ? [] : formData.validator,
+                    lokasi: formData.role === 'Super Admin' ? '' : formData.lokasi,
                 });
 
                 toast.success('Pengguna berhasil ditambahkan');
@@ -219,7 +237,8 @@ const AddUserForm = () => {
                     accountNumber: '',
                     reviewer1: [],
                     reviewer2: [],
-                    validator: []
+                    validator: [],
+                    lokasi: ''
                 });
 
                 setTimeout(() => {
@@ -405,6 +424,24 @@ const AddUserForm = () => {
                                             className="basic-single-select mt-1 hover:border-blue-400"
                                             classNamePrefix="select"
                                             onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
+                                            isClearable
+                                            styles={selectStyles}
+                                            isSearchable={true}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
+                                        />
+                                    </div>
+                                    <div className="mb-2">
+                                        <label className="block font-medium text-gray-700">
+                                            Lokasi <span className="text-red-500">*</span>
+                                        </label>
+                                        <Select
+                                            name="lokasi"
+                                            options={lokasiOptions}
+                                            value={formData.lokasi ? lokasiOptions.find(option => option.value === formData.lokasi) : null}
+                                            className="basic-single-select mt-1 hover:border-blue-400"
+                                            classNamePrefix="select"
+                                            onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
                                             isClearable
                                             styles={selectStyles}
                                             isSearchable={true}
@@ -624,6 +661,23 @@ const AddUserForm = () => {
                                         options={unitOptions}
                                         value={formData.unit ? unitOptions.find(option => option.value === formData.unit) : null}
                                         onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
+                                        className="basic-single-select mt-1 hover:border-blue-400"
+                                        classNamePrefix="select"
+                                        styles={selectStyles}
+                                        isSearchable={true}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
+                                    />
+                                </div>
+                                <div className="mb-2">
+                                    <label className="block font-medium text-gray-700">
+                                        Lokasi <span className="text-red-500">*</span>
+                                    </label>
+                                    <Select
+                                        name="lokasi"
+                                        options={lokasiOptions}
+                                        value={formData.lokasi ? lokasiOptions.find(option => option.value === formData.lokasi) : null}
+                                        onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
                                         className="basic-single-select mt-1 hover:border-blue-400"
                                         classNamePrefix="select"
                                         styles={selectStyles}
