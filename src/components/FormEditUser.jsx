@@ -21,7 +21,8 @@ const EditUserForm = () => {
         role: '',
         department: [],
         bankName: '',
-        accountNumber: ''
+        accountNumber: '',
+        lokasi: ''
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [reviewer1Options, setReviewer1Options] = useState([])
@@ -35,6 +36,18 @@ const EditUserForm = () => {
         { value: 'Reviewer', label: 'Reviewer' },
         { value: 'Admin', label: 'Admin' },
         { value: 'Super Admin', label: 'Super Admin' }
+    ]
+
+    const lokasiOptions = [
+        { value: 'Jakarta', label: 'Jakarta' },
+        { value: 'Makassar', label: 'Makassar' },
+        { value: 'Kendari', label: 'Kendari' },
+        { value: 'Surabaya', label: 'Surabaya' },
+        { value: 'Medan', label: 'Medan' },
+        { value: 'Palopo', label: 'Palopo' },
+        { value: 'Malili', label: 'Malili' },
+        { value: 'Bitung', label: 'Bitung' },
+        
     ]
 
     // Options unit
@@ -207,7 +220,8 @@ const EditUserForm = () => {
                     accountNumber: '',
                     validator: [],
                     reviewer1: [],
-                    reviewer2: []
+                    reviewer2: [],
+                    lokasi: ''
                 })
                 return
             }
@@ -288,7 +302,8 @@ const EditUserForm = () => {
                     { name: 'role', label: 'Role' },
                     { name: 'department', label: 'Department' },
                     { name: 'bankName', label: 'Nama Bank' },
-                    { name: 'accountNumber', label: 'Nomor Rekening' }
+                    { name: 'accountNumber', label: 'Nomor Rekening' },
+                    { name: 'lokasi', label: 'Lokasi' }
                 ]
             } else {
                 // For other roles, validate all fields
@@ -303,7 +318,8 @@ const EditUserForm = () => {
                     { name: 'accountNumber', label: 'Nomor Rekening' },
                     { name: 'reviewer1', label: 'Reviewer 1' },
                     { name: 'reviewer2', label: 'Reviewer 2' },
-                    { name: 'validator', label: 'Validator' }
+                    { name: 'validator', label: 'Validator' },
+                    { name: 'lokasi', label: 'Lokasi' }
                 ]
             }
 
@@ -466,6 +482,24 @@ const EditUserForm = () => {
                                         value={unitOptions.find((option) => option.value === formData.unit)}
                                         onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
                                         options={unitOptions}
+                                        className="basic-single-select mt-1 hover:border-blue-400"
+                                        classNamePrefix="select"
+                                        isClearable
+                                        styles={selectStyles}
+                                        isSearchable={true}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
+                                    />
+                                </div>
+                                <div className="mb-2">
+                                    <label className="block font-medium text-gray-700">
+                                        Lokasi <span className="text-red-500">*</span>
+                                    </label>
+                                    <Select
+                                        name="lokasi"
+                                        value={lokasiOptions.find((option) => option.value === formData.lokasi)}
+                                        onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
+                                        options={lokasiOptions}
                                         className="basic-single-select mt-1 hover:border-blue-400"
                                         classNamePrefix="select"
                                         isClearable
@@ -689,6 +723,23 @@ const EditUserForm = () => {
                                     options={unitOptions}
                                     value={unitOptions.find(option => option.value === formData.unit)}
                                     onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
+                                    className="basic-single-select mt-1 hover:border-blue-400"
+                                    classNamePrefix="select"
+                                    styles={selectStyles}
+                                    isSearchable={true}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
+                                />
+                            </div>
+                            <div className="mb-2">
+                                <label className="block font-medium text-gray-700">
+                                    Lokasi <span className="text-red-500">*</span>
+                                </label>
+                                <Select
+                                    name="lokasi"
+                                    options={lokasiOptions}
+                                    value={lokasiOptions.find(option => option.value === formData.lokasi)}
+                                    onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
                                     className="basic-single-select mt-1 hover:border-blue-400"
                                     classNamePrefix="select"
                                     styles={selectStyles}

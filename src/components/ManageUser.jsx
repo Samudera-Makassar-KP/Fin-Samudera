@@ -14,7 +14,8 @@ const ManageUser = () => {
         posisi: '',
         unit: '',
         role: '',
-        department: ''
+        department: '',
+        lokasi: ''
     })
     const itemsPerPage = 10 // Jumlah item per halaman
     const navigate = useNavigate()
@@ -56,6 +57,16 @@ const ManageUser = () => {
             { value: 'Reviewer', label: 'Reviewer' },
             { value: 'Admin', label: 'Admin' },
             { value: 'Super Admin', label: 'Super Admin' }
+        ],
+        lokasi: [ // ← TAMBAHKAN INI
+            { value: 'Jakarta', label: 'Jakarta' },
+            { value: 'Makassar', label: 'Makassar' },
+            { value: 'Kendari', label: 'Kendari' },
+            { value: 'Surabaya', label: 'Surabaya' },
+            { value: 'Medan', label: 'Medan' },
+            { value: 'Palopo', label: 'Palopo' },
+            { value: 'Malili', label: 'Malili' },
+            { value: 'Bitung', label: 'Bitung' }
         ]
     }
 
@@ -107,7 +118,8 @@ const ManageUser = () => {
             posisi: '',
             unit: '',
             role: '',
-            department: ''
+            department: '',
+            lokasi: ''
         })
         setSearchTerm('')
         setCurrentPage(1)
@@ -238,6 +250,7 @@ const ManageUser = () => {
                             <FilterSelect field="unit" label="Unit Bisnis" />
                             <FilterSelect field="role" label="Role" />
                             <FilterSelect field="department" label="Department" />
+                            <FilterSelect field="lokasi" label="Lokasi" />
 
                             <button
                                 onClick={resetFilters}
@@ -301,11 +314,12 @@ const ManageUser = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-4 gap-4 w-full mb-4">
+                            <div className="grid grid-cols-5 gap-4 w-full mb-4">
                                 <FilterSelect field="posisi" label="Posisi" />
                                 <FilterSelect field="unit" label="Unit Bisnis" />
                                 <FilterSelect field="role" label="Role" />
                                 <FilterSelect field="department" label="Department" />
+                                <FilterSelect field="lokasi" label="Lokasi" />
                             </div>
                         </>
                     )}
@@ -369,6 +383,7 @@ const ManageUser = () => {
                                 <FilterSelect field="unit" label="Unit Bisnis" />
                                 <FilterSelect field="role" label="Role" />
                                 <FilterSelect field="department" label="Department" />
+                                <FilterSelect field="lokasi" label="Lokasi" />
                             </div>
                         </>
                     )}
@@ -391,6 +406,7 @@ const ManageUser = () => {
                                                 <th className="px-4 py-2 border break-words">Email</th>
                                                 <th className="px-4 py-2 border break-words">Posisi</th>
                                                 <th className="px-4 py-2 border break-words">Unit Bisnis</th>
+                                                <th className="px-4 py-2 border break-words">Lokasi</th>
                                                 <th className="px-4 py-2 border break-words">Role</th>
                                                 <th className="px-4 py-2 border break-words">Department</th>
                                                 <th className="px-2 py-2 border text-center">Aksi</th>
@@ -406,6 +422,7 @@ const ManageUser = () => {
                                                     <td className="px-4 py-2 border">{user.email}</td>
                                                     <td className="px-4 py-2 border">{user.posisi}</td>
                                                     <td className="px-4 py-2 border">{user.unit}</td>
+                                                    <td className="px-4 py-2 border">{user.lokasi}</td>
                                                     <td className="px-4 py-2 border">{user.role}</td>
                                                     <td className="px-4 py-2 border">
                                                         {Array.isArray(user.department)

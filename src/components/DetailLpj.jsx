@@ -93,28 +93,37 @@ const DetailLpj = () => {
         const { status } = lpj
         const { validatorNames, reviewer1Names, reviewer2Names } = reviewerData
 
+        // Helper untuk format nama
+        const formatNames = (names) => {
+            if (!names || names.length === 0) return ''
+            if (names.length === 1) return names[0]
+            if (names.length === 2) return `${names[0]} dan ${names[1]}`
+            const lastIndex = names.length - 1
+            return `${names.slice(0, lastIndex).join(', ')}, dan ${names[lastIndex]}`
+        }
+
         // Jika status Diajukan (menunggu validasi)
         if (status === 'Diajukan' && validatorNames && validatorNames.length > 0) {
-            return `${status} (Menunggu Validasi: ${validatorNames.join(', ')})`
+            return `Diajukan (Menunggu validasi ${formatNames(validatorNames)})`
         }
 
         // Jika status Divalidasi (menunggu approval reviewer 1)
         if (status === 'Divalidasi' && reviewer1Names && reviewer1Names.length > 0) {
-            return `${status} (Menunggu Approval: ${reviewer1Names.join(', ')})`
+            return `Divalidasi (Menunggu approval ${formatNames(reviewer1Names)})`
         }
 
         // Jika status Diproses (sudah diapprove reviewer 1, menunggu reviewer 2)
         if (status === 'Diproses') {
             if (reviewer2Names && reviewer2Names.length > 0) {
-                return `${status} (Menunggu Approval: ${reviewer2Names.join(', ')})`
+                return `Diproses (Menunggu approval ${formatNames(reviewer2Names)})`
             }
             // Jika tidak ada reviewer 2, berarti menunggu Super Admin
-            return `${status} (Menunggu Approval Super Admin)`
+            return `Diproses (Menunggu approval Super Admin)`
         }
 
         // Jika status Disetujuii
         if (status === 'Disetujui') {
-            return `${status} (Selesai)`
+            return `Disetujui (Selesai)`
         }
 
         // Status lainnya (Ditolak, Dibatalkan, dll)
