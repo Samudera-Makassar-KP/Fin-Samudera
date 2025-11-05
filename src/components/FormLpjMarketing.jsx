@@ -100,7 +100,7 @@ const FormLpjMarketing = () => {
         const fetchValidators = async () => {
             try {
                 const usersRef = collection(db, 'users')
-                const q = query(usersRef, where('role', 'in', ['Validator']))
+                const q = query(usersRef, where('role', 'in', ['Validator', 'Admin']))
                 const querySnapshot = await getDocs(q)
 
                 const options = querySnapshot.docs.map((doc) => {
@@ -162,7 +162,8 @@ const FormLpjMarketing = () => {
             { value: 'PT SILkargo Indonesia', label: 'PT SILkargo Indonesia' },
             { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
             { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
-            { value: 'Samudera', label: 'Samudera' }
+            { value: 'Samudera', label: 'Samudera' },
+            { value: 'Panitia SISCO', label: 'Panitia SISCO' }
         ],
         []
     )
