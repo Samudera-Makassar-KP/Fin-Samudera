@@ -64,7 +64,7 @@ const AddUserForm = () => {
     const fetchValidators = async () => {
         try {
             const q = query(collection(db, 'users'),
-                where('role', 'in', ['Validator', 'Reviewer']))
+                where('role', 'in', ['Validator', 'Reviewer', 'Admin']))
             const querySnapshot = await getDocs(q)
 
             const validators = querySnapshot.docs.map((doc) => ({
