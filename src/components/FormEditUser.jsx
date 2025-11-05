@@ -168,7 +168,7 @@ const EditUserForm = () => {
                 const validatorOpts = querySnapshot.docs
                     .map(doc => doc.data())
                     .filter(user =>
-                        user.role === 'Validator' || user.role === 'Reviewer'
+                        user.role === 'Validator' || user.role === 'Reviewer' || user.role === 'Admin'
                     )
                     .map(user => ({
                         value: user.uid,
