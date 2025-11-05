@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { db } from '../firebaseConfig'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore'
+// import { deleteUser } from 'firebase/auth'
+// import { auth } from '../firebaseConfig'
+import { toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 import Select from 'react-select'
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
@@ -20,6 +24,8 @@ const ManageUser = () => {
     const itemsPerPage = 10 // Jumlah item per halaman
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
+    const [deleteModal, setDeleteModal] = useState({ isOpen: false, user: null })
+    const [isDeleting, setIsDeleting] = useState(false)
 
     const filterOptions = {
         posisi: [
@@ -97,6 +103,41 @@ const ManageUser = () => {
 
     const handleEdit = (uid) => {
         navigate(`/manage-users/edit?uid=${uid}`)
+    }
+
+    const handleDelete = (user) => {
+        setDeleteModal({ isOpen: true, user })
+    }
+
+    const confirmDelete = async () => {
+        if (!deleteModal.user) return
+        
+        setIsDeleting(true)
+        try {
+            const userUid = deleteModal.user.uid
+            
+            // Hapus data user dari Firestore
+            await deleteDoc(doc(db, 'users', userUid))
+            
+            // Hapus dari Firebase Auth (opsional - hanya jika Anda memiliki akses admin)
+            // Note: Menghapus user dari Auth memerlukan Firebase Admin SDK di backend
+            // Atau user harus login ulang untuk menghapus akun mereka sendiri
+            
+            // Update state users
+            setUsers(users.filter(u => u.uid !== userUid))
+            
+            toast.success('Pengguna berhasil dihapus')
+            setDeleteModal({ isOpen: false, user: null })
+        } catch (error) {
+            console.error('Error deleting user:', error)
+            toast.error('Gagal menghapus pengguna. Silakan coba lagi')
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
+    const cancelDelete = () => {
+        setDeleteModal({ isOpen: false, user: null })
     }
 
     // Fungsi untuk menangani input pencarian
@@ -446,6 +487,26 @@ const ManageUser = () => {
                                                                     <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0 0 10 3H4.75A2.75 2.75 0 0 0 2 5.75v9.5A2.75 2.75 0 0 0 4.75 18h9.5A2.75 2.75 0 0 0 17 15.25V10a.75.75 0 0 0-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5Z" />
                                                                 </svg>
                                                             </button>
+
+                                                            {/* Tombol Delete */}
+                                                            <button
+                                                                onClick={() => handleDelete(user)}
+                                                                className="flex items-center justify-center rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600"
+                                                                title="Delete"
+                                                            >
+                                                                <svg
+                                                                    xmlns="http://www.w3.org/2000/svg"
+                                                                    viewBox="0 0 20 20"
+                                                                    fill="currentColor"
+                                                                    className="size-5"
+                                                                >
+                                                                    <path
+                                                                        fillRule="evenodd"
+                                                                        d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z"
+                                                                        clipRule="evenodd"
+                                                                    />
+                                                                </svg>
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -701,6 +762,38 @@ const ManageUser = () => {
                     </div>
                 )}
             </div>
+            {/* Modal Konfirmasi Delete */}
+            {deleteModal.isOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                        <h3 className="text-lg font-semibold mb-4">Konfirmasi Hapus</h3>
+                        <p className="text-gray-600 mb-6">
+                            Apakah Anda yakin ingin menghapus pengguna{' '}
+                            <span className="font-semibold">{deleteModal.user?.nama}</span>?
+                            <br />
+                            <span className="text-sm text-red-600 mt-2 block">
+                                Tindakan ini tidak dapat dibatalkan.
+                            </span>
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={cancelDelete}
+                                disabled={isDeleting}
+                                className="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isDeleting}
+                                className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {isDeleting ? 'Menghapus...' : 'Hapus'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
