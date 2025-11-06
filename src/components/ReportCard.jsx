@@ -37,6 +37,7 @@ const ReportCard = () => {
             return
         }
 
+        // Admin, Reviewer, dan role lainnya akan fetch data
         const fetchCounts = async (collectionName) => {
             try {
                 const uid = localStorage.getItem('userUid')
@@ -179,7 +180,7 @@ const ReportCard = () => {
             <div
                 className={`hidden xl:flex ${userRole === 'Reviewer' ? 'xl:flex-col xl:gap-6' : 'xl:flex-row xl:gap-6 mb-6'}`}
             >
-                {userRole === 'Reviewer' ? (
+                {(userRole === 'Reviewer' || userRole === 'Admin') ? (
                     // Desktop layout untuk Reviewer
                     <>
                         <div
@@ -359,7 +360,7 @@ const ReportCard = () => {
                         </div>
                     </div>
 
-                    {userRole === 'Reviewer' && (
+                    {(userRole === 'Reviewer' || userRole === 'Admin') && (
                         <div
                             onClick={handleBonSementaraClick}
                             className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
@@ -451,7 +452,7 @@ const ReportCard = () => {
                     </div>
                 </div>
 
-                {userRole === 'Reviewer' && (
+                {(userRole === 'Reviewer' || userRole === 'Admin') && (
                     <div
                         onClick={handleBonSementaraClick}
                         className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
@@ -548,7 +549,7 @@ const ReportCard = () => {
                     <hr className="border-gray-150" />
 
                     {/* Nomor Bon Section */}
-                    {userRole === 'Reviewer' && (
+                    {(userRole === 'Reviewer' || userRole === 'Admin') && (
                         <div
                             onClick={handleBonSementaraClick}
                             className={`flex items-center justify-between w-full bg-white p-3 rounded-lg 
