@@ -62,7 +62,7 @@ const AppContent = () => {
                     } />
 
                     <Route path="/reimbursement/cek-pengajuan" element={
-                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin']}>
+                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin', 'Admin']}>
                             <RbsCheckPage />
                         </ProtectedRoute>
                     } />
@@ -106,7 +106,7 @@ const AppContent = () => {
                     } />
 
                     <Route path="/lpj/cek-pengajuan" element={
-                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin']}>
+                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin', 'Admin']}>
                             <LpjCheckPage />
                         </ProtectedRoute>
                     } />

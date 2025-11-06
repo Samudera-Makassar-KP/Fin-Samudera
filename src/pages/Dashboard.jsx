@@ -106,7 +106,7 @@ const Dashboard = ({ userUid }) => {
                                 <GAUPieChart />
                             </div>
                         )}
-                        {user.role === 'Validator' && <ReportCard />}
+                        {(user.role === 'Validator' || user.role === 'Admin') && <ReportCard />}
                         <ReimbursementTable />
                         <div ref={createBsTableRef}>
                             <CreateBsTable />

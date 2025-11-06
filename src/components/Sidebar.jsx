@@ -158,7 +158,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                         GA/Umum
                                     </NavLink>
                                 </li>
-                                {(role === 'Reviewer' || role === 'Validator') && (
+                                {(role === 'Reviewer' || role === 'Validator' || role === 'Admin') && (
                                     <li>
                                         <NavLink
                                             to="/reimbursement/cek-pengajuan"
@@ -231,7 +231,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                         Marketing/Operasional
                                     </NavLink>
                                 </li>
-                                {(role === 'Reviewer' || role === 'Validator') && (
+                                {(role === 'Reviewer' || role === 'Validator' || role === 'Admin') && (
                                     <li>
                                         <NavLink
                                             to="/lpj/cek-pengajuan"
