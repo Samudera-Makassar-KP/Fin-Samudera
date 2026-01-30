@@ -834,72 +834,143 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
 /**
  * Fungsi ini akan berjalan setiap hari pada pukul 09:00 WIB.
  */
-exports.sendApprovalReminders = onSchedule("0 9 * * *", async (event) => {
-    console.log("Mulai pengecekan pengajuan yang membutuhkan pengingat...");
+exports.sendApprovalReminders = onSchedule({
+    schedule: "0 9 * * *",      // Jalan setiap jam 09:00
+    timeZone: "Asia/Jakarta",   // PENTING: Menggunakan waktu WIB
+    timeoutSeconds: 540,        // Timeout diperpanjang (9 menit) untuk antisipasi data banyak
+    memory: "256MiB"
+}, async (event) => {
+    console.log("⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WIB...");
 
     const now = new Date();
-    // Tentukan waktu kemarin pada pukul 23:59
-    const yesterdayAt2359 = new Date(now);
-    yesterdayAt2359.setDate(now.getDate() - 1);
-    yesterdayAt2359.setHours(12, 59, 59, 999);
+    
+    // Tentukan batas waktu (Cutoff). 
+    // Kita ingin mencari dokumen yang statusnya berubah SEBELUM jam 00:00 hari ini.
+    // Artinya dokumen tersebut menginap semalam dan belum diproses.
+    const startOfToday = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    startOfToday.setHours(0, 0, 0, 0); // Set ke jam 00:00:00 hari ini
 
+    // Definisi Status Flow untuk validasi tambahan
+    // BS: Diajukan (Rev1) -> Diproses (Rev2)
+    // RBS/LPJ: Diajukan (Val) -> Disetujui oleh Validator (Rev1) -> Disetujui oleh Reviewer 1 (Rev2)
+    
     const documentTypes = [
         { collection: "bonSementara", type: "BS" },
         { collection: "lpj", type: "LPJ" },
         { collection: "reimbursement", type: "RBS" },
     ];
 
+    const emailPromises = [];
+
     for (const docType of documentTypes) {
         try {
-            // Ambil semua dokumen yang statusnya belum selesai
+            // 1. Ambil dokumen yang statusnya masih aktif (belum selesai)
             const querySnapshot = await db.collection(docType.collection)
-                .where('status', 'not-in', ['Disetujui', 'Ditolak'])
+                .where('status', 'not-in', ['Disetujui', 'Ditolak', 'Dibatalkan'])
                 .get();
 
-            if (querySnapshot.empty) {
-                console.log(`Tidak ada dokumen ${docType.type} yang membutuhkan pengingat.`);
-                continue;
-            }
+            if (querySnapshot.empty) continue;
 
             for (const doc of querySnapshot.docs) {
-                const newData = doc.data();
+                const data = doc.data();
                 const docId = doc.id;
-                const lastStatusChangeDate = newData.lastStatusChange ? new Date(newData.lastStatusChange) : new Date(newData.tanggalPengajuan);
-                const lastReminderSentDate = newData.lastReminderSent ? new Date(newData.lastReminderSent) : null;
 
-                // Cek apakah dokumen sudah tertunda sejak kemarin pukul 23:59
-                // Dan belum ada reminder yang dikirim hari ini
-                if (lastStatusChangeDate < yesterdayAt2359 && (!lastReminderSentDate || lastReminderSentDate.toDateString() !== now.toDateString())) {
-                    const approverUid = newData.currentApproverUid;
-                    if (!approverUid) {
-                        console.log(`Dokumen ${docId} tidak memiliki currentApproverUid.`);
-                        continue;
-                    }
+                // 2. Cek Current Approver (Siapa yang sedang pegang bola?)
+                const approverUid = data.currentApproverUid;
+                if (!approverUid) {
+                    console.log(`⚠️ Skip ${docType.type} ${data.displayId}: Tidak ada currentApproverUid.`);
+                    continue;
+                }
 
-                    const approverData = await getUserData(approverUid);
-                    if (approverData?.email) {
-                        const submitterData = await getUserData(newData.user.uid);
-                        const subject = `PENGINGAT: Mohon Approval Dokumen ${docType.type} - ${newData.displayId}`;
-                        const emailContent = `
-                            Dear <strong>${approverData.nama}</strong>,
-                            <br><br>Dokumen ${docType.type} dengan nomor <strong>${newData.displayId}</strong> sudah menunggu persetujuan Anda. Mohon segera dicek.
-                        `;
+                // 3. Cek Kapan Terakhir Berubah
+                // Gunakan lastStatusChange, jika tidak ada (dokumen baru), pakai tanggalPengajuan
+                const lastChangeStr = data.lastStatusChange || data.tanggalPengajuan;
+                const lastChangeDate = new Date(lastChangeStr);
 
-                        await sendEmail(approverData.email, subject, createEmailTemplate(emailContent, submitterData, newData, true, 'reminder'));
+                // 4. Cek Logika Waktu:
+                // Apakah perubahan terakhir terjadi SEBELUM hari ini jam 00:00?
+                // Jika YA, berarti sudah lewat pukul 24:00 kemarin.
+                const isOverdue = lastChangeDate < startOfToday;
 
-                        // Perbarui dokumen dengan timestamp reminder terakhir
-                        await db.collection(docType.collection).doc(docId).update({
-                            lastReminderSent: now.toISOString()
-                        });
-                        console.log(`✅ Pengingat berhasil dikirim untuk dokumen ${docId} ke ${approverData.email}.`);
-                    }
+                // 5. Cek apakah sudah diingatkan HARI INI?
+                // Agar tidak spam jika script dijalankan ulang manual
+                const lastReminderSentDate = data.lastReminderSent ? new Date(data.lastReminderSent) : null;
+                const alreadyRemindedToday = lastReminderSentDate && 
+                                             lastReminderSentDate >= startOfToday;
+
+                if (isOverdue && !alreadyRemindedToday) {
+                    // Masukkan ke antrian proses (Promise) agar parallel
+                    emailPromises.push(processReminder(doc, docType, approverUid, now));
                 }
             }
         } catch (error) {
-            console.error(`❌ Gagal saat mengecek koleksi ${docType.collection}:`, error);
+            console.error(`❌ Error pada koleksi ${docType.collection}:`, error);
         }
     }
 
-    console.log("Selesai pengecekan pengajuan.");
-    return null;
+    // Tunggu semua email terkirim
+    await Promise.all(emailPromises);
+    console.log("✅ Selesai pengecekan pengajuan.");
 });
+
+// Fungsi terpisah untuk memproses pengiriman email reminder
+const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) => {
+    const data = docSnapshot.data();
+    
+    try {
+        const [approverData, submitterData] = await Promise.all([
+            getUserData(approverUid),
+            getUserData(data.user.uid)
+        ]);
+
+        if (!approverData?.email) {
+            console.log(`⚠️ Skip: Email approver tidak ditemukan untuk ${approverData?.nama}`);
+            return;
+        }
+
+        // Tentukan Judul Role untuk Email (Opsional, agar lebih jelas)
+        let roleLabel = "Approver";
+        if (docType.type === "BS") {
+            if (data.status === "Diajukan") roleLabel = "Reviewer 1";
+            if (data.status === "Diproses") roleLabel = "Reviewer 2";
+        } else {
+            // RBS & LPJ
+            if (data.status === "Diajukan") roleLabel = "Validator";
+            if (data.status.includes("Validator")) roleLabel = "Reviewer 1"; // Status: Disetujui oleh Validator
+            if (data.status.includes("Reviewer 1")) roleLabel = "Reviewer 2"; // Status: Disetujui oleh Reviewer 1
+        }
+
+        const subject = `[REMINDER] Menunggu Approval ${roleLabel} - ${docType.type} ${data.displayId}`;
+        
+        const emailContent = `
+            Dear <strong>${approverData.nama}</strong>,
+            <br><br>
+            Ini adalah pengingat otomatis. Dokumen <strong>${docType.type}</strong> berikut menunggu persetujuan Anda sejak kemarin.
+            <br><br>
+            <strong>Detail Dokumen:</strong>
+            <ul>
+                <li>Nomor: ${data.displayId}</li>
+                <li>Pengaju: ${submitterData?.nama || 'User'}</li>
+                <li>Tanggal Update Terakhir: ${formatDateIndonesia(data.lastStatusChange || data.tanggalPengajuan)}</li>
+                <li>Status Saat Ini: ${data.status}</li>
+            </ul>
+            <br>
+            Mohon segera melakukan pengecekan melalui dashboard aplikasi.
+        `;
+
+        // Kirim Email
+        await sendEmail(
+            approverData.email, 
+            subject, 
+            createEmailTemplate(emailContent, submitterData, data, true, 'reminder')
+        );
+
+        // Update database bahwa reminder sudah dikirim hari ini
+        await db.collection(docType.collection).doc(docSnapshot.id).update({
+            lastReminderSent: nowTimestamp.toISOString()
+        });
+
+    } catch (err) {
+        console.error(`❌ Gagal kirim reminder untuk ${data.displayId}:`, err);
+    }
+};
