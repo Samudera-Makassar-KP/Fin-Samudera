@@ -18,12 +18,12 @@ const AddUserForm = () => {
         validator: [],
         reviewer1: [],
         reviewer2: [],
-        unit: '',
+        unit: [],
         role: '',
         department: [],
         bankName: '',
         accountNumber: '',
-        lokasi: ''
+        lokasi: []
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [reviewerOptions, setReviewerOptions] = useState([])
@@ -97,7 +97,7 @@ const AddUserForm = () => {
             setFormData({
                 ...formData,
                 role: 'Super Admin',
-                unit: '',
+                unit: [],
                 posisi: '',
                 department: [],
                 bankName: '',
@@ -108,12 +108,12 @@ const AddUserForm = () => {
                 lokasi: [],
                 [field]: selectedOption.value
             })
-        } else if (field === 'department') {
+        } else if (field === 'department' || field === 'unit' || field === 'lokasi') {
             setFormData({
                 ...formData,
                 [field]: Array.isArray(selectedOption)
                     ? selectedOption.map((option) => option.value)
-                    : selectedOption?.value || ''
+                    : []
             })
         } else {
             setFormData({
@@ -213,14 +213,14 @@ const AddUserForm = () => {
                     email: formData.email,
                     role: formData.role,
                     posisi: formData.role === 'Super Admin' ? '' : formData.posisi,
-                    unit: formData.role === 'Super Admin' ? '' : formData.unit,
+                    unit: formData.role === 'Super Admin' ? [] : formData.unit,
                     department: formData.role === 'Super Admin' ? [] : formData.department,
                     bankName: formData.role === 'Super Admin' ? '' : formData.bankName,
                     accountNumber: formData.role === 'Super Admin' ? '' : formData.accountNumber,
                     reviewer1: formData.role === 'Super Admin' ? [] : formData.reviewer1,
                     reviewer2: formData.role === 'Super Admin' ? [] : formData.reviewer2,
                     validator: formData.role === 'Super Admin' ? [] : formData.validator,
-                    lokasi: formData.role === 'Super Admin' ? '' : formData.lokasi,
+                    lokasi: formData.role === 'Super Admin' ? [] : formData.lokasi,
                 });
 
                 toast.success('Pengguna berhasil ditambahkan');
@@ -230,7 +230,7 @@ const AddUserForm = () => {
                     nama: '',
                     email: '',
                     posisi: null,
-                    unit: null,
+                    unit: [],
                     role: null,
                     department: [],
                     bankName: '',
@@ -238,7 +238,7 @@ const AddUserForm = () => {
                     reviewer1: [],
                     reviewer2: [],
                     validator: [],
-                    lokasi: ''
+                    lokasi: []
                 });
 
                 setTimeout(() => {
@@ -419,15 +419,14 @@ const AddUserForm = () => {
                                             Unit Bisnis <span className="text-red-500">*</span>
                                         </label>
                                         <Select
+                                            isMulti
                                             name="unit"
                                             options={unitOptions}
-                                            value={formData.unit ? unitOptions.find(option => option.value === formData.unit) : null}
-                                            className="basic-single-select mt-1 hover:border-blue-400"
+                                            value={formData.unit.length > 0 ? unitOptions.filter(option => formData.unit.includes(option.value)) : []}
+                                            className="basic-multi-select mt-1"
                                             classNamePrefix="select"
-                                            onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
-                                            isClearable
+                                            onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'unit')}
                                             styles={selectStyles}
-                                            isSearchable={true}
                                             menuPortalTarget={document.body}
                                             menuPosition="absolute"
                                         />
@@ -437,15 +436,14 @@ const AddUserForm = () => {
                                             Lokasi <span className="text-red-500">*</span>
                                         </label>
                                         <Select
+                                            isMulti
                                             name="lokasi"
                                             options={lokasiOptions}
-                                            value={formData.lokasi ? lokasiOptions.find(option => option.value === formData.lokasi) : null}
-                                            className="basic-single-select mt-1 hover:border-blue-400"
+                                            value={formData.lokasi.length > 0 ? lokasiOptions.filter(option => formData.lokasi.includes(option.value)) : []}
+                                            className="basic-multi-select mt-1"
                                             classNamePrefix="select"
-                                            onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
-                                            isClearable
+                                            onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'lokasi')}
                                             styles={selectStyles}
-                                            isSearchable={true}
                                             menuPortalTarget={document.body}
                                             menuPosition="absolute"
                                         />
@@ -658,14 +656,14 @@ const AddUserForm = () => {
                                         Unit Bisnis <span className="text-red-500">*</span>
                                     </label>
                                     <Select
+                                        isMulti
                                         name="unit"
                                         options={unitOptions}
-                                        value={formData.unit ? unitOptions.find(option => option.value === formData.unit) : null}
-                                        onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
-                                        className="basic-single-select mt-1 hover:border-blue-400"
+                                        value={formData.unit.length > 0 ? unitOptions.filter(option => formData.unit.includes(option.value)) : []}
+                                        onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'unit')}
+                                        className="basic-multi-select mt-1"
                                         classNamePrefix="select"
                                         styles={selectStyles}
-                                        isSearchable={true}
                                         menuPortalTarget={document.body}
                                         menuPosition="absolute"
                                     />
@@ -675,14 +673,14 @@ const AddUserForm = () => {
                                         Lokasi <span className="text-red-500">*</span>
                                     </label>
                                     <Select
+                                        isMulti
                                         name="lokasi"
                                         options={lokasiOptions}
-                                        value={formData.lokasi ? lokasiOptions.find(option => option.value === formData.lokasi) : null}
-                                        onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
-                                        className="basic-single-select mt-1 hover:border-blue-400"
+                                        value={formData.lokasi.length > 0 ? lokasiOptions.filter(option => formData.lokasi.includes(option.value)) : []}
+                                        onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'lokasi')}
+                                        className="basic-multi-select mt-1"
                                         classNamePrefix="select"
                                         styles={selectStyles}
-                                        isSearchable={true}
                                         menuPortalTarget={document.body}
                                         menuPosition="absolute"
                                     />

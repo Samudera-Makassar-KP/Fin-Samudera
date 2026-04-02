@@ -828,7 +828,7 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
 });
 
 // -----------------------------------------------------------------------------------
-// ---- FUNGSI TERJADWAL UNTUK PENGINGAT (REMINDER) - BARU DITAMBAHKAN ----
+// ---- FUNGSI TERJADWAL UNTUK PENGINGAT (REMINDER) - FIXED ----
 // -----------------------------------------------------------------------------------
 
 /**
@@ -844,23 +844,32 @@ exports.sendApprovalReminders = onSchedule({
 
     const now = new Date();
     
-    // Tentukan batas waktu (Cutoff). 
-    // Kita ingin mencari dokumen yang statusnya berubah SEBELUM jam 00:00 hari ini.
-    // Artinya dokumen tersebut menginap semalam dan belum diproses.
-    const startOfToday = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
-    startOfToday.setHours(0, 0, 0, 0); // Set ke jam 00:00:00 hari ini
+    // Tentukan batas waktu (Cutoff) ke jam 00:00:00 WIB hari ini secara akurat.
+    // Kita format waktu 'sekarang' di Jakarta untuk mengambil Tahun, Bulan, dan Tanggal.
+    const formatter = new Intl.DateTimeFormat('en-US', { 
+        timeZone: "Asia/Jakarta", 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const year = parts.find(p => p.type === 'year').value;
+    const month = parts.find(p => p.type === 'month').value;
+    const day = parts.find(p => p.type === 'day').value;
+    
+    // Bentuk string waktu ISO khusus untuk WIB (UTC+7) di jam 00:00:00
+    const startOfTodayWIBString = `${year}-${month}-${day}T00:00:00+07:00`;
+    const startOfToday = new Date(startOfTodayWIBString);
 
     // Definisi Status Flow untuk validasi tambahan
     // BS: Diajukan (Rev1) -> Diproses (Rev2)
     // RBS/LPJ: Diajukan (Val) -> Disetujui oleh Validator (Rev1) -> Disetujui oleh Reviewer 1 (Rev2)
-    
     const documentTypes = [
         { collection: "bonSementara", type: "BS" },
         { collection: "lpj", type: "LPJ" },
         { collection: "reimbursement", type: "RBS" },
     ];
-
-    const emailPromises = [];
 
     for (const docType of documentTypes) {
         try {
@@ -873,8 +882,7 @@ exports.sendApprovalReminders = onSchedule({
 
             for (const doc of querySnapshot.docs) {
                 const data = doc.data();
-                const docId = doc.id;
-
+                
                 // 2. Cek Current Approver (Siapa yang sedang pegang bola?)
                 const approverUid = data.currentApproverUid;
                 if (!approverUid) {
@@ -885,22 +893,23 @@ exports.sendApprovalReminders = onSchedule({
                 // 3. Cek Kapan Terakhir Berubah
                 // Gunakan lastStatusChange, jika tidak ada (dokumen baru), pakai tanggalPengajuan
                 const lastChangeStr = data.lastStatusChange || data.tanggalPengajuan;
+                if (!lastChangeStr) continue;
+                
                 const lastChangeDate = new Date(lastChangeStr);
 
                 // 4. Cek Logika Waktu:
-                // Apakah perubahan terakhir terjadi SEBELUM hari ini jam 00:00?
+                // Apakah perubahan terakhir terjadi SEBELUM hari ini jam 00:00 WIB?
                 // Jika YA, berarti sudah lewat pukul 24:00 kemarin.
                 const isOverdue = lastChangeDate < startOfToday;
 
                 // 5. Cek apakah sudah diingatkan HARI INI?
                 // Agar tidak spam jika script dijalankan ulang manual
                 const lastReminderSentDate = data.lastReminderSent ? new Date(data.lastReminderSent) : null;
-                const alreadyRemindedToday = lastReminderSentDate && 
-                                             lastReminderSentDate >= startOfToday;
+                const alreadyRemindedToday = lastReminderSentDate && lastReminderSentDate >= startOfToday;
 
                 if (isOverdue && !alreadyRemindedToday) {
-                    // Masukkan ke antrian proses (Promise) agar parallel
-                    emailPromises.push(processReminder(doc, docType, approverUid, now));
+                    // Dieksekusi berurutan (await) untuk mencegah rate-limit pengiriman email
+                    await processReminder(doc, docType, approverUid, now);
                 }
             }
         } catch (error) {
@@ -908,8 +917,6 @@ exports.sendApprovalReminders = onSchedule({
         }
     }
 
-    // Tunggu semua email terkirim
-    await Promise.all(emailPromises);
     console.log("✅ Selesai pengecekan pengajuan.");
 });
 
@@ -924,7 +931,7 @@ const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) 
         ]);
 
         if (!approverData?.email) {
-            console.log(`⚠️ Skip: Email approver tidak ditemukan untuk ${approverData?.nama}`);
+            console.log(`⚠️ Skip: Email approver tidak ditemukan untuk ${approverData?.nama || approverUid}`);
             return;
         }
 
@@ -969,6 +976,8 @@ const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) 
         await db.collection(docType.collection).doc(docSnapshot.id).update({
             lastReminderSent: nowTimestamp.toISOString()
         });
+
+        console.log(`✅ Reminder terkirim ke ${approverData.email} untuk dokumen ${data.displayId}`);
 
     } catch (err) {
         console.error(`❌ Gagal kirim reminder untuk ${data.displayId}:`, err);

@@ -17,12 +17,12 @@ const EditUserForm = () => {
         validator: [],
         reviewer1: [],
         reviewer2: [],
-        unit: '',
+        unit: [],
         role: '',
         department: [],
         bankName: '',
         accountNumber: '',
-        lokasi: ''
+        lokasi: []
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [reviewer1Options, setReviewer1Options] = useState([])
@@ -109,7 +109,11 @@ const EditUserForm = () => {
                         ...userData,
                         reviewer1: userData.reviewer1 || [],
                         reviewer2: userData.reviewer2 || [],
-                        department: userData.department || []
+                        department: userData.department || [],
+                        validator: userData.validator || [],
+                        // Handling konversi data lama (string) ke format baru (array)
+                        unit: Array.isArray(userData.unit) ? userData.unit : (userData.unit ? [userData.unit] : []),
+                        lokasi: Array.isArray(userData.lokasi) ? userData.lokasi : (userData.lokasi ? [userData.lokasi] : [])
                     })
                 } else {
                     console.error('User not found')
@@ -213,7 +217,7 @@ const EditUserForm = () => {
                 setFormData({
                     ...formData,
                     role: 'Super Admin',
-                    unit: '',
+                    unit: [],
                     posisi: '',
                     department: [],
                     bankName: '',
@@ -221,7 +225,7 @@ const EditUserForm = () => {
                     validator: [],
                     reviewer1: [],
                     reviewer2: [],
-                    lokasi: ''
+                    lokasi: []
                 })
                 return
             }
@@ -252,13 +256,13 @@ const EditUserForm = () => {
                 ...formData,
                 [field]: filteredValues,
             })
-        } else if (field === "department") {
-            // Khusus untuk department
+        } else if (field === "department" || field === "unit" || field === "lokasi") {
+            // Khusus untuk multi-select department, unit, dan lokasi
             setFormData({
                 ...formData,
                 [field]: Array.isArray(selectedOption)
                     ? selectedOption.map(option => option.value)
-                    : selectedOption?.value || ''
+                    : []
             })
         } else {
             // Default handling untuk field lainnya
@@ -478,15 +482,14 @@ const EditUserForm = () => {
                                         Unit Bisnis <span className="text-red-500">*</span>
                                     </label>
                                     <Select
+                                        isMulti
                                         name="unit"
-                                        value={unitOptions.find((option) => option.value === formData.unit)}
+                                        value={unitOptions.filter((option) => formData.unit?.includes(option.value))}
                                         onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
                                         options={unitOptions}
-                                        className="basic-single-select mt-1 hover:border-blue-400"
+                                        className="basic-multi-select mt-1"
                                         classNamePrefix="select"
-                                        isClearable
                                         styles={selectStyles}
-                                        isSearchable={true}
                                         menuPortalTarget={document.body}
                                         menuPosition="absolute"
                                     />
@@ -496,15 +499,14 @@ const EditUserForm = () => {
                                         Lokasi <span className="text-red-500">*</span>
                                     </label>
                                     <Select
+                                        isMulti
                                         name="lokasi"
-                                        value={lokasiOptions.find((option) => option.value === formData.lokasi)}
+                                        value={lokasiOptions.filter((option) => formData.lokasi?.includes(option.value))}
                                         onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
                                         options={lokasiOptions}
-                                        className="basic-single-select mt-1 hover:border-blue-400"
+                                        className="basic-multi-select mt-1"
                                         classNamePrefix="select"
-                                        isClearable
                                         styles={selectStyles}
-                                        isSearchable={true}
                                         menuPortalTarget={document.body}
                                         menuPosition="absolute"
                                     />
@@ -517,7 +519,7 @@ const EditUserForm = () => {
                                         isMulti
                                         name="department"
                                         value={departmentOptions.filter((option) =>
-                                            formData.department?.includes(option.label)
+                                            formData.department?.includes(option.value)
                                         )}
                                         onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'department')}
                                         options={departmentOptions}
@@ -705,7 +707,7 @@ const EditUserForm = () => {
                                     isMulti
                                     name="department"
                                     options={departmentOptions}
-                                    value={departmentOptions.filter(option => formData.department.includes(option.value))}
+                                    value={departmentOptions.filter(option => formData.department?.includes(option.value))}
                                     onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'department')}
                                     className="basic-multi-select mt-1"
                                     classNamePrefix="select"
@@ -719,14 +721,14 @@ const EditUserForm = () => {
                                     Unit Bisnis <span className="text-red-500">*</span>
                                 </label>
                                 <Select
+                                    isMulti
                                     name="unit"
                                     options={unitOptions}
-                                    value={unitOptions.find(option => option.value === formData.unit)}
+                                    value={unitOptions.filter(option => formData.unit?.includes(option.value))}
                                     onChange={(selectedOption) => handleSelectChange(selectedOption, 'unit')}
-                                    className="basic-single-select mt-1 hover:border-blue-400"
+                                    className="basic-multi-select mt-1"
                                     classNamePrefix="select"
                                     styles={selectStyles}
-                                    isSearchable={true}
                                     menuPortalTarget={document.body}
                                     menuPosition="absolute"
                                 />
@@ -736,14 +738,14 @@ const EditUserForm = () => {
                                     Lokasi <span className="text-red-500">*</span>
                                 </label>
                                 <Select
+                                    isMulti
                                     name="lokasi"
                                     options={lokasiOptions}
-                                    value={lokasiOptions.find(option => option.value === formData.lokasi)}
+                                    value={lokasiOptions.filter(option => formData.lokasi?.includes(option.value))}
                                     onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
-                                    className="basic-single-select mt-1 hover:border-blue-400"
+                                    className="basic-multi-select mt-1"
                                     classNamePrefix="select"
                                     styles={selectStyles}
-                                    isSearchable={true}
                                     menuPortalTarget={document.body}
                                     menuPosition="absolute"
                                 />
@@ -801,7 +803,8 @@ const EditUserForm = () => {
                                     )}
                                     onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'reviewer1')}
                                     options={reviewer1Options}
-                                    className="mt-1"
+                                    className="basic-multi-select mt-1"
+                                    classNamePrefix="select"
                                     styles={selectStyles}
                                     menuPortalTarget={document.body}
                                     menuPosition="absolute"
@@ -817,7 +820,8 @@ const EditUserForm = () => {
                                     value={reviewer2Options.filter((option) => formData.reviewer2?.includes(option.value))}
                                     onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'reviewer2')}
                                     options={reviewer2Options}
-                                    className="mt-1"
+                                    className="basic-multi-select mt-1"
+                                    classNamePrefix="select"
                                     styles={selectStyles}
                                     menuPortalTarget={document.body}
                                     menuPosition="absolute"
