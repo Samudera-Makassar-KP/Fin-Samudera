@@ -50,6 +50,9 @@ const FormBs = () => {
     const [selectedReviewer1, setSelectedReviewer1] = useState(null)
     const [selectedReviewer2, setSelectedReviewer2] = useState(null)
 
+    // Deteksi apakah user hanya memiliki 1 unit bisnis
+    const isSingleUnit = !isAdmin && userUnitOptions.length === 1
+
     // Fetch reviewer untuk semua role
     useEffect(() => {
         const fetchReviewer = async () => {
@@ -143,6 +146,23 @@ const FormBs = () => {
         }
     }, []);
 
+    // --- Logika Auto-Fill Reviewer 1 dan 2 untuk user dengan 1 Unit Bisnis ---
+    useEffect(() => {
+        if (isSingleUnit) {
+            // Auto-fill Reviewer 1
+            if (reviewerOptions.length > 0 && userData.reviewer1?.length > 0) {
+                const defaultRev1 = reviewerOptions.find(opt => userData.reviewer1.includes(opt.value));
+                if (defaultRev1) setSelectedReviewer1(defaultRev1);
+            }
+            
+            // Auto-fill Reviewer 2
+            if (reviewerOptions.length > 0 && userData.reviewer2?.length > 0) {
+                const defaultRev2 = reviewerOptions.find(opt => userData.reviewer2.includes(opt.value));
+                if (defaultRev2) setSelectedReviewer2(defaultRev2);
+            }
+        }
+    }, [isSingleUnit, reviewerOptions, userData]);
+
     const kategoriOptions = [
         { value: 'GA/Umum', label: 'GA/Umum' },
         { value: 'Marketing/Operasional', label: 'Marketing/Operasional' }
@@ -168,14 +188,15 @@ const FormBs = () => {
     }
 
     const customStyles = {
-        control: (base) => ({
+        control: (base, state) => ({
             ...base,
             padding: '0 7px',
             height: '40px',
             minHeight: '40px',
             borderColor: '#e5e7eb',
+            backgroundColor: state.isDisabled ? '#f9fafb' : 'white', // Warna background saat disabled
             '&:hover': {
-                borderColor: '#3b82f6'
+                borderColor: state.isDisabled ? '#e5e7eb' : '#3b82f6'
             }
         }),
         valueContainer: (base) => ({
@@ -198,10 +219,9 @@ const FormBs = () => {
 
         if (isAdmin || userUnitOptions.length > 1) {
             setSelectedUnit(null)
+            setSelectedReviewer1(null)
+            setSelectedReviewer2(null)
         }
-
-        setSelectedReviewer1(null)
-        setSelectedReviewer2(null)
     }
 
     const formatRupiah = (number) => {
@@ -283,7 +303,6 @@ const FormBs = () => {
         'Samudera': 'SMDR',
     }), []);
 
-    // --- PERUBAHAN: Handler perubahan Unit Bisnis untuk SEMUA role agar Nomor BS terupdate ---
     const handleUnitChange = async (selectedOption) => {
         setSelectedUnit(selectedOption);
 
@@ -319,7 +338,6 @@ const FormBs = () => {
         }
     };
 
-    // --- PERUBAHAN: Modifikasi generateNomorBS awal agar membaca selectedUnit ---
     const generateNomorBS = useCallback(async () => {
         try {
             if (alreadyFetchBS) return null;
@@ -374,7 +392,6 @@ const FormBs = () => {
 
         fetchNomorBS()
     }, [todayDate, alreadyFetchBS, isUserDataLoaded, generateNomorBS, selectedUnit])
-
 
     const handleSubmit = async () => {
         try {
@@ -564,6 +581,7 @@ const FormBs = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={isSingleUnit} // <-- Di-disable jika unit cuma 1
                         />
                     </div>
                 </div>
@@ -594,6 +612,7 @@ const FormBs = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={isSingleUnit} // <-- Di-disable jika unit cuma 1
                         />
                     </div>
                 </div>

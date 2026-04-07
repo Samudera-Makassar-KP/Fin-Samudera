@@ -140,6 +140,31 @@ const FormLpjUmum = () => {
         fetchReviewer()
     }, [])
 
+    // Logika Auto-Fill Validator & Reviewer untuk user dengan 1 Unit Bisnis
+    useEffect(() => {
+        if (!isAdmin && userUnitOptions.length === 1) {
+            // Auto-fill Validator (Abaikan blok ini khusus untuk file FormBs)
+            if (validatorOptions.length > 0 && userData.validator?.length > 0) {
+                const defaultValidator = validatorOptions.find(opt => userData.validator.includes(opt.value));
+                if (defaultValidator) setSelectedValidator(defaultValidator);
+            }
+            
+            // Auto-fill Reviewer 1
+            if (reviewerOptions.length > 0 && userData.reviewer1?.length > 0) {
+                const defaultRev1 = reviewerOptions.find(opt => userData.reviewer1.includes(opt.value));
+                if (defaultRev1) setSelectedReviewer1(defaultRev1);
+            }
+            
+            // Auto-fill Reviewer 2
+            if (reviewerOptions.length > 0 && userData.reviewer2?.length > 0) {
+                const defaultRev2 = reviewerOptions.find(opt => userData.reviewer2.includes(opt.value));
+                if (defaultRev2) setSelectedReviewer2(defaultRev2);
+            }
+        }
+    }, [isAdmin, userUnitOptions.length, validatorOptions, reviewerOptions, userData]);
+
+    const isSingleUnit = !isAdmin && userUnitOptions.length === 1;
+
     const BUSINESS_UNITS = useMemo(
         () => [
             { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
@@ -746,6 +771,7 @@ const FormLpjUmum = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
