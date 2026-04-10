@@ -123,7 +123,6 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
             <td style="padding: 10px; border: 1px solid #ddd;">${formatCurrency(lpjData.sisaKurang || 0)}</td>
         </tr>`;
     } else {
-        // Tambahkan amount row hanya jika bukan LPJ
         tableRows += `
         <tr>
             <td style="padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;"><strong>${amountLabel}</strong></td>
@@ -181,7 +180,7 @@ const sendEmail = async (to, subject, htmlContent = null) => {
     if (!to) return;
     try {
         const mailOptions = {
-            from: process.env.EMAIL,
+            from: '"No Reply - Notifikasi Samudera" <' + process.env.EMAIL + '>',
             to,
             subject,
             html: htmlContent
@@ -193,10 +192,6 @@ const sendEmail = async (to, subject, htmlContent = null) => {
         console.error("❌ Gagal mengirim email:", error);
     }
 };
-
-// ----------------------------------------------------
-// ---- FUNGSI PEMICU (TRIGGERS) DARI KODE ASLI ANDA ----
-// ----------------------------------------------------
 
 // Trigger saat BS pertama kali dibuat
 exports.notifyReviewer1OnCreateBS = onDocumentCreated("bonSementara/{docId}", async (event) => {
@@ -831,89 +826,7 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
 // ---- FUNGSI TERJADWAL UNTUK PENGINGAT (REMINDER) - BARU DITAMBAHKAN ----
 // -----------------------------------------------------------------------------------
 
-/**
- * Fungsi ini akan berjalan setiap hari pada pukul 09:00 WIB.
- */
-exports.sendApprovalReminders = onSchedule({
-    schedule: "0 9 * * *",      // Jalan setiap jam 09:00
-    timeZone: "Asia/Jakarta",   // PENTING: Menggunakan waktu WIB
-    timeoutSeconds: 540,        // Timeout diperpanjang (9 menit) untuk antisipasi data banyak
-    memory: "256MiB"
-}, async (event) => {
-    console.log("⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WIB...");
-
-    const now = new Date();
-    
-    // Tentukan batas waktu (Cutoff). 
-    // Kita ingin mencari dokumen yang statusnya berubah SEBELUM jam 00:00 hari ini.
-    // Artinya dokumen tersebut menginap semalam dan belum diproses.
-    const startOfToday = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
-    startOfToday.setHours(0, 0, 0, 0); // Set ke jam 00:00:00 hari ini
-
-    // Definisi Status Flow untuk validasi tambahan
-    // BS: Diajukan (Rev1) -> Diproses (Rev2)
-    // RBS/LPJ: Diajukan (Val) -> Disetujui oleh Validator (Rev1) -> Disetujui oleh Reviewer 1 (Rev2)
-    
-    const documentTypes = [
-        { collection: "bonSementara", type: "BS" },
-        { collection: "lpj", type: "LPJ" },
-        { collection: "reimbursement", type: "RBS" },
-    ];
-
-    const emailPromises = [];
-
-    for (const docType of documentTypes) {
-        try {
-            // 1. Ambil dokumen yang statusnya masih aktif (belum selesai)
-            const querySnapshot = await db.collection(docType.collection)
-                .where('status', 'not-in', ['Disetujui', 'Ditolak', 'Dibatalkan'])
-                .get();
-
-            if (querySnapshot.empty) continue;
-
-            for (const doc of querySnapshot.docs) {
-                const data = doc.data();
-                const docId = doc.id;
-
-                // 2. Cek Current Approver (Siapa yang sedang pegang bola?)
-                const approverUid = data.currentApproverUid;
-                if (!approverUid) {
-                    console.log(`⚠️ Skip ${docType.type} ${data.displayId}: Tidak ada currentApproverUid.`);
-                    continue;
-                }
-
-                // 3. Cek Kapan Terakhir Berubah
-                // Gunakan lastStatusChange, jika tidak ada (dokumen baru), pakai tanggalPengajuan
-                const lastChangeStr = data.lastStatusChange || data.tanggalPengajuan;
-                const lastChangeDate = new Date(lastChangeStr);
-
-                // 4. Cek Logika Waktu:
-                // Apakah perubahan terakhir terjadi SEBELUM hari ini jam 00:00?
-                // Jika YA, berarti sudah lewat pukul 24:00 kemarin.
-                const isOverdue = lastChangeDate < startOfToday;
-
-                // 5. Cek apakah sudah diingatkan HARI INI?
-                // Agar tidak spam jika script dijalankan ulang manual
-                const lastReminderSentDate = data.lastReminderSent ? new Date(data.lastReminderSent) : null;
-                const alreadyRemindedToday = lastReminderSentDate && 
-                                             lastReminderSentDate >= startOfToday;
-
-                if (isOverdue && !alreadyRemindedToday) {
-                    // Masukkan ke antrian proses (Promise) agar parallel
-                    emailPromises.push(processReminder(doc, docType, approverUid, now));
-                }
-            }
-        } catch (error) {
-            console.error(`❌ Error pada koleksi ${docType.collection}:`, error);
-        }
-    }
-
-    // Tunggu semua email terkirim
-    await Promise.all(emailPromises);
-    console.log("✅ Selesai pengecekan pengajuan.");
-});
-
-// Fungsi terpisah untuk memproses pengiriman email reminder
+// PERBAIKAN: Fungsi processReminder dipindahkan ke ATAS sebelum sendApprovalReminders memanggilnya
 const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) => {
     const data = docSnapshot.data();
     
@@ -974,3 +887,76 @@ const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) 
         console.error(`❌ Gagal kirim reminder untuk ${data.displayId}:`, err);
     }
 };
+
+/**
+ * Fungsi ini akan berjalan setiap hari pada pukul 09:00 WIB.
+ */
+exports.sendApprovalReminders = onSchedule({
+    schedule: "0 9 * * *",      // Jalan setiap jam 09:00
+    timeZone: "Asia/Jakarta",   // PENTING: Menggunakan waktu WIB
+    timeoutSeconds: 540,        // Timeout diperpanjang (9 menit) untuk antisipasi data banyak
+    memory: "256MiB"
+}, async (event) => {
+    console.log("⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WIB...");
+
+    const now = new Date();
+    
+    // Tentukan batas waktu (Cutoff). 
+    // Kita ingin mencari dokumen yang statusnya berubah SEBELUM jam 00:00 hari ini.
+    // Artinya dokumen tersebut menginap semalam dan belum diproses.
+    const startOfToday = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    startOfToday.setHours(0, 0, 0, 0); // Set ke jam 00:00:00 hari ini
+
+    const documentTypes = [
+        { collection: "bonSementara", type: "BS" },
+        { collection: "lpj", type: "LPJ" },
+        { collection: "reimbursement", type: "RBS" },
+    ];
+
+    const emailPromises = [];
+
+    for (const docType of documentTypes) {
+        try {
+            // 1. Ambil dokumen yang statusnya masih aktif (belum selesai)
+            const querySnapshot = await db.collection(docType.collection)
+                .where('status', 'not-in', ['Disetujui', 'Ditolak', 'Dibatalkan'])
+                .get();
+
+            if (querySnapshot.empty) continue;
+
+            for (const doc of querySnapshot.docs) {
+                const data = doc.data();
+                
+                // 2. Cek Current Approver (Siapa yang sedang pegang bola?)
+                const approverUid = data.currentApproverUid;
+                if (!approverUid) {
+                    console.log(`⚠️ Skip ${docType.type} ${data.displayId}: Tidak ada currentApproverUid.`);
+                    continue;
+                }
+
+                // 3. Cek Kapan Terakhir Berubah
+                const lastChangeStr = data.lastStatusChange || data.tanggalPengajuan;
+                const lastChangeDate = new Date(lastChangeStr);
+
+                // 4. Cek Logika Waktu:
+                const isOverdue = lastChangeDate < startOfToday;
+
+                // 5. Cek apakah sudah diingatkan HARI INI?
+                const lastReminderSentDate = data.lastReminderSent ? new Date(data.lastReminderSent) : null;
+                const alreadyRemindedToday = lastReminderSentDate && 
+                                             lastReminderSentDate >= startOfToday;
+
+                if (isOverdue && !alreadyRemindedToday) {
+                    // Masukkan ke antrian proses (Promise) agar parallel
+                    emailPromises.push(processReminder(doc, docType, approverUid, now));
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Error pada koleksi ${docType.collection}:`, error);
+        }
+    }
+
+    // Tunggu semua email terkirim
+    await Promise.all(emailPromises);
+    console.log("✅ Selesai pengecekan pengajuan.");
+});

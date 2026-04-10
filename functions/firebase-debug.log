@@ -1,0 +1,185 @@
+[debug] [2026-03-31T02:43:50.028Z] ----------------------------------------------------------------------
+[debug] [2026-03-31T02:43:50.032Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\ASUS\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js functions:shell
+[debug] [2026-03-31T02:43:50.032Z] CLI Version:   15.12.0
+[debug] [2026-03-31T02:43:50.032Z] Platform:      win32
+[debug] [2026-03-31T02:43:50.032Z] Node Version:  v24.13.0
+[debug] [2026-03-31T02:43:50.033Z] Time:          Tue Mar 31 2026 10:43:50 GMT+0800 (Singapore Standard Time)
+[debug] [2026-03-31T02:43:50.033Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-03-31T02:43:53.583Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-31T02:43:53.584Z] > authorizing via signed-in user (cctv.samudera@gmail.com)
+[debug] [2026-03-31T02:43:53.584Z] [iam] checking project samudera-web-cbf2f for permissions ["firebase.projects.get"]
+[debug] [2026-03-31T02:43:53.587Z] Checked if tokens are valid: true, expires at: 1774928086361
+[debug] [2026-03-31T02:43:53.588Z] Checked if tokens are valid: true, expires at: 1774928086361
+[debug] [2026-03-31T02:43:53.590Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/samudera-web-cbf2f:testIamPermissions [none]
+[debug] [2026-03-31T02:43:53.590Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/samudera-web-cbf2f:testIamPermissions  x-goog-user-project=samudera-web-cbf2f
+[debug] [2026-03-31T02:43:53.590Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/samudera-web-cbf2f:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-03-31T02:43:54.079Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/samudera-web-cbf2f:testIamPermissions 200
+[debug] [2026-03-31T02:43:54.080Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/samudera-web-cbf2f:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-03-31T02:43:54.092Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2026-03-31T02:43:54.150Z] defaultcredentials: writing to file C:\Users\ASUS\AppData\Roaming\firebase\cctv_samudera_gmail.com_application_default_credentials.json
+[debug] [2026-03-31T02:43:54.153Z] DEBUG: Setting GAC to C:\Users\ASUS\AppData\Roaming\firebase\cctv_samudera_gmail.com_application_default_credentials.json
+[debug] [2026-03-31T02:43:54.155Z] Checked if tokens are valid: true, expires at: 1774928086361
+[debug] [2026-03-31T02:43:54.155Z] Checked if tokens are valid: true, expires at: 1774928086361
+[debug] [2026-03-31T02:43:54.155Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/samudera-web-cbf2f/adminSdkConfig [none]
+[debug] [2026-03-31T02:43:55.452Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/samudera-web-cbf2f/adminSdkConfig 200
+[debug] [2026-03-31T02:43:55.452Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/samudera-web-cbf2f/adminSdkConfig {"projectId":"samudera-web-cbf2f","storageBucket":"samudera-web-cbf2f.firebasestorage.app"}
+[debug] [2026-03-31T02:43:55.478Z] [functions] Watching "C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions" for Cloud Functions...
+[debug] [2026-03-31T02:43:55.483Z] Validating nodejs source
+[warn] !  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[warn] !  functions: Please note that there will be breaking changes when you upgrade. 
+[debug] [2026-03-31T02:43:57.913Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.1",
+    "nodemailer": "^6.10.0"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-31T02:43:57.913Z] Building nodejs source
+[debug] [2026-03-31T02:43:57.914Z] Failed to find version of module node: reached end of search path C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "24". Using node@24 from host. 
+[info] i  functions: Loaded environment variables from .env. 
+[debug] [2026-03-31T02:43:57.925Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-31T02:43:57.950Z] Found firebase-functions binary at 'C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8007
+
+[debug] [2026-03-31T02:43:59.615Z] Got response from /__/functions.yaml {"endpoints":{"notifyReviewer1OnCreateBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"bonSementara/{docId}"},"retry":false},"entryPoint":"notifyReviewer1OnCreateBS"},"notifyReviewersAndUserCreateBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"bonSementara/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserCreateBS"},"notifyValidatorOnCreateRBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"reimbursement/{docId}"},"retry":false},"entryPoint":"notifyValidatorOnCreateRBS"},"notifyReviewersAndUserRBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"reimbursement/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserRBS"},"notifyValidatorOnCreateLPJ":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"lpj/{docId}"},"retry":false},"entryPoint":"notifyValidatorOnCreateLPJ"},"notifyReviewersAndUserLPJ":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"lpj/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserLPJ"},"sendApprovalReminders":{"availableMemoryMb":256,"timeoutSeconds":540,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 9 * * *","retryConfig":{},"timeZone":"Asia/Jakarta"},"entryPoint":"sendApprovalReminders"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-31T02:44:03.706Z] [functions] Loaded functions definitions from source: notifyReviewer1OnCreateBS, notifyReviewersAndUserCreateBS, notifyValidatorOnCreateRBS, notifyReviewersAndUserRBS, notifyValidatorOnCreateLPJ, notifyReviewersAndUserLPJ, sendApprovalReminders.
+[debug] [2026-03-31T02:44:03.707Z] [functions[us-central1-notifyReviewer1OnCreateBS]] function ignored because the firestore emulator does not exist or is not running.
+[debug] [2026-03-31T02:44:03.707Z] [functions[us-central1-notifyReviewersAndUserCreateBS]] function ignored because the firestore emulator does not exist or is not running.
+[debug] [2026-03-31T02:44:03.708Z] [functions[us-central1-notifyValidatorOnCreateRBS]] function ignored because the firestore emulator does not exist or is not running.
+[debug] [2026-03-31T02:44:03.708Z] [functions[us-central1-notifyReviewersAndUserRBS]] function ignored because the firestore emulator does not exist or is not running.
+[debug] [2026-03-31T02:44:03.708Z] [functions[us-central1-notifyValidatorOnCreateLPJ]] function ignored because the firestore emulator does not exist or is not running.
+[debug] [2026-03-31T02:44:03.708Z] [functions[us-central1-notifyReviewersAndUserLPJ]] function ignored because the firestore emulator does not exist or is not running.
+[debug] [2026-03-31T02:44:03.708Z] [functions[us-central1-sendApprovalReminders]] function ignored because the pubsub emulator does not exist or is not running.
+[info] i  functions: Loaded functions: notifyReviewer1OnCreateBS, notifyReviewersAndUserCreateBS, notifyValidatorOnCreateRBS, notifyReviewersAndUserRBS, notifyValidatorOnCreateLPJ, notifyReviewersAndUserLPJ, sendApprovalReminders 
+[warn] !  functions: The following emulators are not running, calls to these services will affect production: firestore, database, pubsub, storage, eventarc, tasks 
+[debug] [2026-03-31T02:44:05.676Z] shell:sendApprovalReminders: trigger={"entryPoint":"sendApprovalReminders","platform":"gcfv2","region":"us-central1","name":"sendApprovalReminders","id":"us-central1-sendApprovalReminders","codebase":"default","availableMemoryMb":256,"labels":{"EVENTARC_CLOUD_EVENT_SOURCE":"run-emulated.googleapis.com/projects/samudera-web-cbf2f/locations/us-central1/services/sendApprovalReminders"},"timeoutSeconds":540,"secretEnvironmentVariables":[],"eventTrigger":{"eventType":"pubsub","resource":""},"schedule":{"schedule":"0 9 * * *","timeZone":"Asia/Jakarta","retryConfig":{}}}
+[debug] [2026-03-31T02:44:05.677Z] shell:sendApprovalReminders: opts={}, data={}
+[info] i  functions: Loaded environment variables from .env. 
+[debug] [2026-03-31T02:44:05.721Z] DEBUG: [worker-pool] addWorker(us-central1-sendApprovalReminders)
+[debug] [2026-03-31T02:44:05.724Z] DEBUG: [worker-pool] Adding worker with key us-central1-sendApprovalReminders, total=1
+[debug] [2026-03-31T02:44:07.139Z] DEBUG: [runtime-status] [27312] Resolved module firebase-admin {"declared":true,"installed":true,"version":"13.0.2","resolution":"C:\\Users\\ASUS\\Fin Samudera\\Fin-Samudera\\functions\\node_modules\\firebase-admin\\lib\\index.js"}
+[debug] [2026-03-31T02:44:07.140Z] DEBUG: [runtime-status] [27312] Resolved module firebase-functions {"declared":true,"installed":true,"version":"6.3.1","resolution":"C:\\Users\\ASUS\\Fin Samudera\\Fin-Samudera\\functions\\node_modules\\firebase-functions\\lib\\v2\\index.js"}
+[debug] [2026-03-31T02:44:07.141Z] DEBUG: [runtime-status] [27312] Outgoing network have been stubbed. [{"name":"http","status":"mocked"},{"name":"http","status":"mocked"},{"name":"https","status":"mocked"},{"name":"https","status":"mocked"},{"name":"net","status":"mocked"}]
+[debug] [2026-03-31T02:44:07.142Z] DEBUG: [runtime-status] [27312] Resolved module firebase-functions {"declared":true,"installed":true,"version":"6.3.1","resolution":"C:\\Users\\ASUS\\Fin Samudera\\Fin-Samudera\\functions\\node_modules\\firebase-functions\\lib\\v2\\index.js"}
+[debug] [2026-03-31T02:44:07.542Z] DEBUG: [runtime-status] [27312] Resolved module firebase-admin {"declared":true,"installed":true,"version":"13.0.2","resolution":"C:\\Users\\ASUS\\Fin Samudera\\Fin-Samudera\\functions\\node_modules\\firebase-admin\\lib\\index.js"}
+[debug] [2026-03-31T02:44:07.547Z] DEBUG: [runtime-status] [27312] Resolved module firebase-functions {"declared":true,"installed":true,"version":"6.3.1","resolution":"C:\\Users\\ASUS\\Fin Samudera\\Fin-Samudera\\functions\\node_modules\\firebase-functions\\lib\\v2\\index.js"}
+[debug] [2026-03-31T02:44:07.743Z] DEBUG: [runtime-status] [27312] firebase-admin has been stubbed. {"adminResolution":{"declared":true,"installed":true,"version":"13.0.2","resolution":"C:\\Users\\ASUS\\Fin Samudera\\Fin-Samudera\\functions\\node_modules\\firebase-admin\\lib\\index.js"}}
+[debug] [2026-03-31T02:44:07.824Z] DEBUG: [runtime-status] [27312] Functions runtime initialized. {"cwd":"C:\\Users\\ASUS\\Fin Samudera\\Fin-Samudera\\functions","node_version":"24.13.0"}
+[debug] [2026-03-31T02:44:07.826Z] DEBUG: [runtime-status] [27312] Listening to port: \\?\pipe\fire_emu_aecffc1f2c7e0586
+[debug] [2026-03-31T02:44:07.835Z] DEBUG: [worker-us-central1-sendApprovalReminders-60aed6f4-0670-46c5-97b1-b245686402bf]: IDLE
+[info] >  ⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WIB... {"user":"⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WIB...","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WIB..."}}
+[warn] !  Google API requested!
+   - URL: "https://oauth2.googleapis.com/token"
+   - Be careful, this may be a production service. {"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"Google API requested!\n   - URL: \"https://oauth2.googleapis.com/token\"\n   - Be careful, this may be a production service."}}
+[info] >  ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com {"user":"✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com"}}
+[info] >  ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com {"user":"✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com"}}
+[info] >  ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com {"user":"✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com"}}
+[info] >  ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com {"user":"✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com"}}
+[info] >  ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com {"user":"✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com"}}
+[info] >  ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com {"user":"✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ✅ Email berhasil dikirim ke nurulimamahtamrin03@gmail.com"}}
+[info] >  ✅ Selesai pengecekan pengajuan. {"user":"✅ Selesai pengecekan pengajuan.","metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-sendApprovalReminders"},"extension":{},"message":"\u001b[90m> \u001b[39m ✅ Selesai pengecekan pengajuan."}}
+[debug] [2026-03-31T02:47:22.941Z] DEBUG: File C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\index.js changed, reloading triggers
+[debug] [2026-03-31T02:47:23.953Z] Validating nodejs source
+[warn] !  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[warn] !  functions: Please note that there will be breaking changes when you upgrade. 
+[debug] [2026-03-31T02:47:26.064Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.1",
+    "nodemailer": "^6.10.0"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-31T02:47:26.064Z] Building nodejs source
+[debug] [2026-03-31T02:47:26.065Z] Failed to find version of module node: reached end of search path C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "24". Using node@24 from host. 
+[info] i  functions: Loaded environment variables from .env. 
+[debug] [2026-03-31T02:47:26.068Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-31T02:47:26.077Z] Found firebase-functions binary at 'C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8168
+
+[debug] [2026-03-31T02:47:27.175Z] Got response from /__/functions.yaml {"endpoints":{"notifyReviewer1OnCreateBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"bonSementara/{docId}"},"retry":false},"entryPoint":"notifyReviewer1OnCreateBS"},"notifyReviewersAndUserCreateBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"bonSementara/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserCreateBS"},"notifyValidatorOnCreateRBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"reimbursement/{docId}"},"retry":false},"entryPoint":"notifyValidatorOnCreateRBS"},"notifyReviewersAndUserRBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"reimbursement/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserRBS"},"notifyValidatorOnCreateLPJ":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"lpj/{docId}"},"retry":false},"entryPoint":"notifyValidatorOnCreateLPJ"},"notifyReviewersAndUserLPJ":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"lpj/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserLPJ"},"sendApprovalReminders":{"availableMemoryMb":256,"timeoutSeconds":540,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 9 * * *","retryConfig":{},"timeZone":"Asia/Jakarta"},"entryPoint":"sendApprovalReminders"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-31T02:47:31.248Z] [functions] Loaded functions definitions from source: notifyReviewer1OnCreateBS, notifyReviewersAndUserCreateBS, notifyValidatorOnCreateRBS, notifyReviewersAndUserRBS, notifyValidatorOnCreateLPJ, notifyReviewersAndUserLPJ, sendApprovalReminders.
+[debug] [2026-03-31T02:47:31.248Z] DEBUG: [worker-pool] Shutting down IDLE worker (us-central1-sendApprovalReminders)
+[debug] [2026-03-31T02:47:31.249Z] DEBUG: [worker-us-central1-sendApprovalReminders-60aed6f4-0670-46c5-97b1-b245686402bf]: FINISHING
+[debug] [2026-03-31T02:47:31.273Z] DEBUG: [worker-us-central1-sendApprovalReminders-60aed6f4-0670-46c5-97b1-b245686402bf]: exited
+[debug] [2026-03-31T02:47:31.273Z] DEBUG: [worker-us-central1-sendApprovalReminders-60aed6f4-0670-46c5-97b1-b245686402bf]: FINISHED
+[debug] [2026-03-31T02:55:31.546Z] DEBUG: File C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\index.js changed, reloading triggers
+[debug] [2026-03-31T02:55:32.585Z] Validating nodejs source
+[warn] !  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[warn] !  functions: Please note that there will be breaking changes when you upgrade. 
+[debug] [2026-03-31T02:55:36.012Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.1",
+    "nodemailer": "^6.10.0"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-31T02:55:36.013Z] Building nodejs source
+[debug] [2026-03-31T02:55:36.015Z] Failed to find version of module node: reached end of search path C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "24". Using node@24 from host. 
+[info] i  functions: Loaded environment variables from .env. 
+[debug] [2026-03-31T02:55:36.038Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-31T02:55:36.074Z] Found firebase-functions binary at 'C:\Users\ASUS\Fin Samudera\Fin-Samudera\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8504
+
+[debug] [2026-03-31T02:55:37.197Z] Got response from /__/functions.yaml {"endpoints":{"notifyReviewer1OnCreateBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"bonSementara/{docId}"},"retry":false},"entryPoint":"notifyReviewer1OnCreateBS"},"notifyReviewersAndUserCreateBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"bonSementara/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserCreateBS"},"notifyValidatorOnCreateRBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"reimbursement/{docId}"},"retry":false},"entryPoint":"notifyValidatorOnCreateRBS"},"notifyReviewersAndUserRBS":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"reimbursement/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserRBS"},"notifyValidatorOnCreateLPJ":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.created","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"lpj/{docId}"},"retry":false},"entryPoint":"notifyValidatorOnCreateLPJ"},"notifyReviewersAndUserLPJ":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"lpj/{docId}"},"retry":false},"entryPoint":"notifyReviewersAndUserLPJ"},"sendApprovalReminders":{"availableMemoryMb":256,"timeoutSeconds":540,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 9 * * *","retryConfig":{},"timeZone":"Asia/Jakarta"},"entryPoint":"sendApprovalReminders"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-31T02:55:41.272Z] [functions] Loaded functions definitions from source: notifyReviewer1OnCreateBS, notifyReviewersAndUserCreateBS, notifyValidatorOnCreateRBS, notifyReviewersAndUserRBS, notifyValidatorOnCreateLPJ, notifyReviewersAndUserLPJ, sendApprovalReminders.
