@@ -648,7 +648,8 @@ const FormLpjMarketing = () => {
         })
     }
 
-    const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, 'lpj-marketing', initialLpjState)
+    const draftKey = `lpj-marketing_${userData.uid}_${nomorBS || 'new'}`;
+const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, initialLpjState);
 
     // --- Mengubah handling file pada saveDraft ---
     const handleSaveDraft = async () => {

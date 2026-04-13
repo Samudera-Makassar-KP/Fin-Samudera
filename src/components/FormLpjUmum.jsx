@@ -613,7 +613,8 @@ const FormLpjUmum = () => {
         })
     }
 
-    const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, 'lpj-umum', initialLpjState)
+    const draftKey = `lpj-umum_${userData.uid}_${nomorBS || 'new'}`;
+    const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS)
 
     // --- Mengubah handling file pada saveDraft ---
     const handleSaveDraft = async () => {
