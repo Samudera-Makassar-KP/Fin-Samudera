@@ -43,20 +43,21 @@ const AppContent = () => {
                     } />
 
                     {/* Reimbursement Routes */}
+                    {/* Reimbursement Routes */}
                     <Route path="/reimbursement/bbm" element={
-                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <RbsBbm />
                         </ProtectedRoute>
                     } />
 
                     <Route path="/reimbursement/operasional" element={
-                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <RbsOperasional />
                         </ProtectedRoute>
                     } />
 
                     <Route path="/reimbursement/umum" element={
-                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <RbsUmum />
                         </ProtectedRoute>
                     } />

@@ -13,6 +13,7 @@ import { faSpinner, faTimes, faPenToSquare } from '@fortawesome/free-solid-svg-i
 
 const ReimbursementCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')
+    const navigate = useNavigate()
     const [data, setData] = useState({ reimbursements: [] })
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
     const [approvedData, setApprovedData] = useState({ reimbursements: [] })
@@ -52,6 +53,39 @@ const ReimbursementCheck = () => {
     // Fungsi untuk menutup modal
     const closeModal = () => {
         setShowModal(false)
+    }
+
+    // --- TAMBAHKAN KODE INI ---
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [selectedEditReport, setSelectedEditReport] = useState(null)
+
+    const handleEditClick = (item) => {
+        if (item.kategori === 'BBM') {
+            navigate('/reimbursement/bbm', { state: { isEditMode: true, editData: item } });
+            
+        } else if (item.kategori === 'Operasional') {
+            navigate('/reimbursement/operasional', { state: { isEditMode: true, editData: item } });
+            
+        } else if (item.kategori === 'GA/Umum' || item.kategori === 'Umum') {
+            navigate('/reimbursement/umum', { state: { isEditMode: true, editData: item } });
+        }
+    }
+
+    const handleCloseEditModal = () => {
+        setIsEditModalOpen(false)
+        setSelectedEditReport(null)
+    }
+    // -------------------------
+
+    const handleSuccessEdit = (updatedItemData) => {
+        // Update data di tabel secara real-time tanpa perlu refresh page
+        setData((prevData) => ({
+            reimbursements: prevData.reimbursements.map((r) =>
+                r.id === updatedItemData.id ? { ...r, ...updatedItemData } : r
+            )
+        }))
+        setIsEditModalOpen(false)
+        setSelectedEditReport(null)
     }
 
     useEffect(() => {
@@ -879,14 +913,27 @@ const ReimbursementCheck = () => {
                                                         </span>
                                                     </td>
                                                     <td className="p-2 border text-center">
-                                                        <div className="flex justify-center space-x-2">
+                                                        <div className="flex justify-center items-center space-x-2">
+                                                            
+                                                            {/* --- TAMBAHAN TOMBOL EDIT KHUSUS SUPER ADMIN --- */}
+                                                            {userRole === 'Super Admin' && (
+                                                                <button
+                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                    onClick={() => handleEditClick(item)}
+                                                                    title="Edit Data"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            {/* ----------------------------------------------- */}
+
                                                             <button
-                                                                className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600"
+                                                                className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600 flex items-center justify-center w-8 h-8"
                                                                 onClick={() => handleApprove(item)}
                                                                 title="Approve"
                                                             >
                                                                 <svg
-                                                                    className="w-6 h-6"
+                                                                    className="w-5 h-5"
                                                                     viewBox="0 0 24 24"
                                                                     fill="none"
                                                                     stroke="currentColor"
@@ -901,12 +948,12 @@ const ReimbursementCheck = () => {
                                                             </button>
 
                                                             <button
-                                                                className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600"
+                                                                className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600 flex items-center justify-center w-8 h-8"
                                                                 onClick={() => handleReject(item)}
                                                                 title="Reject"
                                                             >
                                                                 <svg
-                                                                    className="w-6 h-6"
+                                                                    className="w-5 h-5"
                                                                     viewBox="0 0 24 24"
                                                                     fill="none"
                                                                     stroke="currentColor"
