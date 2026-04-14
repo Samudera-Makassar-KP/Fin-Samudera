@@ -783,7 +783,7 @@ const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, 
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                            isDisabled={!isSuperAdmin}
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -821,7 +821,7 @@ const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, 
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                            isDisabled={!isSuperAdmin}
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -851,7 +851,7 @@ const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, 
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                            isDisabled={!isSuperAdmin}
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 

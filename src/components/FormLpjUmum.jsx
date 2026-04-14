@@ -751,7 +751,7 @@ const FormLpjUmum = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                           isDisabled={!isSuperAdmin}
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -799,7 +799,7 @@ const FormLpjUmum = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                            isDisabled={!isSuperAdmin}
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -832,7 +832,7 @@ const FormLpjUmum = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                            isDisabled={!isSuperAdmin}  
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 

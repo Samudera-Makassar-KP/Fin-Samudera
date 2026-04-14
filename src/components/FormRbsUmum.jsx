@@ -57,6 +57,7 @@ const RbsUmumForm = () => {
     const [selectedUnit, setSelectedUnit] = useState(null)
     const [userUnitOptions, setUserUnitOptions] = useState([])
     const [isAdmin, setIsAdmin] = useState(false)
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
     const [validatorOptions, setValidatorOptions] = useState([])
     const [selectedValidator, setSelectedValidator] = useState(null)
@@ -119,29 +120,27 @@ const RbsUmumForm = () => {
     }, [])
 
     // Logika Auto-Fill Validator & Reviewer untuk user dengan 1 Unit Bisnis
-    useEffect(() => {
-        if (!isAdmin && userUnitOptions.length === 1) {
-            // Auto-fill Validator (Abaikan blok ini khusus untuk file FormBs)
+   useEffect(() => {
+        if (userData.uid) { 
+            // Auto-fill Validator
             if (validatorOptions.length > 0 && userData.validator?.length > 0) {
                 const defaultValidator = validatorOptions.find(opt => userData.validator.includes(opt.value));
                 if (defaultValidator) setSelectedValidator(defaultValidator);
             }
-            
             // Auto-fill Reviewer 1
             if (reviewerOptions.length > 0 && userData.reviewer1?.length > 0) {
                 const defaultRev1 = reviewerOptions.find(opt => userData.reviewer1.includes(opt.value));
                 if (defaultRev1) setSelectedReviewer1(defaultRev1);
             }
-            
             // Auto-fill Reviewer 2
             if (reviewerOptions.length > 0 && userData.reviewer2?.length > 0) {
                 const defaultRev2 = reviewerOptions.find(opt => userData.reviewer2.includes(opt.value));
                 if (defaultRev2) setSelectedReviewer2(defaultRev2);
             }
         }
-    }, [isAdmin, userUnitOptions.length, validatorOptions, reviewerOptions, userData]);
+    }, [userData, validatorOptions, reviewerOptions]);
 
-    const isSingleUnit = !isAdmin && userUnitOptions.length === 1;
+    const isSingleUnit = !isSuperAdmin && userUnitOptions.length === 1;
 
     const BUSINESS_UNITS = [
         { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
@@ -182,6 +181,7 @@ const RbsUmumForm = () => {
                     const data = userDoc.data()
                     const adminStatus = data.role === 'Admin' || data.role === 'Super Admin'
                     setIsAdmin(adminStatus)
+                    setIsSuperAdmin(data.role === 'Super Admin')
 
                     const userUnitsArray = Array.isArray(data.unit) ? data.unit : (data.unit ? [data.unit] : [])
 
@@ -640,14 +640,16 @@ const RbsUmumForm = () => {
     }
 
     const customStyles = {
-        control: (base) => ({
+        control: (base, state) => ({
             ...base,
             padding: '0 7px',
             height: '40px',
             minHeight: '40px',
             borderColor: '#e5e7eb',
+            backgroundColor: state.isDisabled ? '#f9fafb' : 'white',
+            cursor: state.isDisabled ? 'not-allowed' : 'default',
             '&:hover': {
-                borderColor: '#3b82f6'
+                borderColor: state.isDisabled ? '#e5e7eb' : '#3b82f6'
             }
         }),
         valueContainer: (base) => ({
@@ -723,6 +725,7 @@ const RbsUmumForm = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -752,6 +755,7 @@ const RbsUmumForm = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -778,7 +782,7 @@ const RbsUmumForm = () => {
                             Unit Bisnis <span className="text-red-500">*</span>
                         </label>
                         <Select
-                            options={isAdmin ? BUSINESS_UNITS : userUnitOptions}
+                            options={isSuperAdmin ? BUSINESS_UNITS : userUnitOptions}
                             value={selectedUnit}
                             onChange={setSelectedUnit}
                             placeholder="Pilih Unit Bisnis"

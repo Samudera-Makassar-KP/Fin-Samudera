@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { collection, addDoc, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
@@ -56,6 +56,7 @@ const RbsBbmForm = () => {
     const [selectedUnit, setSelectedUnit] = useState(null)
     const [userUnitOptions, setUserUnitOptions] = useState([])
     const [isAdmin, setIsAdmin] = useState(false)
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
     const [validatorOptions, setValidatorOptions] = useState([])
     const [selectedValidator, setSelectedValidator] = useState(null)
@@ -64,7 +65,9 @@ const RbsBbmForm = () => {
     const [selectedReviewer1, setSelectedReviewer1] = useState(null)
     const [selectedReviewer2, setSelectedReviewer2] = useState(null)
 
+   
     // --- PERUBAHAN: Hapus if (isAdmin) agar semua role fetch data validator & reviewer ---
+    // 1. Fetch Validator (Sekarang sudah bawa data 'unit')
     useEffect(() => {
         const fetchValidators = async () => {
             try {
@@ -77,7 +80,8 @@ const RbsBbmForm = () => {
                     return {
                         value: userData.uid,
                         label: userData.nama,
-                        role: userData.role
+                        role: userData.role,
+                        unit: userData.unit || [] // <-- INI YANG KURANG TADI! Wajib ada agar filter jalan
                     }
                 })
 
@@ -91,6 +95,7 @@ const RbsBbmForm = () => {
         fetchValidators()
     }, [])
 
+    // 2. Fetch Reviewer (Sekarang sudah bawa data 'unit')
     useEffect(() => {
         const fetchReviewer = async () => {
             try {
@@ -103,7 +108,8 @@ const RbsBbmForm = () => {
                     return {
                         value: userData.uid,
                         label: userData.nama,
-                        role: userData.role
+                        role: userData.role,
+                        unit: userData.unit || [] // <-- INI JUGA WAJIB ADA
                     }
                 })
 
@@ -117,30 +123,34 @@ const RbsBbmForm = () => {
         fetchReviewer()
     }, [])
 
-    // Logika Auto-Fill Validator & Reviewer untuk user dengan 1 Unit Bisnis
+    const isSingleUnit = !isSuperAdmin && userUnitOptions.length === 1;
+
     useEffect(() => {
-        if (!isAdmin && userUnitOptions.length === 1) {
-            // Auto-fill Validator (Abaikan blok ini khusus untuk file FormBs)
+        if (userData.uid) { 
+            // Auto-fill Validator
             if (validatorOptions.length > 0 && userData.validator?.length > 0) {
                 const defaultValidator = validatorOptions.find(opt => userData.validator.includes(opt.value));
                 if (defaultValidator) setSelectedValidator(defaultValidator);
             }
-            
             // Auto-fill Reviewer 1
             if (reviewerOptions.length > 0 && userData.reviewer1?.length > 0) {
                 const defaultRev1 = reviewerOptions.find(opt => userData.reviewer1.includes(opt.value));
                 if (defaultRev1) setSelectedReviewer1(defaultRev1);
             }
-            
             // Auto-fill Reviewer 2
             if (reviewerOptions.length > 0 && userData.reviewer2?.length > 0) {
                 const defaultRev2 = reviewerOptions.find(opt => userData.reviewer2.includes(opt.value));
                 if (defaultRev2) setSelectedReviewer2(defaultRev2);
             }
         }
-    }, [isAdmin, userUnitOptions.length, validatorOptions, reviewerOptions, userData]);
+    }, [userData, validatorOptions, reviewerOptions]);
 
-    const isSingleUnit = !isAdmin && userUnitOptions.length === 1;
+    const filteredReviewerOptions = useMemo(() => {
+        if (!selectedUnit) return [];
+        return reviewerOptions.filter(opt => 
+            Array.isArray(opt.unit) ? opt.unit.includes(selectedUnit.value) : opt.unit === selectedUnit.value
+        );
+    }, [selectedUnit, reviewerOptions]);
 
     const BUSINESS_UNITS = [
         { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
@@ -180,6 +190,7 @@ const RbsBbmForm = () => {
                     const data = userDoc.data()
                     const adminStatus = data.role === 'Admin' || data.role === 'Super Admin'
                     setIsAdmin(adminStatus)
+                    setIsSuperAdmin(data.role === 'Super Admin')
 
                     const userUnitsArray = Array.isArray(data.unit) ? data.unit : (data.unit ? [data.unit] : [])
 
@@ -650,15 +661,18 @@ const RbsBbmForm = () => {
         )
     }
 
+    // --- KODE LANGKAH 5: Style untuk mengubah warna jadi abu-abu kalau terkunci ---
     const customStyles = {
-        control: (base) => ({
+        control: (base, state) => ({
             ...base,
             padding: '0 7px',
             height: '40px',
             minHeight: '40px',
             borderColor: '#e5e7eb',
+            backgroundColor: state.isDisabled ? '#f9fafb' : 'white',
+            cursor: state.isDisabled ? 'not-allowed' : 'default',
             '&:hover': {
-                borderColor: '#3b82f6'
+                borderColor: state.isDisabled ? '#e5e7eb' : '#3b82f6'
             }
         }),
         valueContainer: (base) => ({
@@ -734,6 +748,7 @@ const RbsBbmForm = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -763,6 +778,7 @@ const RbsBbmForm = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={isSingleUnit}
                         />
                     </div>
 
@@ -789,7 +805,7 @@ const RbsBbmForm = () => {
                             Unit Bisnis <span className="text-red-500">*</span>
                         </label>
                         <Select
-                            options={isAdmin ? BUSINESS_UNITS : userUnitOptions}
+                            options={isSuperAdmin ? BUSINESS_UNITS : userUnitOptions}
                             value={selectedUnit}
                             onChange={setSelectedUnit}
                             placeholder="Pilih Unit Bisnis"
