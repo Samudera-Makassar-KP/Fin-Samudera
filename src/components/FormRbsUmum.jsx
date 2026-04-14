@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, addDoc, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
@@ -7,8 +7,15 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons' // Tambah faTimes
+import { useLocation, useNavigate } from 'react-router-dom';
+
 
 const RbsUmumForm = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const isEditMode = location.state?.isEditMode || false;
+    const editData = location.state?.editData || null;
+
     const [todayDate, setTodayDate] = useState('')
     const [userData, setUserData] = useState({
         uid: '',
@@ -240,7 +247,13 @@ const RbsUmumForm = () => {
     }
 
     const formatRupiah = (number) => {
-        const strNumber = number.replace(/[^,\d]/g, '').toString()
+        // Cegah error jika data kosong (undefined/null)
+        if (number === undefined || number === null) return ''
+
+        // Paksa ubah ke bentuk teks (String) sebelum di-replace
+        const stringNumber = number.toString()
+        const strNumber = stringNumber.replace(/[^,\d]/g, '')
+        
         const split = strNumber.split(',')
         const sisa = split[0].length % 3
         let rupiah = split[0].substr(0, sisa)
@@ -252,7 +265,7 @@ const RbsUmumForm = () => {
         }
 
         rupiah = split[1] !== undefined ? rupiah + ',' + split[1] : rupiah
-        return 'Rp' + rupiah
+        return rupiah ? 'Rp' + rupiah : ''
     }
 
     const handleAddForm = () => {
@@ -378,6 +391,52 @@ const RbsUmumForm = () => {
         }
     }
 
+    useEffect(() => {
+        if (isEditMode && editData && editData.reimbursements) {
+            
+            // 1. Set Item Reimbursement
+            const formattedReimbursements = editData.reimbursements.map(item => ({
+                ...item,
+                biaya: item.biaya?.toString() || '',
+                jenis: typeof item.jenis === 'string' 
+                        ? { value: item.jenis, label: item.jenis } 
+                        : item.jenis,
+            }));
+            setReimbursements(formattedReimbursements);
+
+            // 2. Paksa set data user pengaju (Gunakan setTimeout agar tidak tertimpa data login)
+            setTimeout(() => {
+                if (editData.user) {
+                    setUserData({
+                        uid: editData.user.uid,
+                        nama: editData.user.nama,
+                        bankName: editData.user.bankName || '',
+                        accountNumber: editData.user.accountNumber || '',
+                        department: editData.user.department || ''
+                    });
+
+                    // 3. Set Dropdown Unit
+                    if (editData.user.unit) {
+                        setSelectedUnit({ value: editData.user.unit, label: editData.user.unit });
+                    }
+
+                    // 4. Set Dropdown Approval (Cari label berdasarkan value yang cocok di opsi)
+                    const findOption = (options, val) => options.find(o => o.value === val) || { value: val, label: val };
+
+                    if (editData.user.validator) {
+                        setSelectedValidator(findOption(validatorOptions, editData.user.validator[0]));
+                    }
+                    if (editData.user.reviewer1) {
+                        setSelectedReviewer1(findOption(reviewerOptions, editData.user.reviewer1[0]));
+                    }
+                    if (editData.user.reviewer2) {
+                        setSelectedReviewer2(findOption(reviewerOptions, editData.user.reviewer2[0]));
+                    }
+                }
+            }, 100); 
+        }
+    }, [isEditMode, editData, validatorOptions, reviewerOptions]);
+
     const handleSubmit = async () => {
         try {
             setIsSubmitting(true)
@@ -417,7 +476,7 @@ const RbsUmumForm = () => {
                 }
             })
 
-            if (attachmentFiles.length === 0) {
+            if (!isEditMode && attachmentFiles.length === 0) {
                 missingFields.push('File Lampiran')
             }
 
@@ -466,7 +525,7 @@ const RbsUmumForm = () => {
                     keterangan: item.keterangan,
                     tanggal: item.tanggal,
                     isLainnya: item.isLainnya,
-                    jenis: item.isLainnya ? item.jenisLain : item.jenis.value
+                    jenis: item.isLainnya ? item.jenisLain : item.jenis?.value || item.jenis
                 })),
                 displayId: displayId,
                 kategori: 'GA/Umum',
@@ -491,17 +550,44 @@ const RbsUmumForm = () => {
                 updatedAt: new Date().toISOString()
             }
 
-            const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
-            await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
+            if (isEditMode) {
+                // JIKA EDIT: Gunakan updateDoc
+                const reimbursementRef = doc(db, 'reimbursement', editData.id)
+                
+                let updateData = {
+                    reimbursements: reimbursementData.reimbursements,
+                    totalBiaya: reimbursementData.totalBiaya,
+                    statusHistory: arrayUnion({
+                        status: 'Data Diubah oleh Super Admin',
+                        timestamp: new Date().toISOString(),
+                        actor: userData.uid,
+                        reason: 'Super Admin mengedit detail form GA/Umum'
+                    })
+                }
 
-            console.log('Reimbursement berhasil dibuat:', {
-                firestoreId: docRef.id,
-                displayId: displayId
-            })
-            toast.success('Reimbursement GA/Umum berhasil diajukan!')
+                // Update lampiran hanya jika Super Admin mengunggah file baru
+                if (attachmentFiles.length > 0) {
+                    updateData.lampiran = reimbursementData.lampiran;
+                    updateData.lampiranUrl = reimbursementData.lampiranUrl;
+                }
 
-            resetForm()
-            setIsSubmitting(false)
+                await updateDoc(reimbursementRef, updateData)
+                toast.success('Reimbursement GA/Umum berhasil diperbarui!')
+                
+                setIsSubmitting(false)
+                navigate('/reimbursement/cek-pengajuan')
+
+            } else {
+                // JIKA BIKIN BARU: Gunakan addDoc
+                const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
+                await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
+
+                toast.success('Reimbursement GA/Umum berhasil diajukan!')
+
+                resetForm()
+                setIsSubmitting(false)
+            }
+            
         } catch (error) {
             console.error('Error submitting reimbursement:', error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
@@ -876,5 +962,4 @@ const RbsUmumForm = () => {
         </div>
     )
 }
-
 export default RbsUmumForm

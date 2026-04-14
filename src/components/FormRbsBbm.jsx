@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, addDoc, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
@@ -7,8 +7,14 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons' // Tambah faTimes untuk icon hapus file
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const RbsBbmForm = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const isEditMode = location.state?.isEditMode || false;
+    const editData = location.state?.editData || null;
+
     const [todayDate, setTodayDate] = useState('')
     const [userData, setUserData] = useState({
         uid: '',
@@ -239,7 +245,13 @@ const RbsBbmForm = () => {
     }
 
     const formatRupiah = (number) => {
-        const strNumber = number.replace(/[^,\d]/g, '').toString()
+        // Cegah error jika data kosong (undefined/null)
+        if (number === undefined || number === null) return ''
+
+        // Paksa ubah ke bentuk teks (String) sebelum di-replace
+        const stringNumber = number.toString()
+        const strNumber = stringNumber.replace(/[^,\d]/g, '')
+        
         const split = strNumber.split(',')
         const sisa = split[0].length % 3
         let rupiah = split[0].substr(0, sisa)
@@ -251,7 +263,7 @@ const RbsBbmForm = () => {
         }
 
         rupiah = split[1] !== undefined ? rupiah + ',' + split[1] : rupiah
-        return 'Rp' + rupiah
+        return rupiah ? 'Rp' + rupiah : ''
     }
 
     const handleAddForm = () => {
@@ -383,6 +395,52 @@ const RbsBbmForm = () => {
         }
     }
 
+    useEffect(() => {
+        if (isEditMode && editData && editData.reimbursements) {
+            
+            // 1. Set Item Reimbursement
+            const formattedReimbursements = editData.reimbursements.map(item => ({
+                ...item,
+                biaya: item.biaya?.toString() || '',
+                jenis: typeof item.jenis === 'string' 
+                        ? { value: item.jenis, label: item.jenis } 
+                        : item.jenis,
+            }));
+            setReimbursements(formattedReimbursements);
+
+            // 2. Paksa set data user pengaju (Gunakan setTimeout agar tidak tertimpa data login)
+            setTimeout(() => {
+                if (editData.user) {
+                    setUserData({
+                        uid: editData.user.uid,
+                        nama: editData.user.nama,
+                        bankName: editData.user.bankName || '',
+                        accountNumber: editData.user.accountNumber || '',
+                        department: editData.user.department || ''
+                    });
+
+                    // 3. Set Dropdown Unit
+                    if (editData.user.unit) {
+                        setSelectedUnit({ value: editData.user.unit, label: editData.user.unit });
+                    }
+
+                    // 4. Set Dropdown Approval (Cari label berdasarkan value yang cocok di opsi)
+                    const findOption = (options, val) => options.find(o => o.value === val) || { value: val, label: val };
+
+                    if (editData.user.validator) {
+                        setSelectedValidator(findOption(validatorOptions, editData.user.validator[0]));
+                    }
+                    if (editData.user.reviewer1) {
+                        setSelectedReviewer1(findOption(reviewerOptions, editData.user.reviewer1[0]));
+                    }
+                    if (editData.user.reviewer2) {
+                        setSelectedReviewer2(findOption(reviewerOptions, editData.user.reviewer2[0]));
+                    }
+                }
+            }, 100); 
+        }
+    }, [isEditMode, editData, validatorOptions, reviewerOptions]);
+
     const handleSubmit = async () => {
         try {
             setIsSubmitting(true)
@@ -424,7 +482,7 @@ const RbsBbmForm = () => {
                 }
             })
 
-            if (attachmentFiles.length === 0) {
+            if (!isEditMode && attachmentFiles.length === 0) {
                 missingFields.push('File Lampiran')
             }
 
@@ -497,13 +555,49 @@ const RbsBbmForm = () => {
                 ]
             }
 
-            const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
-            await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
+            // --- PERCABANGAN LOGIKA SIMPAN vs UPDATE ---
+            if (isEditMode) {
+                // JIKA EDIT: Gunakan updateDoc untuk memperbarui dokumen yang sudah ada
+                const reimbursementRef = doc(db, 'reimbursement', editData.id)
+                
+                // Siapkan data yang boleh diubah oleh Super Admin
+                let updateData = {
+                    reimbursements: reimbursementData.reimbursements,
+                    totalBiaya: reimbursementData.totalBiaya,
+                    statusHistory: arrayUnion({
+                        status: 'Data Diubah oleh Super Admin',
+                        timestamp: new Date().toISOString(),
+                        actor: userData.uid,
+                        reason: 'Super Admin mengedit detail form BBM'
+                    })
+                }
 
-            toast.success('Reimbursement BBM berhasil diajukan!')
+                // Jika Super Admin mengunggah file baru, perbarui lampirannya.
+                // Jika tidak, biarkan lampiran yang lama tetap ada.
+                if (attachmentFiles.length > 0) {
+                    updateData.lampiran = reimbursementData.lampiran;
+                    updateData.lampiranUrl = reimbursementData.lampiranUrl;
+                }
 
-            resetForm()
-            setIsSubmitting(false)
+                await updateDoc(reimbursementRef, updateData)
+                toast.success('Reimbursement BBM berhasil diperbarui!')
+                
+                setIsSubmitting(false)
+                
+                // Arahkan kembali ke halaman tabel cek pengajuan setelah berhasil edit
+                navigate('/reimbursement/cek-pengajuan')
+
+            } else {
+                // JIKA BIKIN BARU: Gunakan alur addDoc seperti biasa
+                const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
+                await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
+                
+                toast.success('Reimbursement BBM berhasil diajukan!')
+                
+                resetForm()
+                setIsSubmitting(false)
+            }
+            
         } catch (error) {
             console.error('Error submitting reimbursement:', error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
