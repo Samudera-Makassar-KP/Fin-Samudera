@@ -79,6 +79,7 @@ const FormLpjUmum = () => {
     const [selectedUnit, setSelectedUnit] = useState(null)
     const [userUnitOptions, setUserUnitOptions] = useState([])
     const [isAdmin, setIsAdmin] = useState(false)
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
     const [validatorOptions, setValidatorOptions] = useState([])
     const [selectedValidator, setSelectedValidator] = useState(null)
@@ -100,7 +101,8 @@ const FormLpjUmum = () => {
                     return {
                         value: userData.uid,
                         label: userData.nama,
-                        role: userData.role
+                        role: userData.role, 
+                        unit: userData.unit || []  
                     }
                 })
 
@@ -140,10 +142,11 @@ const FormLpjUmum = () => {
         fetchReviewer()
     }, [])
 
-    // Logika Auto-Fill Validator & Reviewer untuk user dengan 1 Unit Bisnis
+   // --- SIHIR AUTO-FILL: Mengisi Validator & Reviewer Otomatis (Berlaku untuk Semua) ---
     useEffect(() => {
-        if (!isAdmin && userUnitOptions.length === 1) {
-            // Auto-fill Validator (Abaikan blok ini khusus untuk file FormBs)
+        // Hapus syarat !isAdmin dan syarat jumlah unit, supaya semua user terisi otomatis
+        if (userData.uid) { 
+            // Auto-fill Validator
             if (validatorOptions.length > 0 && userData.validator?.length > 0) {
                 const defaultValidator = validatorOptions.find(opt => userData.validator.includes(opt.value));
                 if (defaultValidator) setSelectedValidator(defaultValidator);
@@ -161,10 +164,24 @@ const FormLpjUmum = () => {
                 if (defaultRev2) setSelectedReviewer2(defaultRev2);
             }
         }
-    }, [isAdmin, userUnitOptions.length, validatorOptions, reviewerOptions, userData]);
+    }, [userData, validatorOptions, reviewerOptions]); // Pastikan dependency-nya diperbarui
 
-    const isSingleUnit = !isAdmin && userUnitOptions.length === 1;
+    const filteredValidatorOptions = useMemo(() => {
+        if (!selectedUnit) return [];
+        return validatorOptions.filter(opt => 
+            Array.isArray(opt.unit) ? opt.unit.includes(selectedUnit.value) : opt.unit === selectedUnit.value
+        );
+    }, [selectedUnit, validatorOptions]);
 
+    const filteredReviewerOptions = useMemo(() => {
+        if (!selectedUnit) return [];
+        return reviewerOptions.filter(opt => 
+            Array.isArray(opt.unit) ? opt.unit.includes(selectedUnit.value) : opt.unit === selectedUnit.value
+        );
+    }, [selectedUnit, reviewerOptions]);
+
+    const isSingleUnit = !isSuperAdmin && userUnitOptions.length === 1;;
+    
     const BUSINESS_UNITS = useMemo(
         () => [
             { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
@@ -175,8 +192,9 @@ const FormLpjUmum = () => {
             { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
             { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
             { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
-            { value: 'Samudera', label: 'Samudera' },
-            { value: 'Panitia SISCO', label: 'Panitia SISCO' }
+            { value: 'Samudera Indonesia', label: 'Samudera Indonesia' },
+            { value: 'Panitia SISCO', label: 'Panitia SISCO' },
+            { value: 'Panitia', label: 'Panitia' }
         ],
         []
     )
@@ -197,6 +215,7 @@ const FormLpjUmum = () => {
                     const data = userDoc.data()
                     const adminStatus = data.role === 'Admin' || data.role === 'Super Admin'
                     setIsAdmin(adminStatus)
+                    setIsSuperAdmin(data.role === 'Super Admin') 
 
                     const userUnitsArray = Array.isArray(data.unit) ? data.unit : (data.unit ? [data.unit] : [])
 
@@ -230,14 +249,12 @@ const FormLpjUmum = () => {
     }, [])
 
     const calculateCosts = (lpjItems, jumlahBS) => {
-        // Calculate total biaya
         const totalBiaya = lpjItems.reduce((acc, item) => {
             const biaya = Number(item.biaya) || 0
             const jumlah = Number(item.jumlah) || 0
             return acc + biaya * jumlah
         }, 0)
 
-        // Calculate sisa lebih atau kurang
         const sisaLebih = Math.max(0, jumlahBS - totalBiaya)
         const sisaKurang = Math.max(0, totalBiaya - jumlahBS)
 
@@ -313,7 +330,8 @@ const FormLpjUmum = () => {
         'PT SILKargo Indonesia': 'SKI',
         'PT PAD Samudera Perdana': 'SP',
         'PT Masaji Kargosentra Tama': 'MKT',
-        'Samudera': 'SMDR',
+        'Samudera Indonesia': 'SMDR',
+        'Panitia' : 'PNT',
     }
 
     const getUnitCode = (unitName) => {
@@ -332,44 +350,35 @@ const FormLpjUmum = () => {
     }
 
        const handleFileUpload = (e) => {
-        // 1. Tangkap file yang dipilih user (cukup ambil 1 file urutan pertama saja)
         const selectedFile = e.target.files[0]; 
 
         if (selectedFile) {
-            // 2. Cek apakah ukurannya kebesaran (Maksimal 250MB)
             if (selectedFile.size > 250 * 1024 * 1024) {
                 toast.error("Ukuran file terlalu besar! Maksimal 250MB.");
                 return;
             }
 
-            // 3. Simpan file yang sudah ditangkap ke dalam "keranjang" (kurung siku)
             setAttachmentFiles([selectedFile]); 
         }
     }
 
-    // --- TAMBAHAN 1: Fungsi untuk menghapus file di tampilan UI ---
     const removeAttachment = () => {
-        setAttachmentFiles([]); // Langsung kosongkan keranjang
+        setAttachmentFiles([]); 
     }
 
-    // --- TAMBAHAN 2: Fungsi untuk nge-upload file ke Firebase Storage ---
     const uploadAttachments = async (files, id) => {
         if (!files || files.length === 0) return null;
         
         try {
-            // Karena sekarang cuma 1 file, kita ambil file urutan pertama
             const file = files[0]; 
             
-            // Siapkan tempat penyimpanannya di Firebase Storage
             const fileRef = ref(storage, `lampiran_lpj/${id}_${file.name}`);
             
-            // Proses upload file-nya
             await uploadBytes(fileRef, file);
             
-            // Ambil URL/Link PDF-nya yang sudah online
             const downloadUrl = await getDownloadURL(fileRef);
             
-            return downloadUrl; // Mengembalikan 1 URL yang bersih
+            return downloadUrl; 
         } catch (error) {
             console.error("Gagal upload lampiran:", error);
             throw error;
@@ -388,7 +397,6 @@ const FormLpjUmum = () => {
 
             const missingFields = []
 
-            // Validasi seragam
             if (!userData.nama) missingFields.push('Nama')
             if (!selectedUnit?.value) missingFields.push('Unit Bisnis')
             if (!selectedValidator) missingFields.push('Validator')
@@ -463,7 +471,6 @@ const FormLpjUmum = () => {
                 jumlahBS: jumlahBS,
                 ...calculatedCosts,
                 tanggalPengajuan: tanggalPengajuan,
-                // --- Simpan array lampiran ---
                 lampiran: attachmentFiles.map(f => f.name),
                 lampiranUrl: lampiranUrls,
                 statusHistory: [
@@ -519,7 +526,6 @@ const FormLpjUmum = () => {
         setSelectedReviewer2(null)
     }
 
-    // --- Tampilan UI untuk Multi Upload ---
     const renderFileUpload = () => {
         return (
             <div className="flex flex-col items-start w-full">
@@ -574,7 +580,6 @@ const FormLpjUmum = () => {
         }
 
         if (location.state) {
-            // Karena UI seragam, auto-select unit & validator berlaku untuk semua (bukan hanya admin)
             if (location.state.unit) {
                 const unitOption = BUSINESS_UNITS.find((unit) => unit.value === location.state.unit)
                 if (unitOption) {
@@ -591,17 +596,20 @@ const FormLpjUmum = () => {
                 }
             }
         }
-    }, [location.state, validatorOptions, BUSINESS_UNITS])
+   }, [location.state, validatorOptions, BUSINESS_UNITS])
 
+    // --- TAMBAHAN KODE: customStyles diubah supaya warna kotak jadi abu-abu kalau disable ---
     const customStyles = {
-        control: (base) => ({
+        control: (base, state) => ({
             ...base,
             padding: '0 7px',
             height: '40px',
             minHeight: '40px',
             borderColor: '#e5e7eb',
+            backgroundColor: state.isDisabled ? '#f9fafb' : 'white', // <-- Warna otomatis abu-abu
+            cursor: state.isDisabled ? 'not-allowed' : 'default', // <-- Kursor dilarang
             '&:hover': {
-                borderColor: '#3b82f6'
+                borderColor: state.isDisabled ? '#e5e7eb' : '#3b82f6'
             }
         }),
         valueContainer: (base) => ({
@@ -615,7 +623,6 @@ const FormLpjUmum = () => {
     const draftKey = `lpj-umum_${userData.uid}_${nomorBS || 'new'}`;
     const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS)
 
-    // --- Mengubah handling file pada saveDraft ---
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {
             return new Promise((resolve) => {
@@ -642,7 +649,7 @@ const FormLpjUmum = () => {
                 keterangan: item.keterangan
             })),
             tanggalPengajuan,
-            attachmentFiles: attachmentBase64Array, // Simpan array base64
+            attachmentFiles: attachmentBase64Array, 
             selectedUnit: selectedUnit ? {
                 value: selectedUnit.value,
                 label: selectedUnit.label
@@ -668,24 +675,18 @@ const FormLpjUmum = () => {
     }
 
     useEffect(() => {
-        // 1. Cek apakah user datang dari Dashboard dan membawa Nomor BS
         if (location.state && location.state.nomorBS) {
-            setNomorBS(location.state.nomorBS); // Otomatis isi kolom Nomor BS
+            setNomorBS(location.state.nomorBS); 
         }
     }, [location.state]);
 
     useEffect(() => {
-        // 2. Jika Nomor BS dari Dashboard sudah memicu hasDraft menjadi TRUE, langsung eksekusi Load!
         if (location.state && location.state.nomorBS && hasDraft) {
-            handleLoadDraft(); // Panggil fungsimu secara otomatis
-            
-            // 3. Hapus jejak dari memori browser, supaya kalau user iseng me-refresh (F5), 
-            // halamannya tidak error atau me-load ulang terus menerus.
+            handleLoadDraft(); 
             window.history.replaceState({}, document.title);
         }
     }, [hasDraft, location.state]); 
 
-    // --- Mengubah handling file pada loadDraft ---
     const handleLoadDraft = async () => {
         const draftData = await loadDraft();
         if (draftData) {
@@ -694,7 +695,6 @@ const FormLpjUmum = () => {
             setLpj(draftData.lpj || [initialLpjState]);
             setTanggalPengajuan(draftData.tanggalPengajuan || todayDate);
             
-            // Reconstruct files from base64 array
             if (draftData.attachmentFiles && draftData.attachmentFiles.length > 0) {
                 const reconstructedFiles = await Promise.all(draftData.attachmentFiles.map(async (fileData) => {
                     const base64Response = await fetch(fileData.base64)
@@ -724,7 +724,6 @@ const FormLpjUmum = () => {
             </h2>
 
             <div className="bg-white p-6 rounded-lg shadow">
-                {/* --- Layout diseragamkan untuk semua role --- */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                     {/* Row 1 */}
                     <div>
@@ -752,6 +751,7 @@ const FormLpjUmum = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                           isDisabled={!isSuperAdmin}
                         />
                     </div>
 
@@ -760,18 +760,28 @@ const FormLpjUmum = () => {
                         <label className="block text-gray-700 font-medium mb-2">
                             Unit Bisnis <span className="text-red-500">*</span>
                         </label>
-                        <Select
-                            options={isAdmin ? BUSINESS_UNITS : userUnitOptions}
-                            value={selectedUnit}
-                            onChange={setSelectedUnit}
-                            placeholder="Pilih Unit Bisnis"
-                            className="basic-single"
-                            classNamePrefix="select"
-                            styles={customStyles}
-                            isSearchable={false}
-                            menuPortalTarget={document.body}
-                            menuPosition="absolute"
-                        />
+                        
+                        {isSingleUnit ? (
+                            <input
+                                className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                                type="text"
+                                value={selectedUnit ? selectedUnit.label : ''}
+                                disabled
+                            />
+                        ) : (
+                            <Select
+                               options={isSuperAdmin ? BUSINESS_UNITS : userUnitOptions}
+                                value={selectedUnit}
+                                onChange={setSelectedUnit}
+                                placeholder="Pilih Unit Bisnis"
+                                className="basic-single"
+                                classNamePrefix="select"
+                                styles={customStyles}
+                                isSearchable={false}
+                                menuPortalTarget={document.body}
+                                menuPosition="absolute"
+                            />
+                        )}
                     </div>
                     <div>
                         <label className="block text-gray-700 font-medium mb-2">
@@ -789,7 +799,7 @@ const FormLpjUmum = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                            isDisabled={isSingleUnit}
+                            isDisabled={!isSuperAdmin}
                         />
                     </div>
 
@@ -822,6 +832,7 @@ const FormLpjUmum = () => {
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={!isSuperAdmin}  
                         />
                     </div>
 

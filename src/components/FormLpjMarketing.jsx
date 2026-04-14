@@ -89,6 +89,7 @@ const FormLpjMarketing = () => {
     const [selectedUnit, setSelectedUnit] = useState(null)
     const [userUnitOptions, setUserUnitOptions] = useState([])
     const [isAdmin, setIsAdmin] = useState(false)
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
     const [validatorOptions, setValidatorOptions] = useState([])
     const [selectedValidator, setSelectedValidator] = useState(null)
@@ -150,10 +151,10 @@ const FormLpjMarketing = () => {
         fetchReviewer()
     }, [])
 
-    // Logika Auto-Fill Validator & Reviewer untuk user dengan 1 Unit Bisnis
+    // --- SIHIR AUTO-FILL: Mengisi Validator & Reviewer Otomatis (Berlaku untuk Semua) ---
     useEffect(() => {
-        if (!isAdmin && userUnitOptions.length === 1) {
-            // Auto-fill Validator (Abaikan blok ini khusus untuk file FormBs)
+        if (userData.uid) { 
+            // Auto-fill Validator
             if (validatorOptions.length > 0 && userData.validator?.length > 0) {
                 const defaultValidator = validatorOptions.find(opt => userData.validator.includes(opt.value));
                 if (defaultValidator) setSelectedValidator(defaultValidator);
@@ -171,9 +172,9 @@ const FormLpjMarketing = () => {
                 if (defaultRev2) setSelectedReviewer2(defaultRev2);
             }
         }
-    }, [isAdmin, userUnitOptions.length, validatorOptions, reviewerOptions, userData]);
+    }, [userData, validatorOptions, reviewerOptions]);
 
-    const isSingleUnit = !isAdmin && userUnitOptions.length === 1;
+    const isSingleUnit = !isSuperAdmin && userUnitOptions.length === 1;
 
     const BUSINESS_UNITS = useMemo(
         () => [
@@ -208,6 +209,7 @@ const FormLpjMarketing = () => {
                     const data = userDoc.data()
                     const adminStatus = data.role === 'Admin' || data.role === 'Super Admin'
                     setIsAdmin(adminStatus)
+                    setIsSuperAdmin(data.role === 'Super Admin')
 
                     const userUnitsArray = Array.isArray(data.unit) ? data.unit : (data.unit ? [data.unit] : [])
 
@@ -628,14 +630,16 @@ const FormLpjMarketing = () => {
     }, [location.state, validatorOptions, BUSINESS_UNITS])
 
     const customStyles = {
-        control: (base) => ({
+        control: (base, state) => ({
             ...base,
             padding: '0 7px',
             height: '40px',
             minHeight: '40px',
             borderColor: '#e5e7eb',
+            backgroundColor: state.isDisabled ? '#f9fafb' : 'white', 
+            cursor: state.isDisabled ? 'not-allowed' : 'default', 
             '&:hover': {
-                borderColor: '#3b82f6'
+                borderColor: state.isDisabled ? '#e5e7eb' : '#3b82f6'
             }
         }),
         valueContainer: (base) => ({
@@ -779,7 +783,7 @@ const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, 
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
-                            isDisabled={isSingleUnit}
+                            isDisabled={!isSuperAdmin}
                         />
                     </div>
 
@@ -789,7 +793,7 @@ const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, 
                             Unit Bisnis <span className="text-red-500">*</span>
                         </label>
                         <Select
-                            options={isAdmin ? BUSINESS_UNITS : userUnitOptions}
+                            options={isSuperAdmin ? BUSINESS_UNITS : userUnitOptions}
                             value={selectedUnit}
                             onChange={setSelectedUnit}
                             placeholder="Pilih Unit Bisnis"
@@ -817,6 +821,7 @@ const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, 
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={!isSuperAdmin}
                         />
                     </div>
 
@@ -846,6 +851,7 @@ const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, 
                             isClearable={true}
                             menuPortalTarget={document.body}
                             menuPosition="absolute"
+                            isDisabled={!isSuperAdmin}
                         />
                     </div>
 
