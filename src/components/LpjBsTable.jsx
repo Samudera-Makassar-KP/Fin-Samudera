@@ -36,6 +36,7 @@ const LpjBsTable = () => {
 
     const filterOptions = {
         status: [
+            { value: 'Draft', label: 'Draft' },
             { value: 'Diajukan', label: 'Diajukan' },
             { value: 'Divalidasi', label: 'Divalidasi' },
             { value: 'Diproses', label: 'Diproses' },
@@ -66,37 +67,56 @@ const LpjBsTable = () => {
     useEffect(() => {
         const fetchUserAndLpj = async () => {
             try {
-                const uid = localStorage.getItem('userUid') // Ambil UID dari localStorage
-
+                const uid = localStorage.getItem('userUid')
                 if (!uid) {
-                    console.error('UID tidak ditemukan di localStorage')
                     setLoading(false)
                     return
                 }
 
-                // Query lpj berdasarkan UID user
-                const q = query(
-                    collection(db, 'lpj'),
-                    where('user.uid', '==', uid) // Filter data lpj berdasarkan UID user
-                )
-
-                const querySnapshot = await getDocs(q)
-                const lpj = querySnapshot.docs.map((doc) => ({
+                // 1. AMBIL DATA UTAMA
+                const qLpj = query(collection(db, 'lpj'), where('user.uid', '==', uid))
+                const snapshotLpj = await getDocs(qLpj)
+                const dataLpj = snapshotLpj.docs.map((doc) => ({
                     id: doc.id,
                     displayId: doc.data().displayId,
                     ...doc.data()
                 }))
 
-                const existingYears = new Set(lpj.map((item) => new Date(item.tanggalPengajuan).getFullYear()))
+                // 2. AMBIL DATA DRAFT
+                const qDrafts = query(
+                    collection(db, 'drafts'),
+                    where('__name__', '>=', `${uid}_`),
+                    where('__name__', '<=', `${uid}_\uf8ff`)
+                )
+                const snapshotDrafts = await getDocs(qDrafts)
+                const dataDrafts = snapshotDrafts.docs.map((doc) => {
+                    const data = doc.data()
+                    return {
+                        id: doc.id,
+                        displayId: `DRAFT - ${data.nomorBS || 'Baru'}`, // Nama tampilan di tabel
+                        kategori: data.type === 'lpj-umum' ? 'GA/Umum' : 'Marketing/Operasional',
+                        nomorBS: data.nomorBS || '-',
+                        jumlahBS: data.jumlahBS || 0,
+                        tanggalPengajuan: data.tanggalPengajuan || new Date().toISOString(),
+                        status: 'Draft', // Status otomatis
+                        isDraft: true,   // Penanda khusus kalau ini draft
+                        ...data
+                    }
+                })
 
+                // 3. GABUNGKAN KEDUANYA
+                const gabunganData = [...dataLpj, ...dataDrafts]
+
+                // Atur Tahun untuk Filter
+                const existingYears = new Set(gabunganData.map((item) => new Date(item.tanggalPengajuan).getFullYear()))
                 const updatedYearOptions = Array.from(existingYears)
                     .map((year) => ({ value: year, label: `${year}` }))
-                    .sort((a, b) => b.value - a.value) // Urutkan tahun dari yang terbaru
+                    .sort((a, b) => b.value - a.value)
 
                 setYearOptions(updatedYearOptions)
-                setData({ lpj })
+                setData({ lpj: gabunganData })
             } catch (error) {
-                console.error('Error fetching user or lpj data:', error)
+                console.error('Error fetching data:', error)
             } finally {
                 setLoading(false)
             }
@@ -341,12 +361,22 @@ const LpjBsTable = () => {
                                                     {index + 1 + (currentPage - 1) * itemsPerPage}
                                                 </td>
                                                 <td className="px-4 py-2 border">
-                                                    <Link
-                                                        to={`/lpj/${item.id}`}
-                                                        className="text-black hover:text-gray-700 hover:underline cursor-pointer"
-                                                    >
-                                                        {item.displayId}
-                                                    </Link>
+                                                    {item.isDraft ? (
+                                                        <Link
+                                                            to={item.kategori === 'GA/Umum' ? '/lpj/umum' : '/lpj/marketing'}
+                                                            state={{ nomorBS: item.nomorBS }} 
+                                                            className="text-blue-600 font-semibold hover:text-blue-800 hover:underline cursor-pointer italic"
+                                                        >
+                                                            {item.displayId}
+                                                        </Link>
+                                                    ) : (
+                                                        <Link
+                                                            to={`/lpj/${item.id}`}
+                                                            className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                        >
+                                                            {item.displayId}
+                                                        </Link>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-2 border">{item.kategori}</td>
                                                 <td className="px-4 py-2 border">{item.nomorBS}</td>
@@ -360,7 +390,9 @@ const LpjBsTable = () => {
                                                     <span
                                                         className={`px-4 py-1 rounded-full text-xs font-medium 
                                                                 ${
-                                                                    item.status === 'Diajukan'
+                                                                    item.status === 'Draft' 
+                                                                      ? 'bg-gray-100 text-gray-600 border-[1px] border-gray-400 border-dashed'
+                                                                      : item.status === 'Diajukan'
                                                                         ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
                                                                         : item.status === 'Disetujui'
                                                                           ? 'bg-green-200 text-green-800 border-[1px] border-green-600'

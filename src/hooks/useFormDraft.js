@@ -39,7 +39,7 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
                 const draftData = draftSnap.data()
                 
                 // Draft dihapus setelah di-load
-                await deleteDoc(draftRef)
+                //await deleteDoc(draftRef)
                 setHasDraft(false)
                 toast.success('Draft berhasil dimuat')
                 

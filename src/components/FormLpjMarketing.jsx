@@ -340,49 +340,48 @@ const FormLpjMarketing = () => {
         return `LPJ.MRO.${unitCode}.${year}${month}${day}.${sequence}`
     }
 
-    // --- Fungsi handler upload untuk multi file ---
+    // --- Fungsi handler upload untuk 1 file ---
     const handleFileUpload = (event) => {
-        const files = Array.from(event.target.files)
-        if (!files.length) return
+        const selectedFile = event.target.files[0]; 
 
-        const validFiles = []
-        for (let file of files) {
-            if (file.size > 250 * 1024 * 1024) {
-                toast.error(`Ukuran file ${file.name} maksimal 250MB`)
-                continue
+        if (selectedFile) {
+            if (selectedFile.size > 250 * 1024 * 1024) {
+                toast.error(`Ukuran file maksimal 250MB`);
+                return;
             }
-            if (file.type !== 'application/pdf') {
-                toast.error(`File ${file.name} bukan PDF, hanya PDF yang diperbolehkan`)
-                continue
+            if (selectedFile.type !== 'application/pdf') {
+                toast.error(`File bukan PDF, hanya PDF yang diperbolehkan`);
+                return;
             }
-            validFiles.push(file)
+            
+            setAttachmentFiles([selectedFile]); 
         }
-
-        setAttachmentFiles(prev => [...prev, ...validFiles])
-        event.target.value = ''
+        event.target.value = '';
     }
 
-    const removeAttachment = (indexToRemove) => {
-        setAttachmentFiles(prev => prev.filter((_, index) => index !== indexToRemove))
+    // --- Fungsi untuk menghapus file di UI ---
+    const removeAttachment = () => {
+        setAttachmentFiles([]); // Langsung kosongkan keranjang
     }
 
-    // --- Mengupload banyak file sekaligus ---
+    // --- Mengupload 1 file ke Firebase ---
     const uploadAttachments = async (files, displayId) => {
-        if (!files || files.length === 0) return []
+        if (!files || files.length === 0) return null;
 
         try {
-            const uploadPromises = files.map(async (file, index) => {
-                const newFileName = `Lampiran_${index + 1}_${displayId}.pdf`
-                const storageRef = ref(storage, `LPJ/Marketing_Operasional/${displayId}/${newFileName}`)
-                const snapshot = await uploadBytes(storageRef, file)
-                return await getDownloadURL(snapshot.ref)
-            })
-
-            return await Promise.all(uploadPromises)
+            const file = files[0];
+            // Folder penyimpanannya tetap di Marketing_Operasional sesuai kodemu
+            const newFileName = `Lampiran_1_${displayId}.pdf`;
+            const storageRef = ref(storage, `LPJ/Marketing_Operasional/${displayId}/${newFileName}`);
+            
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadUrl = await getDownloadURL(snapshot.ref);
+            
+            return downloadUrl; // Kembalikan 1 URL bersih
         } catch (error) {
-            console.error('Error uploading files:', error)
-            toast.error('Gagal mengunggah lampiran')
-            return []
+            console.error('Error uploading files:', error);
+            toast.error('Gagal mengunggah lampiran');
+            return null;
         }
     }
 
@@ -566,7 +565,6 @@ const FormLpjMarketing = () => {
                         id="file-upload"
                         className="hidden"
                         accept=".pdf"
-                        multiple
                         onChange={handleFileUpload}
                     />
                     <label

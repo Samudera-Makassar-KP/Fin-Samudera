@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { collection, query, where, getDocs, getDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import Modal from './Modal'
@@ -8,6 +8,8 @@ import EmptyState from '../assets/images/EmptyState.png'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faSpinner, faTimes, faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 
 const ReimbursementCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')

@@ -331,52 +331,51 @@ const FormLpjUmum = () => {
         return `LPJ.GAU.${unitCode}.${year}${month}${day}.${sequence}`
     }
 
-    // --- Fungsi handler upload untuk multi file ---
-    const handleFileUpload = (event) => {
-        const files = Array.from(event.target.files)
-        if (!files.length) return
+       const handleFileUpload = (e) => {
+        // 1. Tangkap file yang dipilih user (cukup ambil 1 file urutan pertama saja)
+        const selectedFile = e.target.files[0]; 
 
-        const validFiles = []
-        for (let file of files) {
-            if (file.size > 250 * 1024 * 1024) {
-                toast.error(`Ukuran file ${file.name} maksimal 250MB`)
-                continue
+        if (selectedFile) {
+            // 2. Cek apakah ukurannya kebesaran (Maksimal 250MB)
+            if (selectedFile.size > 250 * 1024 * 1024) {
+                toast.error("Ukuran file terlalu besar! Maksimal 250MB.");
+                return;
             }
-            if (file.type !== 'application/pdf') {
-                toast.error(`File ${file.name} bukan PDF, hanya PDF yang diperbolehkan`)
-                continue
-            }
-            validFiles.push(file)
+
+            // 3. Simpan file yang sudah ditangkap ke dalam "keranjang" (kurung siku)
+            setAttachmentFiles([selectedFile]); 
         }
-
-        setAttachmentFiles(prev => [...prev, ...validFiles])
-        event.target.value = ''
     }
 
-    const removeAttachment = (indexToRemove) => {
-        setAttachmentFiles(prev => prev.filter((_, index) => index !== indexToRemove))
+    // --- TAMBAHAN 1: Fungsi untuk menghapus file di tampilan UI ---
+    const removeAttachment = () => {
+        setAttachmentFiles([]); // Langsung kosongkan keranjang
     }
 
-    // --- Mengupload banyak file sekaligus ---
-    const uploadAttachments = async (files, displayId) => {
-        if (!files || files.length === 0) return []
-
+    // --- TAMBAHAN 2: Fungsi untuk nge-upload file ke Firebase Storage ---
+    const uploadAttachments = async (files, id) => {
+        if (!files || files.length === 0) return null;
+        
         try {
-            const uploadPromises = files.map(async (file, index) => {
-                const newFileName = `Lampiran_${index + 1}_${displayId}.pdf`
-                const storageRef = ref(storage, `LPJ/GA_Umum/${displayId}/${newFileName}`)
-                const snapshot = await uploadBytes(storageRef, file)
-                return await getDownloadURL(snapshot.ref)
-            })
-
-            return await Promise.all(uploadPromises)
+            // Karena sekarang cuma 1 file, kita ambil file urutan pertama
+            const file = files[0]; 
+            
+            // Siapkan tempat penyimpanannya di Firebase Storage
+            const fileRef = ref(storage, `lampiran_lpj/${id}_${file.name}`);
+            
+            // Proses upload file-nya
+            await uploadBytes(fileRef, file);
+            
+            // Ambil URL/Link PDF-nya yang sudah online
+            const downloadUrl = await getDownloadURL(fileRef);
+            
+            return downloadUrl; // Mengembalikan 1 URL yang bersih
         } catch (error) {
-            console.error('Error uploading files:', error)
-            toast.error('Gagal mengunggah lampiran')
-            return []
+            console.error("Gagal upload lampiran:", error);
+            throw error;
         }
-    }
-
+    };
+    
     const handleSubmit = async () => {
         try {
             setIsSubmitting(true)
@@ -667,6 +666,24 @@ const FormLpjUmum = () => {
 
         resetForm()
     }
+
+    useEffect(() => {
+        // 1. Cek apakah user datang dari Dashboard dan membawa Nomor BS
+        if (location.state && location.state.nomorBS) {
+            setNomorBS(location.state.nomorBS); // Otomatis isi kolom Nomor BS
+        }
+    }, [location.state]);
+
+    useEffect(() => {
+        // 2. Jika Nomor BS dari Dashboard sudah memicu hasDraft menjadi TRUE, langsung eksekusi Load!
+        if (location.state && location.state.nomorBS && hasDraft) {
+            handleLoadDraft(); // Panggil fungsimu secara otomatis
+            
+            // 3. Hapus jejak dari memori browser, supaya kalau user iseng me-refresh (F5), 
+            // halamannya tidak error atau me-load ulang terus menerus.
+            window.history.replaceState({}, document.title);
+        }
+    }, [hasDraft, location.state]); 
 
     // --- Mengubah handling file pada loadDraft ---
     const handleLoadDraft = async () => {
