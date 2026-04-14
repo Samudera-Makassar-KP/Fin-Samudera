@@ -43,7 +43,6 @@ const AppContent = () => {
                     } />
 
                     {/* Reimbursement Routes */}
-                    {/* Reimbursement Routes */}
                     <Route path="/reimbursement/bbm" element={
                         <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <RbsBbm />
@@ -63,7 +62,7 @@ const AppContent = () => {
                     } />
 
                     <Route path="/reimbursement/cek-pengajuan" element={
-                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <RbsCheckPage />
                         </ProtectedRoute>
                     } />
@@ -76,13 +75,13 @@ const AppContent = () => {
 
                     {/* Bon Sementara Routes */}
                     <Route path="/bon-sementara/ajukan" element={
-                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <FormBsPage />
                         </ProtectedRoute>
                     } />
 
                     <Route path="/bon-sementara/cek-pengajuan" element={
-                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin']}>
+                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <BsCheckPage />
                         </ProtectedRoute>
                     } />
@@ -95,19 +94,19 @@ const AppContent = () => {
 
                     {/* LPJ BS Routes */}
                     <Route path="/lpj/umum" element={
-                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <LpjUmum />
                         </ProtectedRoute>
                     } />
 
                     <Route path="/lpj/marketing" element={
-                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Employee', 'Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <LpjMarketing />
                         </ProtectedRoute>
                     } />
 
                     <Route path="/lpj/cek-pengajuan" element={
-                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Super Admin', 'Admin']}>
+                        <ProtectedRoute allowedRoles={['Reviewer', 'Validator', 'Admin', 'Super Admin']}>
                             <LpjCheckPage />
                         </ProtectedRoute>
                     } />

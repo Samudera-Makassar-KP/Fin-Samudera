@@ -1005,6 +1005,7 @@ const ReimbursementCheck = () => {
                                                     <th className="px-4 py-2 border">Jumlah</th>
                                                     <th className="px-4 py-2 border">Tanggal Pengajuan</th>
                                                     <th className="px-4 py-2 border">Tanggal Disetujui</th>
+                                                    <th className="px-4 py-2 border text-center">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1041,6 +1042,19 @@ const ReimbursementCheck = () => {
                                                                             new Date(a.timestamp)
                                                                     )[0]?.timestamp
                                                             )}
+                                                        </td>
+                                                        <td className="p-4 border text-center">
+                                                            <div className="flex justify-center items-center">
+                                                                <button
+                                                                    onClick={() => handleEditClick(item)}
+                                                                    className="text-blue-500 hover:text-blue-700 focus:outline-none"
+                                                                    title="Edit Dokumen"
+                                                                >
+                                                                    <div className="w-8 h-8 rounded-full border border-blue-500 flex items-center justify-center bg-blue-50 hover:bg-blue-100">
+                                                                        <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                    </div>
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}

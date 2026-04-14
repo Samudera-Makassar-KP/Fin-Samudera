@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, runTransaction, getDocs, query, where } from 'firebase/firestore'
+import { doc, setDoc, getDoc, addDoc, collection, runTransaction, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { db } from '../firebaseConfig'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
@@ -8,6 +9,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 
 const FormBs = () => {
+    const location = useLocation()
+    const navigate = useNavigate()
+    const isEditMode = location.state?.isEditMode || false
+    const editData = location.state?.editData || null
+
     const [todayDate, setTodayDate] = useState('')
     const [alreadyFetchBS, setAlreadyFetchBS] = useState(false)
     const [userData, setUserData] = useState({
@@ -93,59 +99,112 @@ const FormBs = () => {
         { value: 'Panitia SISCO', label: 'Panitia SISCO' }
     ]
 
+// --- HOOK 1: Inisialisasi Awal (Hanya jalan sekali saat mount) ---
     useEffect(() => {
         const today = new Date();
         const formattedDate = today.toISOString().split('T')[0];
-        const uid = localStorage.getItem('userUid');
-
         setTodayDate(formattedDate);
 
-        const fetchUserData = async () => {
-            try {
-                const userDocRef = doc(db, 'users', uid);
-                const userDoc = await getDoc(userDocRef);
-
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    const adminStatus = data.role === 'Admin' || data.role === 'Super Admin';
-                    setIsAdmin(adminStatus);
-
-                    const userUnitsArray = Array.isArray(data.unit) ? data.unit : (data.unit ? [data.unit] : [])
-
-                    setUserData({
-                        uid: data.uid || '',
-                        nama: data.nama || '',
-                        bankName: data.bankName || '',
-                        accountNumber: data.accountNumber || '',
-                        unit: userUnitsArray,
-                        posisi: data.posisi || '',
-                        department: data.department || [],
-                        reviewer1: data.reviewer1 || [],
-                        reviewer2: data.reviewer2 || []
-                    });
-
-                    const unitOptionsForUser = userUnitsArray.map(u => ({ value: u, label: u }))
-                    setUserUnitOptions(unitOptionsForUser)
-
-                    if (!adminStatus && unitOptionsForUser.length === 1) {
-                        setSelectedUnit(unitOptionsForUser[0])
-                    } else if (!adminStatus && unitOptionsForUser.length === 0) {
-                        setSelectedUnit(null)
-                    }
-
-                    setIsUserDataLoaded(true);
-                }
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                toast.error('Error fetching user data');
-            }
-        };
-
+        const uid = localStorage.getItem('userUid');
         if (uid) {
-            fetchUserData();
+            fetchUserData(uid); // Kirimkan uid ke fungsi fetch
         }
     }, []);
 
+    // --- FUNGSI FETCH USER DATA (Pisahkan dari Hook agar bersih) ---
+    const fetchUserData = async (uid) => {
+        // Pintu penjaga: Jika mode edit, jangan ambil data user login
+        if (isEditMode && editData) {
+            setIsUserDataLoaded(true);
+            return;
+        }
+
+        try {
+            const userDocRef = doc(db, 'users', uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                const adminStatus = data.role === 'Admin' || data.role === 'Super Admin';
+                setIsAdmin(adminStatus);
+
+                const userUnitsArray = Array.isArray(data.unit) ? data.unit : (data.unit ? [data.unit] : []);
+
+                setUserData({
+                    uid: data.uid || '',
+                    nama: data.nama || '',
+                    bankName: data.bankName || '',
+                    accountNumber: data.accountNumber || '',
+                    unit: userUnitsArray,
+                    posisi: data.posisi || '',
+                    department: data.department || [],
+                    reviewer1: data.reviewer1 || [],
+                    reviewer2: data.reviewer2 || []
+                });
+
+                const unitOptionsForUser = userUnitsArray.map(u => ({ value: u, label: u }));
+                setUserUnitOptions(unitOptionsForUser);
+
+                if (!adminStatus && unitOptionsForUser.length === 1) {
+                    setSelectedUnit(unitOptionsForUser[0]);
+                } else if (!adminStatus && unitOptionsForUser.length === 0) {
+                    setSelectedUnit(null);
+                }
+
+                setIsUserDataLoaded(true);
+            }
+        } catch (error) {
+            console.error('Error fetching user data:', error);
+            toast.error('Error fetching user data');
+        }
+    };
+
+    // --- HOOK 2: BLOK AUTO-FILL (BERDIRI SENDIRI DI LUAR) ---
+    // Hook ini akan jalan setiap kali editData atau reviewerOptions berubah
+    useEffect(() => {
+        if (isEditMode && editData) {
+            // 1. Set Data User Pengaju Asli
+            if (editData.user) {
+                setUserData({
+                    uid: editData.user.uid || '',
+                    nama: editData.user.nama || '',
+                    bankName: editData.user.bankName || '',
+                    accountNumber: editData.user.accountNumber || '',
+                    unit: [editData.user.unit], 
+                    posisi: editData.user.posisi || '',
+                    department: editData.user.department || [],
+                    reviewer1: editData.user.reviewer1 || [],
+                    reviewer2: editData.user.reviewer2 || []
+                });
+
+                setSelectedUnit({ value: editData.user.unit, label: editData.user.unit });
+                
+                if (reviewerOptions.length > 0) {
+                    const rev1 = reviewerOptions.find(opt => editData.user.reviewer1.includes(opt.value));
+                    const rev2 = reviewerOptions.find(opt => editData.user.reviewer2.includes(opt.value));
+                    if (rev1) setSelectedReviewer1(rev1);
+                    if (rev2) setSelectedReviewer2(rev2);
+                }
+            }
+
+            // 2. Set Item Bon Sementara
+            if (editData.bonSementara && Array.isArray(editData.bonSementara)) {
+                const formattedBS = editData.bonSementara.map(item => ({
+                    ...item,
+                    jumlahBS: item.jumlahBS?.toString() || '',
+                    kategori: item.kategori || ''
+                }));
+                setBonSementara(formattedBS);
+
+                if (formattedBS[0]?.kategori) {
+                    setSelectedKategori({ value: formattedBS[0].kategori, label: formattedBS[0].kategori });
+                }
+            }
+            
+            setIsUserDataLoaded(true);
+        }
+    }, [isEditMode, editData, reviewerOptions]);
+    
     // --- Logika Auto-Fill Reviewer 1 dan 2 untuk user dengan 1 Unit Bisnis ---
     useEffect(() => {
         if (isSingleUnit) {
@@ -225,7 +284,9 @@ const FormBs = () => {
     }
 
     const formatRupiah = (number) => {
-        const strNumber = number.replace(/[^,\d]/g, '').toString()
+        if (number === undefined || number === null) return ''
+        const stringNumber = number.toString()
+        const strNumber = stringNumber.replace(/[^,\d]/g, '')
         const split = strNumber.split(',')
         const sisa = split[0].length % 3
         let rupiah = split[0].substr(0, sisa)
@@ -237,7 +298,7 @@ const FormBs = () => {
         }
 
         rupiah = split[1] !== undefined ? rupiah + ',' + split[1] : rupiah
-        return 'Rp' + rupiah
+        return rupiah ? 'Rp' + rupiah : ''
     }
 
     const handleInputChange = (index, field, value) => {
@@ -393,6 +454,53 @@ const FormBs = () => {
         fetchNomorBS()
     }, [todayDate, alreadyFetchBS, isUserDataLoaded, generateNomorBS, selectedUnit])
 
+    useEffect(() => {
+        if (isEditMode && editData && editData.bonSementara) {
+            
+            // A. Set Data Bon Sementara
+            const formattedBS = editData.bonSementara.map(item => ({
+                ...item,
+                jumlahBS: item.jumlahBS?.toString() || '',
+                kategori: typeof item.kategori === 'string' ? item.kategori : item.kategori?.value || ''
+            }));
+            setBonSementara(formattedBS);
+
+            // B. Set Dropdown Kategori
+            if (formattedBS[0]?.kategori) {
+                const matchedKategori = kategoriOptions.find(opt => opt.value === formattedBS[0].kategori);
+                setSelectedKategori(matchedKategori || { value: formattedBS[0].kategori, label: formattedBS[0].kategori });
+            }
+
+            // C. Set Data User Pengaju Asli
+            setTimeout(() => {
+                if (editData.user) {
+                    setUserData(prev => ({
+                        ...prev,
+                        uid: editData.user.uid,
+                        nama: editData.user.nama,
+                        bankName: editData.user.bankName || '',
+                        accountNumber: editData.user.accountNumber || '',
+                        posisi: editData.user.posisi || '',
+                        department: editData.user.department || ''
+                    }));
+
+                    if (editData.user.unit) {
+                        setSelectedUnit({ value: editData.user.unit, label: editData.user.unit });
+                    }
+
+                    const findOption = (options, val) => options.find(o => o.value === val) || { value: val, label: val };
+
+                    if (editData.user.reviewer1 && editData.user.reviewer1.length > 0) {
+                        setSelectedReviewer1(findOption(reviewerOptions, editData.user.reviewer1[0]));
+                    }
+                    if (editData.user.reviewer2 && editData.user.reviewer2.length > 0) {
+                        setSelectedReviewer2(findOption(reviewerOptions, editData.user.reviewer2[0]));
+                    }
+                }
+            }, 100);
+        }
+    }, [isEditMode, editData, reviewerOptions])
+
     const handleSubmit = async () => {
         try {
             setIsSubmitting(true)
@@ -477,40 +585,56 @@ const FormBs = () => {
                 ]
             }
 
-            const docRef = await addDoc(collection(db, 'bonSementara'), bonSementaraData)
-            await setDoc(doc(db, 'bonSementara', docRef.id), { ...bonSementaraData, id: docRef.id })
-
-            const counterRef = doc(db, 'businessUnitCounters', kodeUnitBisnis)
-            await runTransaction(db, async (transaction) => {
-                const counterDoc = await transaction.get(counterRef)
-                const today = new Date()
-                const month = (today.getMonth() + 1).toString().padStart(2, '0')
-
-                let newLastNumber
-                if (!counterDoc.exists() || counterDoc.data().lastResetMonth !== month) {
-                    newLastNumber = 501
-                } else {
-                    newLastNumber = counterDoc.data().lastNumber + 1
-                }
-
-                transaction.set(counterRef, {
-                    lastNumber: newLastNumber,
-                    lastResetMonth: month
+            if (isEditMode) {
+                // --- LOGIKA JIKA EDIT ---
+                const bsRef = doc(db, 'bonSementara', editData.id)
+                await updateDoc(bsRef, {
+                    bonSementara: bonSementaraData.bonSementara,
+                    statusHistory: arrayUnion({
+                        status: 'Data Diubah oleh Super Admin',
+                        timestamp: new Date().toISOString(),
+                        actor: userData.uid,
+                        reason: 'Super Admin mengedit detail form Bon Sementara'
+                    })
                 })
-            })
+                
+                toast.success('Bon Sementara berhasil diperbarui!')
+                setIsSubmitting(false)
+                navigate('/bon-sementara/cek-pengajuan') // Arahkan kembali ke tabel
 
-            console.log('Bon Sementara berhasil dibuat:', {
-                firestoreId: docRef.id,
-                displayId: displayId
-            })
-            toast.success('Bon Sementara berhasil diajukan!')
+            } else {
+                // --- LOGIKA JIKA BIKIN BARU ---
+                const docRef = await addDoc(collection(db, 'bonSementara'), bonSementaraData)
+                await setDoc(doc(db, 'bonSementara', docRef.id), { ...bonSementaraData, id: docRef.id })
 
-            setAlreadyFetchBS(false) // Trigger pembuatan nomor BS baru untuk form selanjutnya
-            resetForm()
-            setIsSubmitting(false)
-            
-            const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '00005')
-            setCurrentCounter(nextSequence)
+                const counterRef = doc(db, 'businessUnitCounters', kodeUnitBisnis)
+                await runTransaction(db, async (transaction) => {
+                    const counterDoc = await transaction.get(counterRef)
+                    const today = new Date()
+                    const month = (today.getMonth() + 1).toString().padStart(2, '0')
+
+                    let newLastNumber
+                    if (!counterDoc.exists() || counterDoc.data().lastResetMonth !== month) {
+                        newLastNumber = 501
+                    } else {
+                        newLastNumber = counterDoc.data().lastNumber + 1
+                    }
+
+                    transaction.set(counterRef, {
+                        lastNumber: newLastNumber,
+                        lastResetMonth: month
+                    })
+                })
+
+                toast.success('Bon Sementara berhasil diajukan!')
+
+                setAlreadyFetchBS(false) 
+                resetForm()
+                setIsSubmitting(false)
+                
+                const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '00005')
+                setCurrentCounter(nextSequence)
+            }
         } catch (error) {
             console.error('Error submitting bon sementara:', error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')

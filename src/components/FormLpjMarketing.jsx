@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -46,6 +46,9 @@ const FormLpjMarketing = () => {
     }
 
     const location = useLocation()
+    const navigate = useNavigate() // Tambahkan ini
+    const isEditMode = location.state?.isEditMode || false
+    const editData = location.state?.editData || null
     const [lpj, setLpj] = useState([initialLpjState])
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
     const [jumlahBS, setJumlahBS] = useState(location.state?.jumlahBS || '')
@@ -265,7 +268,8 @@ const FormLpjMarketing = () => {
     }, [lpj, jumlahBS])
 
     const formatRupiah = (value) => {
-        let numberString = (value || '').toString().replace(/[^,\d]/g, '')
+        if (value === undefined || value === null) return ''
+        let numberString = value.toString().replace(/[^,\d]/g, '')
         let split = numberString.split(',')
         let sisa = split[0].length % 3
         let rupiah = split[0].substr(0, sisa)
@@ -277,7 +281,7 @@ const FormLpjMarketing = () => {
         }
 
         rupiah = split[1] !== undefined ? rupiah + ',' + split[1] : rupiah
-        return 'Rp' + rupiah
+        return rupiah ? 'Rp' + rupiah : ''
     }
 
     const handleInputChange = (index, field, value) => {
@@ -386,6 +390,53 @@ const FormLpjMarketing = () => {
             return null;
         }
     }
+
+    useEffect(() => {
+        if (isEditMode && editData && editData.lpj) {
+            
+            // 1. Set Data Item LPJ
+            const formattedLPJ = editData.lpj.map(item => ({
+                ...item,
+                biaya: item.biaya?.toString() || '',
+                jumlah: item.jumlah?.toString() || '',
+            }));
+            setLpj(formattedLPJ);
+
+            // 2. Set Data Marketing (Project, JO, dll)
+            setNomorBS(editData.nomorBS || '');
+            setJumlahBS(editData.jumlahBS || '');
+            setProject(editData.project || '');
+            setNomorJO(editData.nomorJO || '');
+            setCustomer(editData.customer || '');
+            setLokasi(editData.lokasi || '');
+            setTanggal(editData.tanggal || '');
+            setAktivitas(editData.aktivitas || '');
+            
+            // 3. Set Lampiran Visual (Mock File)
+            if (editData.lampiran && editData.lampiran.length > 0) {
+                const mockFiles = editData.lampiran.map(name => new File([""], name));
+                setAttachmentFiles(mockFiles);
+            }
+
+            // 4. Set Data User & Dropdown
+            setTimeout(() => {
+                if (editData.user) {
+                    setUserData(prev => ({ ...prev, 
+                        uid: editData.user.uid, 
+                        nama: editData.user.nama,
+                        bankName: editData.user.bankName || '',
+                        accountNumber: editData.user.accountNumber || ''
+                    }));
+                    if (editData.user.unit) setSelectedUnit({ value: editData.user.unit, label: editData.user.unit });
+
+                    const findOption = (options, val) => options.find(o => o.value === val) || { value: val, label: val };
+                    if (editData.user.validator) setSelectedValidator(findOption(validatorOptions, editData.user.validator[0]));
+                    if (editData.user.reviewer1) setSelectedReviewer1(findOption(reviewerOptions, editData.user.reviewer1[0]));
+                    if (editData.user.reviewer2) setSelectedReviewer2(findOption(reviewerOptions, editData.user.reviewer2[0]));
+                }
+            }, 100);
+        }
+    }, [isEditMode, editData, validatorOptions, reviewerOptions]);
 
     const handleSubmit = async () => {
         try {
@@ -509,17 +560,50 @@ const FormLpjMarketing = () => {
                 updatedAt: new Date().toISOString()
             }
 
-            const docRef = await addDoc(collection(db, 'lpj'), lpjData)
-            await setDoc(doc(db, 'lpj', docRef.id), { ...lpjData, id: docRef.id })
+            if (isEditMode) {
+                // --- LOGIKA UPDATE (SUPER ADMIN) ---
+                const lpjRef = doc(db, 'lpj', editData.id)
+                const updateData = {
+                    lpj: lpjData.lpj,
+                    nomorBS: lpjData.nomorBS,
+                    jumlahBS: lpjData.jumlahBS,
+                    project: lpjData.project,
+                    nomorJO: lpjData.nomorJO,
+                    customer: lpjData.customer,
+                    lokasi: lpjData.lokasi,
+                    tanggal: lpjData.tanggal,
+                    aktivitas: lpjData.aktivitas,
+                    totalBiaya: lpjData.totalBiaya,
+                    sisaLebih: lpjData.sisaLebih,
+                    sisaKurang: lpjData.sisaKurang,
+                    updatedAt: new Date().toISOString(),
+                    statusHistory: arrayUnion({
+                        status: 'Data Diubah oleh Super Admin',
+                        timestamp: new Date().toISOString(),
+                        actor: userData.uid,
+                        reason: 'Super Admin mengedit detail form LPJ Marketing'
+                    })
+                };
 
-            console.log('LPJ berhasil dibuat:', {
-                firestoreId: docRef.id,
-                displayId: displayId
-            })
-            toast.success('LPJ Marketing/Operasional berhasil dibuat')
+                // Update lampiran jika ada file baru yang diupload
+                if (attachmentFiles.length > 0 && attachmentFiles[0].size > 0) {
+                    updateData.lampiran = lpjData.lampiran;
+                    updateData.lampiranUrl = lpjData.lampiranUrl;
+                }
 
-            resetForm()
-            setIsSubmitting(false)
+                await updateDoc(lpjRef, updateData)
+                toast.success('LPJ Marketing berhasil diperbarui!')
+                setIsSubmitting(false)
+                navigate('/lpj/cek-pengajuan')
+
+            } else {
+                // --- LOGIKA SIMPAN BARU ---
+                const docRef = await addDoc(collection(db, 'lpj'), lpjData)
+                await setDoc(doc(db, 'lpj', docRef.id), { ...lpjData, id: docRef.id })
+                toast.success('LPJ Marketing/Operasional berhasil dibuat')
+                resetForm()
+                setIsSubmitting(false)
+            }
         } catch (error) {
             console.error('Error submitting lpj:', error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')

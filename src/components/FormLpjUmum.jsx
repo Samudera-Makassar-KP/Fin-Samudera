@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -42,6 +42,9 @@ const FormLpjUmum = () => {
 
     const [tanggalPengajuan, setTanggalPengajuan] = useState('')
     const location = useLocation()
+    const navigate = useNavigate() // <-- Tambahkan ini
+    const isEditMode = location.state?.isEditMode || false
+    const editData = location.state?.editData || null
     const [lpj, setLpj] = useState([initialLpjState])
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
     const [jumlahBS, setJumlahBS] = useState(location.state?.jumlahBS || '')
@@ -384,6 +387,63 @@ const FormLpjUmum = () => {
             throw error;
         }
     };
+
+    useEffect(() => {
+        if (isEditMode && editData && editData.lpj) {
+            
+            // 1. Set Data Item LPJ
+            const formattedLPJ = editData.lpj.map(item => ({
+                ...item,
+                biaya: item.biaya?.toString() || '',
+                jumlah: item.jumlah?.toString() || '',
+            }));
+            setLpj(formattedLPJ);
+
+            // 2. Set Nomor & Jumlah BS
+            setNomorBS(editData.nomorBS || '');
+            setJumlahBS(editData.jumlahBS || '');
+            
+            // 3. Set Lampiran Visual (hanya nama, tidak mendownload file aslinya untuk di-upload ulang)
+            if (editData.lampiran && editData.lampiran.length > 0) {
+                // Membuat objek tiruan (mock file) hanya agar namanya muncul di layar
+                const mockFiles = editData.lampiran.map(name => new File([""], name));
+                setAttachmentFiles(mockFiles);
+            }
+
+            // 4. Set Data User Pengaju Asli
+            setTimeout(() => {
+                if (editData.user) {
+                    setUserData(prev => ({
+                        ...prev,
+                        uid: editData.user.uid,
+                        nama: editData.user.nama,
+                        bankName: editData.user.bankName || '',
+                        accountNumber: editData.user.accountNumber || '',
+                        department: editData.user.department || ''
+                    }));
+
+                    // Set Dropdown Unit
+                    if (editData.user.unit) {
+                        setSelectedUnit({ value: editData.user.unit, label: editData.user.unit });
+                    }
+
+                    // Fungsi pencari opsi dropdown
+                    const findOption = (options, val) => options.find(o => o.value === val) || { value: val, label: val };
+
+                    // Set Dropdown Validator & Reviewer
+                    if (editData.user.validator && editData.user.validator.length > 0) {
+                        setSelectedValidator(findOption(validatorOptions, editData.user.validator[0]));
+                    }
+                    if (editData.user.reviewer1 && editData.user.reviewer1.length > 0) {
+                        setSelectedReviewer1(findOption(reviewerOptions, editData.user.reviewer1[0]));
+                    }
+                    if (editData.user.reviewer2 && editData.user.reviewer2.length > 0) {
+                        setSelectedReviewer2(findOption(reviewerOptions, editData.user.reviewer2[0]));
+                    }
+                }
+            }, 100);
+        }
+    }, [isEditMode, editData, validatorOptions, reviewerOptions]);
     
     const handleSubmit = async () => {
         try {
@@ -484,17 +544,53 @@ const FormLpjUmum = () => {
                 updatedAt: new Date().toISOString()
             }
 
-            const docRef = await addDoc(collection(db, 'lpj'), lpjData)
-            await setDoc(doc(db, 'lpj', docRef.id), { ...lpjData, id: docRef.id })
+            if (isEditMode) {
+                // --- LOGIKA JIKA EDIT (SUPER ADMIN) ---
+                const lpjRef = doc(db, 'lpj', editData.id)
+                
+                // Siapkan data yang akan di-update
+                const updateData = {
+                    lpj: lpjData.lpj,
+                    nomorBS: lpjData.nomorBS,
+                    jumlahBS: lpjData.jumlahBS,
+                    totalBiaya: lpjData.totalBiaya,
+                    sisaLebih: lpjData.sisaLebih,
+                    sisaKurang: lpjData.sisaKurang,
+                    updatedAt: new Date().toISOString(),
+                    statusHistory: arrayUnion({
+                        status: 'Data Diubah oleh Super Admin',
+                        timestamp: new Date().toISOString(),
+                        actor: userData.uid,
+                        reason: 'Super Admin mengedit detail form LPJ Umum'
+                    })
+                };
 
-            console.log('LPJ berhasil dibuat:', {
-                firestoreId: docRef.id,
-                displayId: displayId
-            })
-            toast.success('LPJ GA/Umum berhasil dibuat')
+                // Jika ada file baru yang di-upload, tambahkan ke updateData
+                if (attachmentFiles.length > 0 && attachmentFiles[0].size > 0) { // Cek size > 0 untuk memastikan bukan mock file
+                    updateData.lampiran = lpjData.lampiran;
+                    updateData.lampiranUrl = lpjData.lampiranUrl;
+                }
 
-            resetForm()
-            setIsSubmitting(false)
+                await updateDoc(lpjRef, updateData)
+                
+                toast.success('LPJ Umum berhasil diperbarui!')
+                setIsSubmitting(false)
+                navigate('/lpj/cek-pengajuan') // Arahkan kembali ke tabel
+
+            } else {
+                // --- LOGIKA JIKA BIKIN BARU ---
+                const docRef = await addDoc(collection(db, 'lpj'), lpjData)
+                await setDoc(doc(db, 'lpj', docRef.id), { ...lpjData, id: docRef.id })
+
+                console.log('LPJ berhasil dibuat:', {
+                    firestoreId: docRef.id,
+                    displayId: displayId
+                })
+                toast.success('LPJ GA/Umum berhasil dibuat')
+
+                resetForm()
+                setIsSubmitting(false)
+            }
         } catch (error) {
             console.error('Error submitting lpj:', error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
