@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { collection, query, where, getDocs, getDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import Modal from './Modal'
@@ -8,6 +8,8 @@ import EmptyState from '../assets/images/EmptyState.png'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 
 const LpjBsCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')
@@ -306,6 +308,30 @@ const LpjBsCheck = () => {
         }
 
         return tabs;
+    };
+
+    const navigate = useNavigate();
+
+    const handleEditClick = (item) => {
+        let path = '';
+
+        // Deteksi kategori untuk menentukan rute form yang tepat
+        if (item.kategori === 'GA/Umum') {
+            path = '/lpj/umum';
+        } else if (item.kategori === 'Marketing/Operasional') {
+            path = '/lpj/marketing';
+        } else {
+            toast.error('Kategori LPJ tidak dikenali untuk diedit');
+            return;
+        }
+
+        // Lempar data ke halaman form yang sesuai
+        navigate(path, {
+            state: {
+                isEditMode: true,
+                editData: item
+            }
+        });
     };
 
     // Handle Approve
@@ -896,14 +922,25 @@ const LpjBsCheck = () => {
                                                         </span>
                                                     </td>
                                                     <td className="p-2 border text-center">
-                                                        <div className="flex justify-center space-x-2">
+                                                        <div className="flex justify-center items-center space-x-2">
+                                                            
+                                                            {/* --- TOMBOL EDIT (BARU) --- */}
                                                             <button
-                                                                className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600"
+                                                                className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                onClick={() => handleEditClick(item)}
+                                                                title="Edit Dokumen"
+                                                            >
+                                                                <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                            </button>
+
+                                                            {/* --- TOMBOL APPROVE (ASLI MILIKMU) --- */}
+                                                            <button
+                                                                className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600 flex items-center justify-center w-8 h-8"
                                                                 onClick={() => handleApprove(item)}
                                                                 title="Approve"
                                                             >
                                                                 <svg
-                                                                    className="w-6 h-6"
+                                                                    className="w-5 h-5"
                                                                     viewBox="0 0 24 24"
                                                                     fill="none"
                                                                     stroke="currentColor"
@@ -917,13 +954,14 @@ const LpjBsCheck = () => {
                                                                 </svg>
                                                             </button>
 
+                                                            {/* --- TOMBOL REJECT (ASLI MILIKMU) --- */}
                                                             <button
-                                                                className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600"
+                                                                className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600 flex items-center justify-center w-8 h-8"
                                                                 onClick={() => handleReject(item)}
                                                                 title="Reject"
                                                             >
                                                                 <svg
-                                                                    className="w-6 h-6"
+                                                                    className="w-5 h-5"
                                                                     viewBox="0 0 24 24"
                                                                     fill="none"
                                                                     stroke="currentColor"
@@ -936,6 +974,7 @@ const LpjBsCheck = () => {
                                                                     />
                                                                 </svg>
                                                             </button>
+
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -976,6 +1015,7 @@ const LpjBsCheck = () => {
                                                     <th className="px-4 py-2 border">Jumlah BS</th>
                                                     <th className="px-4 py-2 border">Tanggal Pengajuan</th>
                                                     <th className="px-4 py-2 border">Tanggal Disetujui</th>
+                                                    <th className="px-4 py-2 border">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1013,6 +1053,17 @@ const LpjBsCheck = () => {
                                                                             new Date(a.timestamp)
                                                                     )[0]?.timestamp
                                                             )}
+                                                        </td>
+                                                        <td className="p-2 border text-center">
+                                                            <div className="flex justify-center items-center">
+                                                                <button
+                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                    onClick={() => handleEditClick(item)}
+                                                                    title="Edit Dokumen"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))}

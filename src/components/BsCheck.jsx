@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { collection, query, where, getDocs, getDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import Modal from './Modal'
@@ -8,6 +8,8 @@ import EmptyState from '../assets/images/EmptyState.png'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 
 const BsCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')
@@ -271,6 +273,17 @@ const BsCheck = () => {
         }
 
         return tabs;
+    };
+
+    const navigate = useNavigate();
+    
+    const handleEditClick = (item) => {
+        navigate('/bon-sementara/ajukan', {
+            state: {
+                isEditMode: true,
+                editData: item
+            }
+        });
     };
 
     // Handle Approve
@@ -747,86 +760,92 @@ const BsCheck = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {data.bonSementara.map((item, index) => (
-                                                <tr key={index}>
-                                                    <td className="p-2 border text-center w-auto">{index + 1}</td>
-                                                    <td className="px-4 py-2 border">
-                                                        <Link
-                                                            to={`/bon-sementara/${item.id}`}
-                                                            className="text-black hover:text-gray-700 hover:underline cursor-pointer"
-                                                        >
-                                                            {item.displayId}
-                                                        </Link>
-                                                    </td>
-                                                    <td className="px-4 py-2 border">{item.user.nama}</td>
-                                                    <td className="px-4 py-2 border">
-                                                        {item.bonSementara[0].kategori}
-                                                    </td>
-                                                    <td className="px-4 py-2 border">
-                                                        Rp
-                                                        {item.bonSementara[0].jumlahBS.toLocaleString('id-ID')}
-                                                    </td>
-                                                    <td className="px-4 py-2 border">
-                                                        {formatDate(item.tanggalPengajuan)}
-                                                    </td>
-                                                    <td className="p-2 border text-center">
-                                                        <span
-                                                            className={`px-4 py-1 rounded-full text-xs font-medium 
+                                                {data.bonSementara.map((item, index) => (
+                                                    <tr key={index}>
+                                                        <td className="p-2 border text-center w-auto">{index + 1}</td>
+                                                        <td className="px-4 py-2 border">
+                                                            <Link
+                                                                to={`/bon-sementara/${item.id}`}
+                                                                className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                            >
+                                                                {item.displayId}
+                                                            </Link>
+                                                        </td>
+                                                        <td className="px-4 py-2 border">{item.user.nama}</td>
+                                                        <td className="px-4 py-2 border">
+                                                            {item.bonSementara[0].kategori}
+                                                        </td>
+                                                        <td className="px-4 py-2 border">
+                                                            Rp
+                                                            {item.bonSementara[0].jumlahBS.toLocaleString('id-ID')}
+                                                        </td>
+                                                        <td className="px-4 py-2 border">
+                                                            {formatDate(item.tanggalPengajuan)}
+                                                        </td>
+                                                        <td className="p-2 border text-center">
+                                                            <span
+                                                                className={`px-4 py-1 rounded-full text-xs font-medium 
                                                     ${item.status === 'Diajukan'
-                                                                    ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
-                                                                    : item.status === 'Disetujui'
-                                                                        ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
-                                                                        : item.status === 'Diproses'
-                                                                            ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
-                                                                            : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
-                                                                }`}
-                                                        >
-                                                            {item.status || 'Tidak Diketahui'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-2 border text-center">
-                                                        <div className="flex justify-center space-x-2">
-                                                            <button
-                                                                className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600"
-                                                                onClick={() => handleApprove(item)}
-                                                                title="Approve"
+                                                                        ? 'bg-blue-200 text-blue-800 border-[1px] border-blue-600'
+                                                                        : item.status === 'Disetujui'
+                                                                            ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
+                                                                            : item.status === 'Diproses'
+                                                                                ? 'bg-yellow-200 text-yellow-800 border-[1px] border-yellow-600'
+                                                                                : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
+                                                                    }`}
                                                             >
-                                                                <svg
-                                                                    className="w-6 h-6"
-                                                                    viewBox="0 0 24 24"
-                                                                    fill="none"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth="2"
+                                                                {item.status || 'Tidak Diketahui'}
+                                                            </span>
+                                                        </td>
+                                                        
+                                                        {/* --- BAGIAN INI YANG KITA UBAH (TAMBAH TOMBOL EDIT) --- */}
+                                                        <td className="p-2 border text-center">
+                                                            <div className="flex justify-center space-x-2">
+                                                                
+                                                                {/* Tombol Edit */}
+                                                                <button
+                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                    onClick={() => handleEditClick(item)}
+                                                                    title="Edit"
                                                                 >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M5 13l4 4L19 7"
-                                                                    />
-                                                                </svg>
-                                                            </button>
+                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                </button>
 
-                                                            <button
-                                                                className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600"
-                                                                onClick={() => handleReject(item)}
-                                                                title="Reject"
-                                                            >
-                                                                <svg
-                                                                    className="w-6 h-6"
-                                                                    viewBox="0 0 24 24"
-                                                                    fill="none"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth="2"
+                                                                {/* Tombol Approve Asli */}
+                                                                <button
+                                                                    className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600 flex items-center justify-center w-8 h-8"
+                                                                    onClick={() => handleApprove(item)}
+                                                                    title="Approve"
                                                                 >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M6 18L18 6M6 6l12 12"
-                                                                    />
-                                                                </svg>
-                                                            </button>
-                                                        </div>
-                                                    </td>
+                                                                    <svg
+                                                                        className="w-5 h-5"
+                                                                        viewBox="0 0 24 24"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        strokeWidth="2"
+                                                                    >
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                {/* Tombol Reject Asli */}
+                                                                <button
+                                                                    className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600 flex items-center justify-center w-8 h-8"
+                                                                    onClick={() => handleReject(item)}
+                                                                    title="Reject"
+                                                                >
+                                                                    <svg
+                                                                        className="w-5 h-5"
+                                                                        viewBox="0 0 24 24"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        strokeWidth="2"
+                                                                    >
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -864,6 +883,7 @@ const BsCheck = () => {
                                                     <th className="px-4 py-2 border">Jumlah</th>
                                                     <th className="px-4 py-2 border">Tanggal Pengajuan</th>
                                                     <th className="px-4 py-2 border">Tanggal Disetujui</th>
+                                                    <th className="px-4 py-2 border">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -893,7 +913,8 @@ const BsCheck = () => {
                                                                 item.statusHistory
                                                                     .filter(
                                                                         (status) =>
-                                                                            status.status.includes('Disetujui')
+                                                                            // Kalau ada uid di sini, pastikan variabel uid sudah dideklarasikan di atas ya
+                                                                            status.status.includes('Disetujui') 
                                                                     )
                                                                     .sort(
                                                                         (a, b) =>
@@ -902,6 +923,21 @@ const BsCheck = () => {
                                                                     )[0]?.timestamp
                                                             )}
                                                         </td>
+
+                                                        {/* --- TAMBAHAN TOMBOL EDIT DI SINI --- */}
+                                                        <td className="p-2 border text-center">
+                                                            <div className="flex justify-center items-center">
+                                                                <button
+                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                    onClick={() => handleEditClick(item)}
+                                                                    title="Edit Dokumen"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        {/* ------------------------------------ */}
+
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -941,6 +977,7 @@ const BsCheck = () => {
                                                     <th className="px-4 py-2 border">Tanggal Pengajuan</th>
                                                     <th className="px-4 py-2 border">Tanggal Dibatalkan</th>
                                                     <th className="px-4 py-2 border">Alasan Pembatalan</th>
+                                                    <th className="px-4 py-2 border">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -972,7 +1009,24 @@ const BsCheck = () => {
                                                                     ?.timestamp
                                                             )}
                                                         </td>
-                                                        <td className="p-4 border truncate max-w-[150px] overflow-hidden whitespace-nowrap">{item.cancelReason || '-'}</td>
+                                                        <td className="p-4 border truncate max-w-[150px] overflow-hidden whitespace-nowrap">
+                                                            {item.cancelReason || '-'}
+                                                        </td>
+
+                                                        {/* --- TAMBAHAN TOMBOL EDIT DI SINI --- */}
+                                                        <td className="p-2 border text-center">
+                                                            <div className="flex justify-center items-center">
+                                                                <button
+                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                    onClick={() => handleEditClick(item)}
+                                                                    title="Edit Dokumen"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        {/* ------------------------------------ */}
+
                                                     </tr>
                                                 ))}
                                             </tbody>

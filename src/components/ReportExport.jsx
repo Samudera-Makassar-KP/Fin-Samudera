@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 // --- PERUBAHAN 1: Impor fungsi 'doc' dan 'deleteDoc' dari Firestore ---
 import { collection, query, where, getDocs, or, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
@@ -10,6 +10,7 @@ import EmptyState from '../assets/images/EmptyState.png';
 import * as XLSX from 'xlsx';
 
 const ReportExport = () => {
+    const navigate = useNavigate(); // INISIALISASI navigate
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [documentType, setDocumentType] = useState('reimbursement');
     const [data, setData] = useState({
@@ -177,6 +178,34 @@ const ReportExport = () => {
         }
     };
 
+    const handleEditClick = (item) => {
+        const docId = item.displayId || item.nomorBS || '';
+        let path = '';
+
+        // 1. Logika untuk Reimbursement
+        if (documentType === 'reimbursement') {
+            if (item.kategori === 'BBM') path = '/reimbursement/bbm';
+            else if (item.kategori === 'Operasional') path = '/reimbursement/operasional';
+            else path = '/reimbursement/umum';
+        } 
+        // 2. Logika untuk Bon Sementara
+        else if (documentType === 'bonSementara') {
+            path = '/bon-sementara/ajukan';
+        } 
+        // 3. Logika untuk LPJ
+        else if (documentType === 'lpj') {
+            path = item.kategori === 'GA/Umum' ? '/lpj/umum' : '/lpj/marketing';
+        }
+
+        if (path) {
+            navigate(path, {
+                state: {
+                    isEditMode: true,
+                    editData: item
+                }
+            });
+        }
+    };
 
     const getApproverName = (statusHistory) => {
         const lastEntry = statusHistory[statusHistory.length - 1];
@@ -801,7 +830,7 @@ const ReportExport = () => {
                                                         <th className="px-4 py-2 border">Tanggal Disetujui/Dibatalkan</th>
                                                         <th className="px-4 py-2 border">Disetujui/Dibatalkan Oleh</th>
                                                         <th className="p-2 border text-center">Status</th>
-                                                        {/* --- PERUBAHAN 3: Tambah kolom Aksi --- */}
+                                                        {/* Kolom Aksi */}
                                                         <th className="p-2 border text-center">Aksi</th>
                                                     </tr>
                                                 </thead>
@@ -842,16 +871,31 @@ const ReportExport = () => {
                                                                     {item.status}
                                                                 </span>
                                                             </td>
-                                                            {/* --- PERUBAHAN 4: Tambah tombol Edit dan Hapus --- */}
+                                                            
+                                                            {/* --- BAGIAN AKSI YANG DIPERBAIKI --- */}
                                                             <td className="p-2 border text-center">
                                                                 <div className="flex justify-center items-center gap-2">
-                                                                    {/* Tombol Edit: Arahkan ke halaman edit, misalnya /edit-reimbursement/id */}
-                                                                    <Link to={`/edit-reimbursement/${item.id}`} className="text-blue-600 hover:text-blue-800" title="Edit">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
-                                                                    </Link>
-                                                                    {/* Tombol Hapus: Panggil fungsi handleDelete */}
-                                                                    <button onClick={() => handleDelete(item.id, 'reimbursements')} className="text-red-600 hover:text-red-800" title="Hapus">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                                                                    {/* Tombol Edit: Sekarang memanggil handleEditClick */}
+                                                                    <button 
+                                                                        onClick={() => handleEditClick(item)} 
+                                                                        className="text-blue-600 hover:text-blue-800" 
+                                                                        title="Edit"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                                                                            <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                                                                        </svg>
+                                                                    </button>
+
+                                                                    {/* Tombol Hapus: Tetap memanggil handleDelete */}
+                                                                    <button 
+                                                                        onClick={() => handleDelete(item.id, 'reimbursements')} 
+                                                                        className="text-red-600 hover:text-red-800" 
+                                                                        title="Hapus"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                                                                        </svg>
                                                                     </button>
                                                                 </div>
                                                             </td>
@@ -927,13 +971,31 @@ const ReportExport = () => {
                                                                     {bs.status}
                                                                 </span>
                                                             </td>
+
+                                                            {/* --- BAGIAN AKSI YANG DIPERBAIKI (TOMBOL BIRU) --- */}
                                                             <td className="p-2 border text-center">
                                                                 <div className="flex justify-center items-center gap-2">
-                                                                    <Link to={`/edit-bon-sementara/${bs.id}`} className="text-blue-600 hover:text-blue-800" title="Edit">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
-                                                                    </Link>
-                                                                    <button onClick={() => handleDelete(bs.id, 'bonSementara')} className="text-red-600 hover:text-red-800" title="Hapus">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                                                                    
+                                                                    {/* Ganti Link jadi Button supaya handleEditClick jalan */}
+                                                                    <button 
+                                                                        onClick={() => handleEditClick(bs)} 
+                                                                        className="text-blue-600 hover:text-blue-800" 
+                                                                        title="Edit Data"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                                                                            <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                                                                        </svg>
+                                                                    </button>
+
+                                                                    <button 
+                                                                        onClick={() => handleDelete(bs.id, 'bonSementara')} 
+                                                                        className="text-red-600 hover:text-red-800" 
+                                                                        title="Hapus"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                                                                        </svg>
                                                                     </button>
                                                                 </div>
                                                             </td>
@@ -1009,13 +1071,31 @@ const ReportExport = () => {
                                                                     {item.status}
                                                                 </span>
                                                             </td>
+
+                                                            {/* --- BAGIAN AKSI YANG DIPERBAIKI (TOMBOL BIRU) --- */}
                                                             <td className="p-2 border text-center">
                                                                 <div className="flex justify-center items-center gap-2">
-                                                                    <Link to={`/edit-lpj/${item.id}`} className="text-blue-600 hover:text-blue-800" title="Edit">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
-                                                                    </Link>
-                                                                    <button onClick={() => handleDelete(item.id, 'lpj')} className="text-red-600 hover:text-red-800" title="Hapus">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                                                                    
+                                                                    {/* Tombol Edit menggunakan onClick, bukan Link */}
+                                                                    <button 
+                                                                        onClick={() => handleEditClick(item)} 
+                                                                        className="text-blue-600 hover:text-blue-800" 
+                                                                        title="Edit Data"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                            <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                                                                            <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                                                                        </svg>
+                                                                    </button>
+
+                                                                    <button 
+                                                                        onClick={() => handleDelete(item.id, 'lpj')} 
+                                                                        className="text-red-600 hover:text-red-800" 
+                                                                        title="Hapus"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                                                                        </svg>
                                                                     </button>
                                                                 </div>
                                                             </td>
