@@ -924,14 +924,16 @@ const LpjBsCheck = () => {
                                                     <td className="p-2 border text-center">
                                                         <div className="flex justify-center items-center space-x-2">
                                                             
-                                                            {/* --- TOMBOL EDIT (BARU) --- */}
-                                                            <button
-                                                                className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
-                                                                onClick={() => handleEditClick(item)}
-                                                                title="Edit Dokumen"
-                                                            >
-                                                                <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
-                                                            </button>
+                                                            {/* --- TOMBOL EDIT (BARU) - DIGEMBOK KHUSUS SUPER ADMIN --- */}
+                                                                {userRole === 'Super Admin' && (
+                                                                    <button
+                                                                        className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                        onClick={() => handleEditClick(item)}
+                                                                        title="Edit Dokumen"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
 
                                                             {/* --- TOMBOL APPROVE (ASLI MILIKMU) --- */}
                                                             <button
@@ -1056,13 +1058,16 @@ const LpjBsCheck = () => {
                                                         </td>
                                                         <td className="p-2 border text-center">
                                                             <div className="flex justify-center items-center">
-                                                                <button
-                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
-                                                                    onClick={() => handleEditClick(item)}
-                                                                    title="Edit Dokumen"
-                                                                >
-                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
-                                                                </button>
+                                                                {/* --- DIGEMBOK KHUSUS SUPER ADMIN --- */}
+                                                                {userRole === 'Super Admin' && (
+                                                                    <button
+                                                                        className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                        onClick={() => handleEditClick(item)}
+                                                                        title="Edit Dokumen"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </td>
                                                     </tr>

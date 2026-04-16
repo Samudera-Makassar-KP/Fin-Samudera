@@ -28,6 +28,8 @@ const BsCheck = () => {
     const [selectedReport, setselectedReport] = useState(null)
 
     // const uid = localStorage.getItem('userUid')
+    const uid = localStorage.getItem('userUid')
+    const userRole = localStorage.getItem('userRole')
 
     // Get current date
     const today = new Date()
@@ -54,8 +56,6 @@ const BsCheck = () => {
     }
 
     useEffect(() => {
-        const uid = localStorage.getItem('userUid')
-        const userRole = localStorage.getItem('userRole')
         const fetchUserAndBonSementara = async () => {
             setLoading(true)
             try {
@@ -803,13 +803,15 @@ const BsCheck = () => {
                                                             <div className="flex justify-center space-x-2">
                                                                 
                                                                 {/* Tombol Edit */}
-                                                                <button
-                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
-                                                                    onClick={() => handleEditClick(item)}
-                                                                    title="Edit"
-                                                                >
-                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
-                                                                </button>
+                                                                    {userRole === 'Super Admin' && (
+                                                                        <button
+                                                                            className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                            onClick={() => handleEditClick(item)}
+                                                                            title="Edit"
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
 
                                                                 {/* Tombol Approve Asli */}
                                                                 <button
@@ -927,13 +929,15 @@ const BsCheck = () => {
                                                         {/* --- TAMBAHAN TOMBOL EDIT DI SINI --- */}
                                                         <td className="p-2 border text-center">
                                                             <div className="flex justify-center items-center">
-                                                                <button
-                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
-                                                                    onClick={() => handleEditClick(item)}
-                                                                    title="Edit Dokumen"
-                                                                >
-                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
-                                                                </button>
+                                                                {userRole === 'Super Admin' && (
+                                                                    <button
+                                                                        className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                        onClick={() => handleEditClick(item)}
+                                                                        title="Edit Dokumen"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         {/* ------------------------------------ */}
@@ -1016,13 +1020,15 @@ const BsCheck = () => {
                                                         {/* --- TAMBAHAN TOMBOL EDIT DI SINI --- */}
                                                         <td className="p-2 border text-center">
                                                             <div className="flex justify-center items-center">
-                                                                <button
-                                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
-                                                                    onClick={() => handleEditClick(item)}
-                                                                    title="Edit Dokumen"
-                                                                >
-                                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
-                                                                </button>
+                                                                {userRole === 'Super Admin' && (
+                                                                    <button
+                                                                        className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                                        onClick={() => handleEditClick(item)}
+                                                                        title="Edit Dokumen"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         {/* ------------------------------------ */}
