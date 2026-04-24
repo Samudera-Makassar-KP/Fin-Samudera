@@ -71,7 +71,7 @@ const RbsUmumForm = () => {
         const fetchValidators = async () => {
             try {
                 const usersRef = collection(db, 'users')
-                const q = query(usersRef, where('role', 'in', ['Validator', 'Admin']))
+                const q = query(usersRef, where('role', 'in', ['Validator', 'Admin', 'Reviewer']))
                 const querySnapshot = await getDocs(q)
 
                 const options = querySnapshot.docs.map((doc) => {
@@ -97,7 +97,7 @@ const RbsUmumForm = () => {
         const fetchReviewer = async () => {
             try {
                 const usersRef = collection(db, 'users')
-                const q = query(usersRef, where('role', 'in', ['Reviewer']))
+                const q = query(usersRef, where('role', 'in', ['Reviewer', 'Validator', 'Admin']))
                 const querySnapshot = await getDocs(q)
 
                 const options = querySnapshot.docs.map((doc) => {
@@ -151,8 +151,8 @@ const RbsUmumForm = () => {
         { value: 'PT SILKargo Indonesia', label: 'PT SILKargo Indonesia' },
         { value: 'PT PAD Samudera Perdana', label: 'PT PAD Samudera Perdana' },
         { value: 'PT Masaji Kargosentra Tama', label: 'PT Masaji Kargosentra Tama' },
-        { value: 'Samudera', label: 'Samudera' },
-        { value: 'Panitia SISCO', label: 'Panitia SISCO' }
+        { value: 'Samudera Indonesia', label: 'Samudera Indonesia' },
+        { value: 'Panitia', label: 'Panitia' }
     ]
 
     const jenisOptions = [
@@ -326,8 +326,8 @@ const RbsUmumForm = () => {
         'PT Samudera Agencies Indonesia': 'SAI',
         'PT SILKargo Indonesia': 'SKI',
         'PT PAD Samudera Perdana': 'SP',
-        'PT Masaji Kargosentra Tama': 'MKT',
-        'Samudera': 'SMDR',
+        'Samudera Indonesia': 'SMDR',
+        'Panitia': 'PNTA',
     }
 
     const getUnitCode = (unitName) => {
