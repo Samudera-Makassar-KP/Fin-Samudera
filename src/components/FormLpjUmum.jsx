@@ -566,7 +566,7 @@ const FormLpjUmum = () => {
                 };
 
                 // Jika ada file baru yang di-upload, tambahkan ke updateData
-                if (attachmentFiles.length > 0 && attachmentFiles[0].size > 0) { // Cek size > 0 untuk memastikan bukan mock file
+                if (attachmentFiles.length > 0 && attachmentFiles[0].size > 0) { 
                     updateData.lampiran = lpjData.lampiran;
                     updateData.lampiranUrl = lpjData.lampiranUrl;
                 }
@@ -582,6 +582,11 @@ const FormLpjUmum = () => {
                 const docRef = await addDoc(collection(db, 'lpj'), lpjData)
                 await setDoc(doc(db, 'lpj', docRef.id), { ...lpjData, id: docRef.id })
 
+                // --- PERBAIKAN: Hapus Draft setelah berhasil simpan baru ---
+                if (typeof clearDraft === 'function') {
+                    await clearDraft();
+                }
+
                 console.log('LPJ berhasil dibuat:', {
                     firestoreId: docRef.id,
                     displayId: displayId
@@ -590,6 +595,9 @@ const FormLpjUmum = () => {
 
                 resetForm()
                 setIsSubmitting(false)
+
+                // --- PERBAIKAN: Arahkan ke halaman Cek Pengajuan ---
+                navigate('/lpj/cek-pengajuan')
             }
         } catch (error) {
             console.error('Error submitting lpj:', error)
@@ -717,7 +725,7 @@ const FormLpjUmum = () => {
     }
 
     const draftKey = `lpj-umum_${userData.uid}_${nomorBS || 'new'}`;
-    const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS)
+    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS)
 
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {

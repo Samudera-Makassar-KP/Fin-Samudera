@@ -602,9 +602,18 @@ const FormLpjMarketing = () => {
                 // --- LOGIKA SIMPAN BARU ---
                 const docRef = await addDoc(collection(db, 'lpj'), lpjData)
                 await setDoc(doc(db, 'lpj', docRef.id), { ...lpjData, id: docRef.id })
+                
+                // --- PERBAIKAN: Clear Draft yang aman ---
+                if (typeof clearDraft === 'function') {
+                    await clearDraft();
+                }
+                
                 toast.success('LPJ Marketing/Operasional berhasil dibuat')
                 resetForm()
                 setIsSubmitting(false)
+                
+                // --- PERBAIKAN: Arahkan kembali ke tabel ---
+                navigate('/lpj/cek-pengajuan')
             }
         } catch (error) {
             console.error('Error submitting lpj:', error)
@@ -737,7 +746,7 @@ const FormLpjMarketing = () => {
     }
 
     const draftKey = `lpj-marketing_${userData.uid}_${nomorBS || 'new'}`;
-const { hasDraft, saveDraft, loadDraft } = useFormDraft(db, userData, draftKey, initialLpjState);
+const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, draftKey, initialLpjState);
 
     // --- Mengubah handling file pada saveDraft ---
     const handleSaveDraft = async () => {
