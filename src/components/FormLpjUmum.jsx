@@ -724,8 +724,8 @@ const FormLpjUmum = () => {
         })
     }
 
-    const draftKey = `lpj-umum_${userData.uid}_${nomorBS || 'new'}`;
-    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS)
+    
+    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-umum', 'draft')
 
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {

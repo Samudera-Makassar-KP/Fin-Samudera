@@ -38,9 +38,8 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
             if (draftSnap.exists()) {
                 const draftData = draftSnap.data()
                 
-                // Draft dihapus setelah di-load
-                //await deleteDoc(draftRef)
-                setHasDraft(false)
+                // Draft JANGAN dihapus saat di-load agar user bisa lanjut edit.
+                // Draft hanya dihapus saat tombol Submit ditekan (menggunakan clearDraft).
                 toast.success('Draft berhasil dimuat')
                 
                 return draftData
@@ -50,6 +49,18 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
             console.error('Error loading draft:', error)
             toast.error('Gagal memuat draft')
             return null
+        }
+    }
+
+    // --- TAMBAHAN BARU: Fungsi untuk menghapus draft ---
+    const clearDraft = async () => {
+        try {
+            const draftRef = getDraftRef()
+            await deleteDoc(draftRef) // Perintah untuk menghapus dari Firebase
+            setHasDraft(false) // Reset status draft di UI
+            console.log(`🗑️ Draft [${draftRef.id}] berhasil dihapus dari database.`)
+        } catch (error) {
+            console.error('Error clearing draft:', error)
         }
     }
 
@@ -77,7 +88,8 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
     return {
         hasDraft,
         saveDraft,
-        loadDraft
+        loadDraft,
+        clearDraft // <-- PASTIKAN INI DIKEMBALIKAN (DI-EXPORT)
     }
 }
 

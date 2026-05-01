@@ -46,7 +46,7 @@ const FormLpjMarketing = () => {
     }
 
     const location = useLocation()
-    const navigate = useNavigate() // Tambahkan ini
+    const navigate = useNavigate() 
     const isEditMode = location.state?.isEditMode || false
     const editData = location.state?.editData || null
     const [lpj, setLpj] = useState([initialLpjState])
@@ -157,19 +157,14 @@ const FormLpjMarketing = () => {
     // --- SIHIR AUTO-FILL: Mengisi Validator & Reviewer Otomatis (Berlaku untuk Semua) ---
     useEffect(() => {
         if (userData.uid) { 
-            // Auto-fill Validator
             if (validatorOptions.length > 0 && userData.validator?.length > 0) {
                 const defaultValidator = validatorOptions.find(opt => userData.validator.includes(opt.value));
                 if (defaultValidator) setSelectedValidator(defaultValidator);
             }
-            
-            // Auto-fill Reviewer 1
             if (reviewerOptions.length > 0 && userData.reviewer1?.length > 0) {
                 const defaultRev1 = reviewerOptions.find(opt => userData.reviewer1.includes(opt.value));
                 if (defaultRev1) setSelectedReviewer1(defaultRev1);
             }
-            
-            // Auto-fill Reviewer 2
             if (reviewerOptions.length > 0 && userData.reviewer2?.length > 0) {
                 const defaultRev2 = reviewerOptions.find(opt => userData.reviewer2.includes(opt.value));
                 if (defaultRev2) setSelectedReviewer2(defaultRev2);
@@ -348,7 +343,6 @@ const FormLpjMarketing = () => {
         return `LPJ.MRO.${unitCode}.${year}${month}${day}.${sequence}`
     }
 
-    // --- Fungsi handler upload untuk 1 file ---
     const handleFileUpload = (event) => {
         const selectedFile = event.target.files[0]; 
 
@@ -367,25 +361,22 @@ const FormLpjMarketing = () => {
         event.target.value = '';
     }
 
-    // --- Fungsi untuk menghapus file di UI ---
     const removeAttachment = () => {
-        setAttachmentFiles([]); // Langsung kosongkan keranjang
+        setAttachmentFiles([]);
     }
 
-    // --- Mengupload 1 file ke Firebase ---
     const uploadAttachments = async (files, displayId) => {
         if (!files || files.length === 0) return null;
 
         try {
             const file = files[0];
-            // Folder penyimpanannya tetap di Marketing_Operasional sesuai kodemu
             const newFileName = `Lampiran_1_${displayId}.pdf`;
             const storageRef = ref(storage, `LPJ/Marketing_Operasional/${displayId}/${newFileName}`);
             
             const snapshot = await uploadBytes(storageRef, file);
             const downloadUrl = await getDownloadURL(snapshot.ref);
             
-            return downloadUrl; // Kembalikan 1 URL bersih
+            return downloadUrl; 
         } catch (error) {
             console.error('Error uploading files:', error);
             toast.error('Gagal mengunggah lampiran');
@@ -396,7 +387,6 @@ const FormLpjMarketing = () => {
     useEffect(() => {
         if (isEditMode && editData && editData.lpj) {
             
-            // 1. Set Data Item LPJ
             const formattedLPJ = editData.lpj.map(item => ({
                 ...item,
                 biaya: item.biaya?.toString() || '',
@@ -404,7 +394,6 @@ const FormLpjMarketing = () => {
             }));
             setLpj(formattedLPJ);
 
-            // 2. Set Data Marketing (Project, JO, dll)
             setNomorBS(editData.nomorBS || '');
             setJumlahBS(editData.jumlahBS || '');
             setProject(editData.project || '');
@@ -414,13 +403,11 @@ const FormLpjMarketing = () => {
             setTanggal(editData.tanggal || '');
             setAktivitas(editData.aktivitas || '');
             
-            // 3. Set Lampiran Visual (Mock File)
             if (editData.lampiran && editData.lampiran.length > 0) {
                 const mockFiles = editData.lampiran.map(name => new File([""], name));
                 setAttachmentFiles(mockFiles);
             }
 
-            // 4. Set Data User & Dropdown
             setTimeout(() => {
                 if (editData.user) {
                     setUserData(prev => ({ ...prev, 
@@ -452,7 +439,6 @@ const FormLpjMarketing = () => {
 
             const missingFields = []
 
-            // Validasi seragam
             if (!userData.nama) missingFields.push('Nama')
             if (!selectedUnit?.value) missingFields.push('Unit Bisnis')
             if (!selectedValidator) missingFields.push('Validator')
@@ -547,7 +533,6 @@ const FormLpjMarketing = () => {
                 ...calculatedCosts,
                 tanggalPengajuan: tanggalPengajuan,
                 tanggal: tanggal,
-                // --- Simpan array lampiran ---
                 lampiran: attachmentFiles.map(f => f.name),
                 lampiranUrl: lampiranUrls,
                 totalBiaya: totalBiaya,
@@ -652,7 +637,6 @@ const FormLpjMarketing = () => {
         setSelectedReviewer2(null)
     }
 
-    // --- Tampilan UI untuk Multi Upload ---
     const renderFileUpload = () => {
         return (
             <div className="flex flex-col items-start w-full">
@@ -682,7 +666,7 @@ const FormLpjMarketing = () => {
                                 <span className="text-sm text-gray-700 truncate max-w-[80%]">{file.name}</span>
                                 <button
                                     type="button"
-                                    onClick={() => removeAttachment(index)}
+                                    onClick={() => removeAttachment()}
                                     className="text-red-500 hover:text-red-700 ml-2 font-bold"
                                 >
                                     <FontAwesomeIcon icon={faTimes} />
@@ -745,10 +729,9 @@ const FormLpjMarketing = () => {
         })
     }
 
-    const draftKey = `lpj-marketing_${userData.uid}_${nomorBS || 'new'}`;
-const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, draftKey, initialLpjState);
+    // --- PERBAIKAN: Gunakan ID statis 'draft' ---
+    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-marketing', 'draft');
 
-    // --- Mengubah handling file pada saveDraft ---
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {
             return new Promise((resolve) => {
@@ -805,7 +788,6 @@ const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData
         resetForm();
     }
     
-    // --- Mengubah handling file pada loadDraft ---
     const handleLoadDraft = async () => {
         const draftData = await loadDraft()
         if (draftData) {
@@ -820,7 +802,6 @@ const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData
             setTanggalPengajuan(draftData.tanggalPengajuan || todayDate)
             setAktivitas(draftData.aktivitas || '')
             
-            // Reconstruct files from base64 array
             if (draftData.attachmentFiles && draftData.attachmentFiles.length > 0) {
                 const reconstructedFiles = await Promise.all(draftData.attachmentFiles.map(async (fileData) => {
                     const base64Response = await fetch(fileData.base64)
@@ -850,7 +831,6 @@ const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData
             </h2>
 
             <div className="bg-white p-6 rounded-lg shadow">
-                {/* --- Layout diseragamkan untuk semua role --- */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                     {/* Row 1 */}
                     <div>
