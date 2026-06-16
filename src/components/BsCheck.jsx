@@ -251,7 +251,7 @@ const BsCheck = () => {
         }
 
         fetchUserAndBonSementara()
-    }, [])
+    }, [uid, userRole])
 
     const getAvailableTabs = () => {
         const tabs = [

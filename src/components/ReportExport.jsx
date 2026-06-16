@@ -179,7 +179,6 @@ const ReportExport = () => {
     };
 
     const handleEditClick = (item) => {
-        const docId = item.displayId || item.nomorBS || '';
         let path = '';
 
         // 1. Logika untuk Reimbursement

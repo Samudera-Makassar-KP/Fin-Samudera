@@ -1,0 +1,215 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function hasUserDoc(uid) {
+      return exists(userPath(uid));
+    }
+
+    function isSuperAdmin() {
+      return signedIn()
+        && hasUserDoc(request.auth.uid)
+        && get(userPath(request.auth.uid)).data.role == 'Super Admin';
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function validString(value, maxLength) {
+      return value is string && value.size() > 0 && value.size() <= maxLength;
+    }
+
+    function validOptionalString(value, maxLength) {
+      return value == null || (value is string && value.size() <= maxLength);
+    }
+
+    function validStringList(value, maxItems) {
+      return value is list
+        && value.size() <= maxItems;
+    }
+
+    function validUserRole(role) {
+      return role in ['Employee', 'Validator', 'Reviewer', 'Admin', 'Super Admin'];
+    }
+
+    function validUserDocument(data) {
+      return validString(data.uid, 128)
+        && validString(data.nama, 120)
+        && validString(data.email, 254)
+        && validUserRole(data.role)
+        && validOptionalString(data.posisi, 80)
+        && validOptionalString(data.bankName, 80)
+        && validOptionalString(data.accountNumber, 80)
+        && validStringList(data.unit, 20)
+        && validStringList(data.department, 20)
+        && validStringList(data.validator, 20)
+        && validStringList(data.reviewer1, 20)
+        && validStringList(data.reviewer2, 20)
+        && validStringList(data.lokasi, 20);
+    }
+
+    function isWorkflowOwner(data) {
+      return signedIn()
+        && data.user is map
+        && data.user.uid == request.auth.uid;
+    }
+
+    function hasUserList(data, field) {
+      return data.user is map
+        && field in data.user.keys()
+        && data.user[field] is list
+        && request.auth.uid in data.user[field];
+    }
+
+    function isWorkflowApprover(data) {
+      return signedIn()
+        && (
+          hasUserList(data, 'validator')
+          || hasUserList(data, 'reviewer1')
+          || hasUserList(data, 'reviewer2')
+        );
+    }
+
+    function isCurrentApprover(data) {
+      return signedIn()
+        && data.currentApproverUid is string
+        && data.currentApproverUid == request.auth.uid;
+    }
+
+    function canReadWorkflow(data) {
+      return signedIn()
+        && (
+          isSuperAdmin()
+          || isWorkflowOwner(data)
+          || isWorkflowApprover(data)
+          || isCurrentApprover(data)
+        );
+    }
+
+    function validWorkflowCreate(data) {
+      return data.user is map
+        && data.user.uid is string
+        && data.user.uid.size() > 0
+        && validOptionalString(data.displayId, 80)
+        && validOptionalString(data.status, 80);
+    }
+
+    function keepsWorkflowIdentity() {
+      return request.resource.data.user is map
+        && resource.data.user is map
+        && request.resource.data.user.uid == resource.data.user.uid
+        && request.resource.data.displayId == resource.data.displayId;
+    }
+
+    function canCreateWorkflow(data) {
+      return signedIn()
+        && validWorkflowCreate(data)
+        && (isSuperAdmin() || data.user.uid == request.auth.uid);
+    }
+
+    function workflowStatusUpdateKeysOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'statusHistory',
+        'approvedByValidator',
+        'approvedByValidatorStatus',
+        'approvedByReviewer1',
+        'approvedByReviewer1Status',
+        'approvedByReviewer2',
+        'approvedByReviewer2Status',
+        'approvedBySuperAdmin',
+        'rejectedBySuperAdmin',
+        'rejectReason'
+      ]);
+    }
+
+    function ownerCancelKeysOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'status',
+        'cancelReason',
+        'statusHistory'
+      ]);
+    }
+
+    function canCancelOwnWorkflow() {
+      return isWorkflowOwner(resource.data)
+        && resource.data.status == 'Diajukan'
+        && request.resource.data.status == 'Dibatalkan'
+        && ownerCancelKeysOnly()
+        && validOptionalString(request.resource.data.cancelReason, 500);
+    }
+
+    function canApproverUpdateWorkflow() {
+      return (isWorkflowApprover(resource.data) || isCurrentApprover(resource.data))
+        && workflowStatusUpdateKeysOnly();
+    }
+
+    function canUpdateWorkflow() {
+      return signedIn()
+        && keepsWorkflowIdentity()
+        && (
+          isSuperAdmin()
+          || canCancelOwnWorkflow()
+          || canApproverUpdateWorkflow()
+        );
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if false;
+      allow update: if (
+        isSuperAdmin() && request.resource.data.uid == uid && validUserDocument(request.resource.data)
+      ) || (
+        isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bankName', 'accountNumber'])
+        && validOptionalString(request.resource.data.bankName, 80)
+        && validOptionalString(request.resource.data.accountNumber, 80)
+      );
+      allow delete: if false;
+    }
+
+    match /drafts/{draftId} {
+      allow read, create, update, delete: if signedIn()
+        && draftId.matches(request.auth.uid + '_.*');
+    }
+
+    match /counters/{counterId} {
+      allow read, create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    match /bonSementara/{docId} {
+      allow read: if canReadWorkflow(resource.data);
+      allow create: if canCreateWorkflow(request.resource.data);
+      allow update: if canUpdateWorkflow();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /reimbursement/{docId} {
+      allow read: if canReadWorkflow(resource.data);
+      allow create: if canCreateWorkflow(request.resource.data);
+      allow update: if canUpdateWorkflow();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /lpj/{docId} {
+      allow read: if canReadWorkflow(resource.data);
+      allow create: if canCreateWorkflow(request.resource.data);
+      allow update: if canUpdateWorkflow();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

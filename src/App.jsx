@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from './pages/LoginPage';
-import SidebarWrapper from './components/sidebarWrapper';
 import RbsBbm from './pages/RbsBbm';
 import RbsOperasional from './pages/RbsOperasional';
 import RbsUmum from './pages/RbsUmum';
@@ -24,13 +23,9 @@ import Dashboard from './pages/Dashboard';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 
 const AppContent = () => {
-    const userRole = localStorage.getItem('userRole');
-
     return (
         <SessionTimeoutHandler timeoutDuration={60 * 60 * 1000}> {/* 60 menit timeout */}
             <div>
-                <SidebarWrapper role={userRole} />
-
                 <Routes>
                     {/* Login Routes */}
                     <Route path="/" element={<Login />} />

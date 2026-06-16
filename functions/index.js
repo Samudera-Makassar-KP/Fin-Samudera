@@ -1,8 +1,11 @@
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
+const crypto = require("crypto");
 
 // Inisialisasi Firebase Admin
 initializeApp();
@@ -192,6 +195,165 @@ const sendEmail = async (to, subject, htmlContent = null) => {
         console.error("❌ Gagal mengirim email:", error);
     }
 };
+
+const requireSuperAdmin = async (authContext) => {
+    if (!authContext?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
+    }
+
+    const requesterData = await getUserData(authContext.uid);
+    if (requesterData?.role !== "Super Admin") {
+        throw new HttpsError("permission-denied", "Hanya Super Admin yang dapat menjalankan aksi ini.");
+    }
+
+    return requesterData;
+};
+
+const normalizeText = (value, fieldName, maxLength = 120, required = true) => {
+    if (value === undefined || value === null || value === "") {
+        if (required) {
+            throw new HttpsError("invalid-argument", `${fieldName} wajib diisi.`);
+        }
+        return "";
+    }
+
+    if (typeof value !== "string") {
+        throw new HttpsError("invalid-argument", `${fieldName} harus berupa teks.`);
+    }
+
+    const trimmed = value.trim();
+    if (required && !trimmed) {
+        throw new HttpsError("invalid-argument", `${fieldName} wajib diisi.`);
+    }
+
+    if (trimmed.length > maxLength) {
+        throw new HttpsError("invalid-argument", `${fieldName} terlalu panjang.`);
+    }
+
+    return trimmed;
+};
+
+const normalizeStringArray = (value, fieldName, maxItems = 20) => {
+    if (!value) return [];
+    if (!Array.isArray(value)) {
+        throw new HttpsError("invalid-argument", `${fieldName} harus berupa daftar.`);
+    }
+
+    if (value.length > maxItems) {
+        throw new HttpsError("invalid-argument", `${fieldName} terlalu banyak.`);
+    }
+
+    return value
+        .filter((item) => typeof item === "string" && item.trim())
+        .map((item) => item.trim());
+};
+
+const normalizeManagedUser = (input) => {
+    const allowedRoles = ["Employee", "Validator", "Reviewer", "Admin", "Super Admin"];
+    const role = normalizeText(input?.role, "Role", 40);
+
+    if (!allowedRoles.includes(role)) {
+        throw new HttpsError("invalid-argument", "Role tidak dikenali.");
+    }
+
+    const isSuperAdminRole = role === "Super Admin";
+
+    return {
+        nama: normalizeText(input?.nama, "Nama", 120),
+        email: normalizeText(input?.email, "Email", 254).toLowerCase(),
+        role,
+        posisi: isSuperAdminRole ? "" : normalizeText(input?.posisi, "Posisi", 80, false),
+        unit: isSuperAdminRole ? [] : normalizeStringArray(input?.unit, "Unit bisnis"),
+        department: isSuperAdminRole ? [] : normalizeStringArray(input?.department, "Department"),
+        bankName: isSuperAdminRole ? "" : normalizeText(input?.bankName, "Nama bank", 80, false),
+        accountNumber: isSuperAdminRole ? "" : normalizeText(input?.accountNumber, "Nomor rekening", 80, false),
+        reviewer1: isSuperAdminRole ? [] : normalizeStringArray(input?.reviewer1, "Reviewer 1"),
+        reviewer2: isSuperAdminRole ? [] : normalizeStringArray(input?.reviewer2, "Reviewer 2"),
+        validator: isSuperAdminRole ? [] : normalizeStringArray(input?.validator, "Validator"),
+        lokasi: isSuperAdminRole ? [] : normalizeStringArray(input?.lokasi, "Lokasi"),
+    };
+};
+
+exports.createManagedUser = onCall(async (request) => {
+    await requireSuperAdmin(request.auth);
+
+    const userData = normalizeManagedUser(request.data || {});
+    const temporaryPassword = `${crypto.randomBytes(18).toString("base64url")}aA1!`;
+    let userRecord;
+
+    try {
+        userRecord = await getAuth().createUser({
+            email: userData.email,
+            displayName: userData.nama,
+            password: temporaryPassword,
+            emailVerified: false,
+            disabled: false,
+        });
+
+        await db.collection("users").doc(userRecord.uid).set({
+            uid: userRecord.uid,
+            ...userData,
+            createdAt: new Date().toISOString(),
+            createdBy: request.auth.uid,
+        });
+    } catch (error) {
+        if (userRecord?.uid) {
+            await getAuth().deleteUser(userRecord.uid).catch(() => undefined);
+        }
+
+        if (error.code === "auth/email-already-exists") {
+            throw new HttpsError("already-exists", "Email sudah terdaftar. Gunakan email lain.");
+        }
+
+        if (error.code === "auth/invalid-email") {
+            throw new HttpsError("invalid-argument", "Format email tidak valid.");
+        }
+
+        console.error("Gagal membuat managed user:", error);
+        throw new HttpsError("internal", "Gagal menambahkan pengguna.");
+    }
+
+    try {
+        const resetLink = await getAuth().generatePasswordResetLink(userData.email);
+        await sendEmail(
+            userData.email,
+            "Akun Samudera Indonesia Anda",
+            `
+                <p>Dear <strong>${userData.nama}</strong>,</p>
+                <p>Akun Samudera Indonesia Anda telah dibuat. Silakan atur kata sandi melalui tautan berikut:</p>
+                <p><a href="${resetLink}">Atur kata sandi</a></p>
+                <p>Jika Anda tidak merasa meminta akun ini, abaikan email ini.</p>
+            `
+        );
+    } catch (error) {
+        console.error("Gagal mengirim email reset password pengguna baru:", error);
+    }
+
+    return { uid: userRecord.uid };
+});
+
+exports.deleteManagedUser = onCall(async (request) => {
+    await requireSuperAdmin(request.auth);
+
+    const uid = normalizeText(request.data?.uid, "UID", 128);
+    if (uid === request.auth.uid) {
+        throw new HttpsError("failed-precondition", "Anda tidak dapat menghapus akun sendiri.");
+    }
+
+    try {
+        await getAuth().deleteUser(uid).catch((error) => {
+            if (error.code !== "auth/user-not-found") {
+                throw error;
+            }
+        });
+
+        await db.collection("users").doc(uid).delete();
+        return { uid };
+    } catch (error) {
+        console.error("Gagal menghapus managed user:", error);
+        throw new HttpsError("internal", "Gagal menghapus pengguna.");
+    }
+});
 
 // Trigger saat BS pertama kali dibuat
 exports.notifyReviewer1OnCreateBS = onDocumentCreated("bonSementara/{docId}", async (event) => {

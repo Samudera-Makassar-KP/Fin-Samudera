@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { collection, addDoc, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
@@ -144,13 +144,6 @@ const RbsBbmForm = () => {
             }
         }
     }, [userData, validatorOptions, reviewerOptions]);
-
-    const filteredReviewerOptions = useMemo(() => {
-        if (!selectedUnit) return [];
-        return reviewerOptions.filter(opt => 
-            Array.isArray(opt.unit) ? opt.unit.includes(selectedUnit.value) : opt.unit === selectedUnit.value
-        );
-    }, [selectedUnit, reviewerOptions]);
 
     const BUSINESS_UNITS = [
         { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },

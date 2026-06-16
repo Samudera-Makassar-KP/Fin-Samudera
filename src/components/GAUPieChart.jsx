@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import { collection, getDocs, query, where } from "firebase/firestore";
@@ -73,7 +73,7 @@ const GAUPieChart = () => {
     };
 
     // Warna yang sudah ditentukan sebelumnya untuk tipe pengeluaran
-    const predefinedTypes = {
+    const predefinedTypes = useMemo(() => ({
         ATK: "rgba(255, 99, 132, 1)",
         RTG: "rgba(54, 162, 235, 1)",
         Entertaint: "rgba(255, 206, 86, 1)",
@@ -81,10 +81,10 @@ const GAUPieChart = () => {
         "Meals Lembur": "rgba(153, 102, 255, 1)",
         "Meals Meeting": "rgba(255, 159, 64, 1)",
         "Jenis Lain": "rgba(201, 203, 207, 1)",
-    };
+    }), []);
 
     // Fungsi untuk menormalisasi nama tipe
-    const normalizeTypeName = (type) => {
+    const normalizeTypeName = useCallback((type) => {
         if (!type) return "Jenis Lain";
 
         const predefinedType = Object.keys(predefinedTypes).find(
@@ -99,7 +99,7 @@ const GAUPieChart = () => {
             .split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
-    };
+    }, [predefinedTypes]);
 
     // Fungsi untuk mendapatkan warna berdasarkan tipe
     const getColor = useCallback((type, index) => {
@@ -191,7 +191,7 @@ const GAUPieChart = () => {
                 },
             ],
         });
-    }, [showLPJ, lpjData, reimbursementData, getColor]);
+    }, [showLPJ, lpjData, reimbursementData, getColor, normalizeTypeName]);
 
     // Efek untuk mengambil data dari Firestore saat komponen dimuat
     useEffect(() => {

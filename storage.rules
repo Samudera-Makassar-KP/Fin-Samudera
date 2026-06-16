@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validPdfUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 250 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+    }
+
+    match /Reimbursement/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if signedIn() && validPdfUpload();
+    }
+
+    match /BonSementara/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if signedIn() && validPdfUpload();
+    }
+
+    match /LPJ/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if signedIn() && validPdfUpload();
+    }
+
+    match /lampiran_lpj/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && validPdfUpload();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

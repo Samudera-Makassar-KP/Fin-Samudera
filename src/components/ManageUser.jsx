@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { db } from '../firebaseConfig'
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore'
-// import { deleteUser } from 'firebase/auth'
-// import { auth } from '../firebaseConfig'
+import { db, functions } from '../firebaseConfig'
+import { collection, getDocs } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import Select from 'react-select'
@@ -116,12 +115,8 @@ const ManageUser = () => {
         try {
             const userUid = deleteModal.user.uid
             
-            // Hapus data user dari Firestore
-            await deleteDoc(doc(db, 'users', userUid))
-            
-            // Hapus dari Firebase Auth (opsional - hanya jika Anda memiliki akses admin)
-            // Note: Menghapus user dari Auth memerlukan Firebase Admin SDK di backend
-            // Atau user harus login ulang untuk menghapus akun mereka sendiri
+            const deleteManagedUser = httpsCallable(functions, 'deleteManagedUser')
+            await deleteManagedUser({ uid: userUid })
             
             // Update state users
             setUsers(users.filter(u => u.uid !== userUid))

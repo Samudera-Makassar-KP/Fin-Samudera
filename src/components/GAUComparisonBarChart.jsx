@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Bar } from 'react-chartjs-2';
 import Select from 'react-select';
 import { ClipLoader } from 'react-spinners';
@@ -45,13 +45,13 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
     }, [onClose]);
 
     // Daftar bulan untuk label sumbu X
-    const months = [
+    const months = useMemo(() => [
         "Januari", "Februari", "Maret", "April", "Mei", "Juni",
         "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-    ];
+    ], []);
 
     // Daftar warna predefined untuk tipe pengeluaran
-    const predefinedTypes = {
+    const predefinedTypes = useMemo(() => ({
         "ATK": "rgba(255, 99, 132, 1)",
         "RTG": "rgba(54, 162, 235, 1)",
         "Entertaint": "rgba(255, 206, 86, 1)",
@@ -59,10 +59,10 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
         "Meals Lembur": "rgba(153, 102, 255, 1)",
         "Meals Meeting": "rgba(255, 159, 64, 1)",
         "Jenis Lain": "rgba(201, 203, 207, 1)",
-    };
+    }), []);
 
     // Fungsi untuk menormalisasi nama tipe
-    const normalizeTypeName = (type) => {
+    const normalizeTypeName = useCallback((type) => {
         if (!type) return "Jenis Lain";
 
         const predefinedType = Object.keys(predefinedTypes).find(
@@ -77,7 +77,7 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             .split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' ');
-    };
+    }, [predefinedTypes]);
 
     // Fungsi untuk mendapatkan warna berdasarkan indeks
     const getMonthlyColor = useCallback((index) => {
@@ -230,7 +230,7 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             labels: months,
             datasets: datasets
         });
-    }, [rawData, showLPJ, selectedYears, getMonthlyColor]);
+    }, [rawData, showLPJ, selectedYears, getMonthlyColor, months, normalizeTypeName]);
 
     // Logika untuk menyiapkan data tahunan
     const prepareYearlyData = useCallback(() => {
@@ -303,7 +303,7 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             labels: selectedYears.map(year => `${year.value}`),
             datasets: datasets
         });
-    }, [rawData, showLPJ, selectedYears, getYearlyColor]);
+    }, [rawData, showLPJ, selectedYears, getYearlyColor, normalizeTypeName]);
 
     // Fungsi utama untuk menyiapkan data chart
     const prepareChartData = useCallback(() => {

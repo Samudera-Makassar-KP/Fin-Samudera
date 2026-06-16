@@ -99,20 +99,8 @@ const FormBs = () => {
         { value: 'Panitia', label: 'Panitia' }
     ]
 
-// --- HOOK 1: Inisialisasi Awal (Hanya jalan sekali saat mount) ---
-    useEffect(() => {
-        const today = new Date();
-        const formattedDate = today.toISOString().split('T')[0];
-        setTodayDate(formattedDate);
-
-        const uid = localStorage.getItem('userUid');
-        if (uid) {
-            fetchUserData(uid); // Kirimkan uid ke fungsi fetch
-        }
-    }, []);
-
     // --- FUNGSI FETCH USER DATA (Pisahkan dari Hook agar bersih) ---
-    const fetchUserData = async (uid) => {
+    const fetchUserData = useCallback(async (uid) => {
         // Pintu penjaga: Jika mode edit, jangan ambil data user login
         if (isEditMode && editData) {
             setIsUserDataLoaded(true);
@@ -157,7 +145,19 @@ const FormBs = () => {
             console.error('Error fetching user data:', error);
             toast.error('Error fetching user data');
         }
-    };
+    }, [isEditMode, editData]);
+
+// --- HOOK 1: Inisialisasi Awal (Hanya jalan sekali saat mount) ---
+    useEffect(() => {
+        const today = new Date();
+        const formattedDate = today.toISOString().split('T')[0];
+        setTodayDate(formattedDate);
+
+        const uid = localStorage.getItem('userUid');
+        if (uid) {
+            fetchUserData(uid); // Kirimkan uid ke fungsi fetch
+        }
+    }, [fetchUserData]);
 
     // --- HOOK 2: BLOK AUTO-FILL (BERDIRI SENDIRI DI LUAR) ---
     // Hook ini akan jalan setiap kali editData atau reviewerOptions berubah
@@ -222,10 +222,10 @@ const FormBs = () => {
         }
     }, [isSingleUnit, reviewerOptions, userData]);
 
-    const kategoriOptions = [
+    const kategoriOptions = useMemo(() => [
         { value: 'GA/Umum', label: 'GA/Umum' },
         { value: 'Marketing/Operasional', label: 'Marketing/Operasional' }
-    ]
+    ], [])
 
     const [selectedKategori, setSelectedKategori] = useState(null)
 
@@ -500,7 +500,7 @@ const FormBs = () => {
                 }
             }, 100);
         }
-    }, [isEditMode, editData, reviewerOptions])
+    }, [isEditMode, editData, reviewerOptions, kategoriOptions])
 
     const handleSubmit = async () => {
         try {

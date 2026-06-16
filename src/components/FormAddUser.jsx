@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { db } from '../firebaseConfig'
-import { collection, doc, setDoc, getDocs, query, where } from 'firebase/firestore'
+import { db, functions } from '../firebaseConfig'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebaseConfig';
 
 const AddUserForm = () => {
     const navigate = useNavigate()
@@ -198,17 +197,8 @@ const AddUserForm = () => {
             }
 
             try {
-                // Password default untuk semua user
-                const defaultPassword = 'QWERTY123';
-
-                // Membuat user menggunakan email dan password
-                const userCredential = await createUserWithEmailAndPassword(auth, formData.email, defaultPassword);
-                const firebaseUser = userCredential.user;
-
-                // Menyimpan data pengguna ke Firestore
-                const uid = firebaseUser.uid;
-                await setDoc(doc(db, 'users', uid), {
-                    uid,
+                const createManagedUser = httpsCallable(functions, 'createManagedUser');
+                await createManagedUser({
                     nama: formData.nama,
                     email: formData.email,
                     role: formData.role,
@@ -223,7 +213,7 @@ const AddUserForm = () => {
                     lokasi: formData.role === 'Super Admin' ? [] : formData.lokasi,
                 });
 
-                toast.success('Pengguna berhasil ditambahkan');
+                toast.success('Pengguna berhasil ditambahkan. Email pengaturan kata sandi akan dikirim jika email notifikasi aktif.');
 
                 // Reset form setelah submit
                 setFormData({
@@ -248,14 +238,14 @@ const AddUserForm = () => {
                 console.error('Detailed Firebase Error:', firebaseError);
 
                 // More specific error messages
-                if (firebaseError.code === 'auth/email-already-in-use') {
+                if (firebaseError.code === 'functions/already-exists') {
                     toast.error('Email sudah terdaftar. Gunakan email lain.');
+                } else if (firebaseError.code === 'functions/invalid-argument') {
+                    toast.error(firebaseError.message || 'Data pengguna tidak valid.');
+                } else if (firebaseError.code === 'functions/permission-denied') {
+                    toast.error('Anda tidak memiliki akses untuk menambahkan pengguna.');
                 } else if (firebaseError.code === 'auth/invalid-email') {
                     toast.error('Format email tidak valid.');
-                } else if (firebaseError.code === 'auth/operation-not-allowed') {
-                    toast.error('Operasi tidak diizinkan. Periksa pengaturan Firebase.');
-                } else if (firebaseError.code === 'auth/weak-password') {
-                    toast.error('Password terlalu lemah.');
                 } else {
                     toast.error(`Gagal menambahkan pengguna: ${firebaseError.message}`);
                 }

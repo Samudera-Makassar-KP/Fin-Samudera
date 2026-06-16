@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
@@ -23,7 +23,7 @@ const FormLpjUmum = () => {
 
     const [isSubmitting, setIsSubmitting] = useState(false)
 
-    const initialLpjState = {
+    const initialLpjState = useMemo(() => ({
         nomorBS: '',
         jumlahBS: '',
         lampiran: null,
@@ -38,7 +38,7 @@ const FormLpjUmum = () => {
         sisaKurang: '',
         tanggalPengajuan: todayDate,
         aktivitas: ''
-    }
+    }), [todayDate])
 
     const [tanggalPengajuan, setTanggalPengajuan] = useState('')
     const location = useLocation()
@@ -168,20 +168,6 @@ const FormLpjUmum = () => {
             }
         }
     }, [userData, validatorOptions, reviewerOptions]); // Pastikan dependency-nya diperbarui
-
-    const filteredValidatorOptions = useMemo(() => {
-        if (!selectedUnit) return [];
-        return validatorOptions.filter(opt => 
-            Array.isArray(opt.unit) ? opt.unit.includes(selectedUnit.value) : opt.unit === selectedUnit.value
-        );
-    }, [selectedUnit, validatorOptions]);
-
-    const filteredReviewerOptions = useMemo(() => {
-        if (!selectedUnit) return [];
-        return reviewerOptions.filter(opt => 
-            Array.isArray(opt.unit) ? opt.unit.includes(selectedUnit.value) : opt.unit === selectedUnit.value
-        );
-    }, [selectedUnit, reviewerOptions]);
 
     const isSingleUnit = !isSuperAdmin && userUnitOptions.length === 1;;
     
@@ -784,14 +770,7 @@ const FormLpjUmum = () => {
         }
     }, [location.state]);
 
-    useEffect(() => {
-        if (location.state && location.state.nomorBS && hasDraft) {
-            handleLoadDraft(); 
-            window.history.replaceState({}, document.title);
-        }
-    }, [hasDraft, location.state]); 
-
-    const handleLoadDraft = async () => {
+    const handleLoadDraft = useCallback(async () => {
         const draftData = await loadDraft();
         if (draftData) {
             setNomorBS(draftData.nomorBS || '');
@@ -819,7 +798,14 @@ const FormLpjUmum = () => {
                 sisaKurang: 0
             });
         }
-    }
+    }, [initialLpjState, loadDraft, todayDate])
+
+    useEffect(() => {
+        if (location.state && location.state.nomorBS && hasDraft) {
+            handleLoadDraft();
+            window.history.replaceState({}, document.title);
+        }
+    }, [handleLoadDraft, hasDraft, location.state]);
 
     return (
         <div className="container mx-auto py-10 md:py-8">

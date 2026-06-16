@@ -9,7 +9,7 @@ import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner, faTimes, faPenToSquare } from '@fortawesome/free-solid-svg-icons'
+import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 
 const ReimbursementCheck = () => {
     const [activeTab, setActiveTab] = useState('pending')
@@ -55,10 +55,6 @@ const ReimbursementCheck = () => {
         setShowModal(false)
     }
 
-    // --- TAMBAHKAN KODE INI ---
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-    const [selectedEditReport, setSelectedEditReport] = useState(null)
-
     const handleEditClick = (item) => {
         if (item.kategori === 'BBM') {
             navigate('/reimbursement/bbm', { state: { isEditMode: true, editData: item } });
@@ -69,23 +65,6 @@ const ReimbursementCheck = () => {
         } else if (item.kategori === 'GA/Umum' || item.kategori === 'Umum') {
             navigate('/reimbursement/umum', { state: { isEditMode: true, editData: item } });
         }
-    }
-
-    const handleCloseEditModal = () => {
-        setIsEditModalOpen(false)
-        setSelectedEditReport(null)
-    }
-    // -------------------------
-
-    const handleSuccessEdit = (updatedItemData) => {
-        // Update data di tabel secara real-time tanpa perlu refresh page
-        setData((prevData) => ({
-            reimbursements: prevData.reimbursements.map((r) =>
-                r.id === updatedItemData.id ? { ...r, ...updatedItemData } : r
-            )
-        }))
-        setIsEditModalOpen(false)
-        setSelectedEditReport(null)
     }
 
     useEffect(() => {

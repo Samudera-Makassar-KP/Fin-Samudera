@@ -16,6 +16,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+pubsub-debug.log
 
 # Environment variables
 .env
