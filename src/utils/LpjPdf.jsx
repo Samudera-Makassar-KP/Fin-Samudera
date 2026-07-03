@@ -918,7 +918,7 @@ const generateLpjPDF = async (lpjDetail) => {
         const sanitizedKategori = lpjDetail.kategori.replace(/\//g, '_')
 
         const storageRef = ref(storage, `LPJ/${sanitizedKategori}/${lpjDetail.displayId}/${lpjDetail.displayId}.pdf`)
-        await uploadBytes(storageRef, pdfBlob)
+        await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' })
 
         const downloadURL = await getDownloadURL(storageRef)
         return downloadURL

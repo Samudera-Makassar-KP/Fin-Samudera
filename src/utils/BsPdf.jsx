@@ -431,7 +431,7 @@ const generateBsPDF = async (bonSementaraDetail) => {
             storage,
             `BonSementara/${sanitizedKategori}/${bonSementaraDetail.displayId}/${bonSementaraDetail.displayId}.pdf`
         )
-        await uploadBytes(storageRef, pdfBlob)
+        await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' })
 
         const downloadURL = await getDownloadURL(storageRef)
         return downloadURL

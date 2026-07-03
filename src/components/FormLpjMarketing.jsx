@@ -343,16 +343,30 @@ const FormLpjMarketing = () => {
         return `LPJ.MRO.${unitCode}.${year}${month}${day}.${sequence}`
     }
 
+    const getUploadableAttachments = (files = []) => {
+        return files.filter(file => file.size > 0);
+    }
+
     const handleFileUpload = (event) => {
         const selectedFile = event.target.files[0]; 
 
         if (selectedFile) {
-            if (selectedFile.size > 250 * 1024 * 1024) {
-                toast.error(`Ukuran file maksimal 250MB`);
+            const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
+
+            if (selectedFile.size === 0) {
+                toast.error(`File lampiran tidak boleh kosong`);
+                event.target.value = '';
                 return;
             }
-            if (selectedFile.type !== 'application/pdf') {
+
+            if (selectedFile.size > 250 * 1024 * 1024) {
+                toast.error(`Ukuran file maksimal 250MB`);
+                event.target.value = '';
+                return;
+            }
+            if (!isPdf) {
                 toast.error(`File bukan PDF, hanya PDF yang diperbolehkan`);
+                event.target.value = '';
                 return;
             }
             
@@ -366,21 +380,22 @@ const FormLpjMarketing = () => {
     }
 
     const uploadAttachments = async (files, displayId) => {
-        if (!files || files.length === 0) return null;
+        const uploadableFiles = getUploadableAttachments(files);
+        if (uploadableFiles.length === 0) return null;
 
         try {
-            const file = files[0];
+            const file = uploadableFiles[0];
             const newFileName = `Lampiran_1_${displayId}.pdf`;
             const storageRef = ref(storage, `LPJ/Marketing_Operasional/${displayId}/${newFileName}`);
             
-            const snapshot = await uploadBytes(storageRef, file);
+            const snapshot = await uploadBytes(storageRef, file, { contentType: 'application/pdf' });
             const downloadUrl = await getDownloadURL(snapshot.ref);
             
             return downloadUrl; 
         } catch (error) {
             console.error('Error uploading files:', error);
             toast.error('Gagal mengunggah lampiran');
-            return null;
+            throw error;
         }
     }
 
@@ -404,7 +419,7 @@ const FormLpjMarketing = () => {
             setAktivitas(editData.aktivitas || '');
             
             if (editData.lampiran && editData.lampiran.length > 0) {
-                const mockFiles = editData.lampiran.map(name => new File([""], name));
+                const mockFiles = editData.lampiran.map(name => new File([""], name, { type: 'application/pdf' }));
                 setAttachmentFiles(mockFiles);
             }
 
@@ -573,7 +588,7 @@ const FormLpjMarketing = () => {
                 };
 
                 // Update lampiran jika ada file baru yang diupload
-                if (attachmentFiles.length > 0 && attachmentFiles[0].size > 0) {
+                if (getUploadableAttachments(attachmentFiles).length > 0) {
                     updateData.lampiran = lpjData.lampiran;
                     updateData.lampiranUrl = lpjData.lampiranUrl;
                 }

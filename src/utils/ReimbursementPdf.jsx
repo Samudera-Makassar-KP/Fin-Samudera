@@ -531,7 +531,7 @@ const generateReimbursementPDF = async (reimbursementDetail) => {
             storage,
             `Reimbursement/${sanitizedKategori}/${reimbursementDetail.displayId}/${reimbursementDetail.displayId}.pdf`
         )
-        await uploadBytes(storageRef, pdfBlob)
+        await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' })
 
         const downloadURL = await getDownloadURL(storageRef)
         return downloadURL

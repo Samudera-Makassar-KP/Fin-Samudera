@@ -338,17 +338,37 @@ const FormLpjUmum = () => {
         return `LPJ.GAU.${unitCode}.${year}${month}${day}.${sequence}`
     }
 
-       const handleFileUpload = (e) => {
+    const getUploadableAttachments = (files = []) => {
+        return files.filter(file => file.size > 0);
+    }
+
+    const handleFileUpload = (e) => {
         const selectedFile = e.target.files[0]; 
 
         if (selectedFile) {
+            const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
+
+            if (selectedFile.size === 0) {
+                toast.error("File lampiran tidak boleh kosong.");
+                e.target.value = '';
+                return;
+            }
+
             if (selectedFile.size > 250 * 1024 * 1024) {
                 toast.error("Ukuran file terlalu besar! Maksimal 250MB.");
+                e.target.value = '';
+                return;
+            }
+
+            if (!isPdf) {
+                toast.error("File bukan PDF, hanya PDF yang diperbolehkan.");
+                e.target.value = '';
                 return;
             }
 
             setAttachmentFiles([selectedFile]); 
         }
+        e.target.value = '';
     }
 
     const removeAttachment = () => {
@@ -356,14 +376,15 @@ const FormLpjUmum = () => {
     }
 
     const uploadAttachments = async (files, id) => {
-        if (!files || files.length === 0) return null;
+        const uploadableFiles = getUploadableAttachments(files);
+        if (uploadableFiles.length === 0) return null;
         
         try {
-            const file = files[0]; 
+            const file = uploadableFiles[0];
             
             const fileRef = ref(storage, `lampiran_lpj/${id}_${file.name}`);
             
-            await uploadBytes(fileRef, file);
+            await uploadBytes(fileRef, file, { contentType: 'application/pdf' });
             
             const downloadUrl = await getDownloadURL(fileRef);
             
@@ -392,7 +413,7 @@ const FormLpjUmum = () => {
             // 3. Set Lampiran Visual (hanya nama, tidak mendownload file aslinya untuk di-upload ulang)
             if (editData.lampiran && editData.lampiran.length > 0) {
                 // Membuat objek tiruan (mock file) hanya agar namanya muncul di layar
-                const mockFiles = editData.lampiran.map(name => new File([""], name));
+                const mockFiles = editData.lampiran.map(name => new File([""], name, { type: 'application/pdf' }));
                 setAttachmentFiles(mockFiles);
             }
 
@@ -552,7 +573,7 @@ const FormLpjUmum = () => {
                 };
 
                 // Jika ada file baru yang di-upload, tambahkan ke updateData
-                if (attachmentFiles.length > 0 && attachmentFiles[0].size > 0) { 
+                if (getUploadableAttachments(attachmentFiles).length > 0) {
                     updateData.lampiran = lpjData.lampiran;
                     updateData.lampiranUrl = lpjData.lampiranUrl;
                 }

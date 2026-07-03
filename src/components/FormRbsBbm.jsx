@@ -387,7 +387,7 @@ const RbsBbmForm = () => {
                 // Beri penomoran file jika lebih dari 1
                 const newFileName = `Lampiran_${index + 1}_${displayId}.pdf`
                 const storageRef = ref(storage, `Reimbursement/BBM/${displayId}/${newFileName}`)
-                const snapshot = await uploadBytes(storageRef, file)
+                const snapshot = await uploadBytes(storageRef, file, { contentType: 'application/pdf' })
                 return await getDownloadURL(snapshot.ref)
             })
 

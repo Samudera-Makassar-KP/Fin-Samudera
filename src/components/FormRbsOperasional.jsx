@@ -379,7 +379,7 @@ const RbsOperasionalForm = () => {
             const uploadPromises = files.map(async (file, index) => {
                 const newFileName = `Lampiran_${index + 1}_${displayId}.pdf`
                 const storageRef = ref(storage, `Reimbursement/Operasional/${displayId}/${newFileName}`)
-                const snapshot = await uploadBytes(storageRef, file)
+                const snapshot = await uploadBytes(storageRef, file, { contentType: 'application/pdf' })
                 return await getDownloadURL(snapshot.ref)
             })
 
