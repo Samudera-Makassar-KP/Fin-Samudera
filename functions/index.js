@@ -1,6 +1,7 @@
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const legacyFunctions = require("firebase-functions");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
@@ -11,14 +12,41 @@ const crypto = require("crypto");
 initializeApp();
 const db = getFirestore();
 
-// Konfigurasi transporter untuk Nodemailer
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.EMAIL,
-        pass: process.env.EMAIL_PASSWORD
+let cachedTransporter = null;
+let cachedEmailUser = null;
+
+const getEmailCredentials = () => {
+    let emailConfig = {};
+
+    try {
+        emailConfig = legacyFunctions.config()?.email || {};
+    } catch (error) {
+        emailConfig = {};
     }
-});
+
+    return {
+        user: process.env.EMAIL || emailConfig.user,
+        pass: process.env.EMAIL_PASSWORD || emailConfig.password
+    };
+};
+
+const getMailTransporter = () => {
+    const credentials = getEmailCredentials();
+
+    if (!credentials.user || !credentials.pass) {
+        throw new Error("Konfigurasi EMAIL atau EMAIL_PASSWORD belum tersedia.");
+    }
+
+    if (!cachedTransporter || cachedEmailUser !== credentials.user) {
+        cachedTransporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: credentials
+        });
+        cachedEmailUser = credentials.user;
+    }
+
+    return { transporter: cachedTransporter, fromEmail: credentials.user };
+};
 
 // Helper Function: Format currency ke format Rupiah
 const formatCurrency = (amount) => {
@@ -257,10 +285,12 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
 
 // Helper Function: Mengirim email
 const sendEmail = async (to, subject, htmlContent = null) => {
-    if (!to) return;
+    if (!to) return false;
+
     try {
+        const { transporter, fromEmail } = getMailTransporter();
         const mailOptions = {
-            from: '"No Reply - Notifikasi Samudera" <' + process.env.EMAIL + '>',
+            from: '"No Reply - Notifikasi Samudera" <' + fromEmail + '>',
             to,
             subject,
             html: htmlContent
@@ -268,8 +298,10 @@ const sendEmail = async (to, subject, htmlContent = null) => {
 
         await transporter.sendMail(mailOptions);
         console.log(`✅ Email berhasil dikirim ke ${to}`);
+        return true;
     } catch (error) {
         console.error("❌ Gagal mengirim email:", error);
+        return false;
     }
 };
 
@@ -1066,6 +1098,36 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
 // -----------------------------------------------------------------------------------
 
 // PERBAIKAN: Fungsi processReminder dipindahkan ke ATAS sebelum sendApprovalReminders memanggilnya
+const resolveCurrentApproverUid = (data, docType) => {
+    if (data.currentApproverUid) return data.currentApproverUid;
+
+    if (docType.type === "BS") {
+        if (data.status === "Diajukan") return data.user?.reviewer1?.[0] || null;
+        if (data.status === "Diproses") return data.user?.reviewer2?.[0] || null;
+        return null;
+    }
+
+    if (data.status === "Diajukan") return data.user?.validator?.[0] || null;
+    if (data.status === "Divalidasi") return data.user?.reviewer1?.[0] || null;
+    if (data.status === "Diproses") return data.user?.reviewer2?.[0] || null;
+
+    return null;
+};
+
+const getReminderRoleLabel = (data, docType) => {
+    if (docType.type === "BS") {
+        if (data.status === "Diajukan") return "Reviewer 1";
+        if (data.status === "Diproses") return "Reviewer 2";
+        return "Approver";
+    }
+
+    if (data.status === "Diajukan") return "Validator";
+    if (data.status === "Divalidasi") return "Reviewer 1";
+    if (data.status === "Diproses") return "Reviewer 2";
+
+    return "Approver";
+};
+
 const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) => {
     const data = docSnapshot.data();
     
@@ -1080,18 +1142,7 @@ const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) 
             return;
         }
 
-        // Tentukan Judul Role untuk Email (Opsional, agar lebih jelas)
-        let roleLabel = "Approver";
-        if (docType.type === "BS") {
-            if (data.status === "Diajukan") roleLabel = "Reviewer 1";
-            if (data.status === "Diproses") roleLabel = "Reviewer 2";
-        } else {
-            // RBS & LPJ
-            if (data.status === "Diajukan") roleLabel = "Validator";
-            if (data.status.includes("Validator")) roleLabel = "Reviewer 1"; // Status: Disetujui oleh Validator
-            if (data.status.includes("Reviewer 1")) roleLabel = "Reviewer 2"; // Status: Disetujui oleh Reviewer 1
-        }
-
+        const roleLabel = getReminderRoleLabel(data, docType);
         const subject = `[REMINDER] Menunggu Approval ${roleLabel} - ${docType.type} ${data.displayId}`;
         
         const emailContent = `
@@ -1111,11 +1162,16 @@ const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) 
         `;
 
         // Kirim Email
-        await sendEmail(
+        const emailSent = await sendEmail(
             approverData.email, 
             subject, 
             createEmailTemplate(emailContent, submitterData, data, true, 'reminder')
         );
+
+        if (!emailSent) {
+            console.error(`❌ Reminder tidak ditandai terkirim karena email gagal: ${data.displayId}`);
+            return;
+        }
 
         // Update database bahwa reminder sudah dikirim hari ini
         await db.collection(docType.collection).doc(docSnapshot.id).update({
@@ -1128,22 +1184,24 @@ const processReminder = async (docSnapshot, docType, approverUid, nowTimestamp) 
 };
 
 /**
- * Fungsi ini akan berjalan setiap hari pada pukul 09:00 WIB.
+ * Fungsi ini akan berjalan setiap hari pada pukul 09:00 WITA.
  */
+const REMINDER_TIME_ZONE = "Asia/Makassar";
+const REMINDER_TIMEZONE_OFFSET = "+08:00";
+
 exports.sendApprovalReminders = onSchedule({
     schedule: "0 9 * * *",      // Jalan setiap jam 09:00
-    timeZone: "Asia/Jakarta",   // PENTING: Menggunakan waktu WIB
+    timeZone: REMINDER_TIME_ZONE,
     timeoutSeconds: 540,        // Timeout diperpanjang (9 menit) untuk antisipasi data banyak
     memory: "256MiB"
 }, async (event) => {
-    console.log("⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WIB...");
+    console.log("⏰ Mulai pengecekan pengajuan untuk Reminder jam 09:00 WITA...");
 
     const now = new Date();
     
-    // Tentukan batas waktu (Cutoff) ke jam 00:00:00 WIB hari ini secara akurat.
-    // Kita format waktu 'sekarang' di Jakarta untuk mengambil Tahun, Bulan, dan Tanggal.
+    // Tentukan batas waktu (Cutoff) ke jam 00:00:00 WITA hari ini secara akurat.
     const formatter = new Intl.DateTimeFormat('en-US', { 
-        timeZone: "Asia/Jakarta", 
+        timeZone: REMINDER_TIME_ZONE,
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit' 
@@ -1154,9 +1212,8 @@ exports.sendApprovalReminders = onSchedule({
     const month = parts.find(p => p.type === 'month').value;
     const day = parts.find(p => p.type === 'day').value;
     
-    // Bentuk string waktu ISO khusus untuk WIB (UTC+7) di jam 00:00:00
-    const startOfTodayWIBString = `${year}-${month}-${day}T00:00:00+07:00`;
-    const startOfToday = new Date(startOfTodayWIBString);
+    const startOfTodayLocalString = `${year}-${month}-${day}T00:00:00${REMINDER_TIMEZONE_OFFSET}`;
+    const startOfToday = new Date(startOfTodayLocalString);
 
     // Definisi Status Flow untuk validasi tambahan
     // BS: Diajukan (Rev1) -> Diproses (Rev2)
@@ -1181,10 +1238,14 @@ exports.sendApprovalReminders = onSchedule({
                 
                 
                 // 2. Cek Current Approver (Siapa yang sedang pegang bola?)
-                const approverUid = data.currentApproverUid;
+                const approverUid = resolveCurrentApproverUid(data, docType);
                 if (!approverUid) {
                     console.log(`⚠️ Skip ${docType.type} ${data.displayId}: Tidak ada currentApproverUid.`);
                     continue;
+                }
+
+                if (!data.currentApproverUid) {
+                    await doc.ref.update({ currentApproverUid: approverUid });
                 }
 
                 // 3. Cek Kapan Terakhir Berubah
