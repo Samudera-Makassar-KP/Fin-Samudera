@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { db } from '../firebaseConfig'
-import { getDocs, where, query, collection } from 'firebase/firestore'
+import { db, functions } from '../firebaseConfig'
+import { getDoc, getDocs, where, query, collection, doc } from 'firebase/firestore'
+import { httpsCallable } from 'firebase/functions'
 import { useNavigate } from 'react-router-dom'
 import LogoHero from '../assets/images/login-hero.webp'
 import Logo from '../assets/images/logo-samudera.png'
@@ -18,6 +19,33 @@ const LoginPage = () => {
     const navigate = useNavigate()
     const [isLoading, setIsLoading] = useState(false)
     const [isResetLoading, setIsResetLoading] = useState(false)
+
+    const fetchUserProfile = async (authUser, loginEmail) => {
+        try {
+            const syncCurrentUserProfile = httpsCallable(functions, 'syncCurrentUserProfile')
+            const result = await syncCurrentUserProfile()
+            if (result?.data?.role) {
+                return result.data
+            }
+        } catch (syncError) {
+            console.warn('Gagal sinkronisasi profil user dari callable:', syncError)
+        }
+
+        const uidDoc = await getDoc(doc(db, 'users', authUser.uid))
+        if (uidDoc.exists()) {
+            return { ...uidDoc.data(), uid: authUser.uid }
+        }
+
+        const emailQuery = query(collection(db, 'users'), where('email', '==', loginEmail))
+        const emailSnapshot = await getDocs(emailQuery)
+
+        if (emailSnapshot.empty) {
+            return null
+        }
+
+        const userDoc = emailSnapshot.docs[0]
+        return { ...userDoc.data(), uid: authUser.uid }
+    }
 
     const togglePasswordVisibility = () => {
         setShowPassword(!showPassword)
@@ -66,25 +94,22 @@ const LoginPage = () => {
 
         try {
             // Step 1: Login via Firebase Authentication
-            await signInWithEmailAndPassword(auth, email, password);                        
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
-            // Step 2: Validasi email di Firestore
-            const emailQuery = query(collection(db, 'users'), where('email', '==', email));
-            const emailSnapshot = await getDocs(emailQuery);
+            // Step 2: Ambil profil berdasarkan Auth UID, dengan fallback migrasi email lama
+            const userData = await fetchUserProfile(userCredential.user, email);
 
-            if (emailSnapshot.empty) {
+            if (!userData) {
                 console.error('Email ditemukan di Firebase Auth tetapi tidak di Firestore.');
                 setError('Email tidak ditemukan di sistem. Silakan hubungi admin.');
                 setIsLoading(false);
                 return;
             }
 
-            // Step 3: Ambil data pengguna dari Firestore
-            const userDoc = emailSnapshot.docs[0];
-            const userData = userDoc.data();
+            // Step 3: Simpan data pengguna dari profil yang sudah sinkron
             const role = userData.role;
             
-            localStorage.setItem('userUid', userDoc.id);
+            localStorage.setItem('userUid', userData.uid || userCredential.user.uid);
             localStorage.setItem('userRole', role);
             
             if (role === 'Super Admin') {

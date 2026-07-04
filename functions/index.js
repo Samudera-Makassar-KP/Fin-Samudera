@@ -53,6 +53,83 @@ const getUserData = async (uid) => {
     return userDoc.exists ? userDoc.data() : null;
 };
 
+const getUserDataByEmail = async (email) => {
+    if (!email) return null;
+    const trimmedEmail = email.trim();
+    const normalizedEmail = trimmedEmail.toLowerCase();
+    const emailCandidates = [...new Set([trimmedEmail, normalizedEmail])];
+    const docsById = new Map();
+
+    for (const candidate of emailCandidates) {
+        const snapshot = await db.collection("users")
+            .where("email", "==", candidate)
+            .limit(2)
+            .get();
+
+        snapshot.docs.forEach((doc) => docsById.set(doc.id, doc));
+    }
+
+    if (docsById.size === 0) return null;
+
+    const exactEmailDocs = [...docsById.values()].filter((doc) => {
+        const data = doc.data();
+        return typeof data.email === "string" && data.email.trim().toLowerCase() === normalizedEmail;
+    });
+
+    if (exactEmailDocs.length !== 1) return null;
+
+    const doc = exactEmailDocs[0];
+    return { id: doc.id, data: doc.data() };
+};
+
+const syncAuthenticatedUserProfile = async (authContext) => {
+    if (!authContext?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
+    }
+
+    const uidUser = await getUserData(authContext.uid);
+    if (uidUser) {
+        return { ...uidUser, uid: authContext.uid };
+    }
+
+    const authEmail = authContext.token?.email;
+    const emailUser = await getUserDataByEmail(authEmail);
+    if (!emailUser?.data) {
+        throw new HttpsError("permission-denied", "Profil pengguna tidak ditemukan. Silakan hubungi Super Admin.");
+    }
+
+    const syncedUser = {
+        ...emailUser.data,
+        email: emailUser.data.email || authEmail,
+        uid: authContext.uid,
+        migratedFromUid: emailUser.id,
+        updatedAt: new Date().toISOString(),
+    };
+
+    await db.collection("users").doc(authContext.uid).set(syncedUser, { merge: true });
+    return syncedUser;
+};
+
+exports.syncCurrentUserProfile = onCall(async (request) => {
+    const userData = await syncAuthenticatedUserProfile(request.auth);
+
+    return {
+        uid: request.auth.uid,
+        nama: userData.nama || "",
+        email: userData.email || request.auth.token?.email || "",
+        role: userData.role || "",
+        posisi: userData.posisi || "",
+        unit: userData.unit || [],
+        department: userData.department || [],
+        bankName: userData.bankName || "",
+        accountNumber: userData.accountNumber || "",
+        reviewer1: userData.reviewer1 || [],
+        reviewer2: userData.reviewer2 || [],
+        validator: userData.validator || [],
+        lokasi: userData.lokasi || [],
+    };
+});
+
 // Helper Function: Template HTML untuk email
 const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo = true, status = 'approval') => {
     // Deteksi tipe dokumen
@@ -201,7 +278,7 @@ const requireSuperAdmin = async (authContext) => {
         throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
     }
 
-    const requesterData = await getUserData(authContext.uid);
+    const requesterData = await syncAuthenticatedUserProfile(authContext);
     if (requesterData?.role !== "Super Admin") {
         throw new HttpsError("permission-denied", "Hanya Super Admin yang dapat menjalankan aksi ini.");
     }
