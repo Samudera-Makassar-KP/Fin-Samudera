@@ -1,6 +1,8 @@
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
+const { setGlobalOptions } = require("firebase-functions/v2/options");
 const legacyFunctions = require("firebase-functions");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -8,12 +10,34 @@ const { getFirestore } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 
+const emailUserSecret = defineSecret("EMAIL");
+const emailPasswordSecret = defineSecret("EMAIL_PASSWORD");
+
+setGlobalOptions({
+    region: "asia-southeast2",
+    secrets: [emailUserSecret, emailPasswordSecret]
+});
+
 // Inisialisasi Firebase Admin
 initializeApp();
 const db = getFirestore();
 
 let cachedTransporter = null;
 let cachedEmailUser = null;
+
+const getOptionalString = (value) => {
+    if (typeof value !== "string") return undefined;
+    const trimmedValue = value.trim();
+    return trimmedValue ? trimmedValue : undefined;
+};
+
+const readSecretValue = (secret) => {
+    try {
+        return getOptionalString(secret.value());
+    } catch (error) {
+        return undefined;
+    }
+};
 
 const getEmailCredentials = () => {
     let emailConfig = {};
@@ -25,8 +49,12 @@ const getEmailCredentials = () => {
     }
 
     return {
-        user: process.env.EMAIL || emailConfig.user,
-        pass: process.env.EMAIL_PASSWORD || emailConfig.password
+        user: getOptionalString(process.env.EMAIL)
+            || readSecretValue(emailUserSecret)
+            || getOptionalString(emailConfig.user),
+        pass: getOptionalString(process.env.EMAIL_PASSWORD)
+            || readSecretValue(emailPasswordSecret)
+            || getOptionalString(emailConfig.password)
     };
 };
 

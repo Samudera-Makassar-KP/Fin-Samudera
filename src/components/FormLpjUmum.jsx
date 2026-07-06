@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -9,6 +8,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
 import useFormDraft from '../hooks/useFormDraft'
+import { getUploadablePdfFiles, isPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
 
 const FormLpjUmum = () => {
     const [todayDate, setTodayDate] = useState('')
@@ -339,28 +339,26 @@ const FormLpjUmum = () => {
     }
 
     const getUploadableAttachments = (files = []) => {
-        return files.filter(file => file.size > 0);
+        return getUploadablePdfFiles(files);
     }
 
     const handleFileUpload = (e) => {
         const selectedFile = e.target.files[0]; 
 
         if (selectedFile) {
-            const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
-
             if (selectedFile.size === 0) {
                 toast.error("File lampiran tidak boleh kosong.");
                 e.target.value = '';
                 return;
             }
 
-            if (selectedFile.size > 250 * 1024 * 1024) {
+            if (selectedFile.size > PDF_MAX_SIZE_BYTES) {
                 toast.error("Ukuran file terlalu besar! Maksimal 250MB.");
                 e.target.value = '';
                 return;
             }
 
-            if (!isPdf) {
+            if (!isPdfFile(selectedFile)) {
                 toast.error("File bukan PDF, hanya PDF yang diperbolehkan.");
                 e.target.value = '';
                 return;
@@ -381,12 +379,7 @@ const FormLpjUmum = () => {
         
         try {
             const file = uploadableFiles[0];
-            
-            const fileRef = ref(storage, `lampiran_lpj/${id}_${file.name}`);
-            
-            await uploadBytes(fileRef, file, { contentType: 'application/pdf' });
-            
-            const downloadUrl = await getDownloadURL(fileRef);
+            const downloadUrl = await uploadPdfFile(storage, `lampiran_lpj/${id}_${file.name}`, file);
             
             return downloadUrl; 
         } catch (error) {

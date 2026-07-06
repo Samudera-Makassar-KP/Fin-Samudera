@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { collection, addDoc, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
@@ -8,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons' // Tambah faTimes
 import { useLocation, useNavigate } from 'react-router-dom';
+import { isPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
 
 
 const RbsUmumForm = () => {
@@ -352,11 +352,11 @@ const RbsUmumForm = () => {
 
         const validFiles = []
         for (let file of files) {
-            if (file.size > 250 * 1024 * 1024) {
+            if (file.size > PDF_MAX_SIZE_BYTES) {
                 toast.error(`Ukuran file ${file.name} maksimal 250MB`)
                 continue
             }
-            if (file.type !== 'application/pdf') {
+            if (!isPdfFile(file)) {
                 toast.error(`File ${file.name} bukan PDF, hanya PDF yang diperbolehkan`)
                 continue
             }
@@ -378,9 +378,7 @@ const RbsUmumForm = () => {
         try {
             const uploadPromises = files.map(async (file, index) => {
                 const newFileName = `Lampiran_${index + 1}_${displayId}.pdf`
-                const storageRef = ref(storage, `Reimbursement/GA_Umum/${displayId}/${newFileName}`)
-                const snapshot = await uploadBytes(storageRef, file, { contentType: 'application/pdf' })
-                return await getDownloadURL(snapshot.ref)
+                return await uploadPdfFile(storage, `Reimbursement/GA_Umum/${displayId}/${newFileName}`, file)
             })
 
             return await Promise.all(uploadPromises)

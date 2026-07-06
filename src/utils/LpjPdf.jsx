@@ -3,10 +3,10 @@ import { pdf } from '@react-pdf/renderer'
 import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer'
 import Logo from '../assets/images/logo-samudera.png'
 import { doc, getDoc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import { toast, ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
+import { uploadPdfFile } from './uploadPdfFile'
 
 Font.register({
     family: 'Poppins',
@@ -917,10 +917,11 @@ const generateLpjPDF = async (lpjDetail) => {
 
         const sanitizedKategori = lpjDetail.kategori.replace(/\//g, '_')
 
-        const storageRef = ref(storage, `LPJ/${sanitizedKategori}/${lpjDetail.displayId}/${lpjDetail.displayId}.pdf`)
-        await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' })
-
-        const downloadURL = await getDownloadURL(storageRef)
+        const downloadURL = await uploadPdfFile(
+            storage,
+            `LPJ/${sanitizedKategori}/${lpjDetail.displayId}/${lpjDetail.displayId}.pdf`,
+            pdfBlob
+        )
         return downloadURL
     } catch (error) {
         console.error('Gagal mengunduh:', error)

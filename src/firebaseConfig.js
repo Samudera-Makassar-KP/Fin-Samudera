@@ -14,10 +14,11 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const functionsRegion = process.env.REACT_APP_FIREBASE_FUNCTIONS_REGION || 'asia-southeast2';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
-const functions = getFunctions(app);
+const functions = getFunctions(app, functionsRegion);
 const storage = getStorage(app)
 
 export default app;

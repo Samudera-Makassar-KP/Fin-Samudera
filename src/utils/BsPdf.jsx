@@ -2,10 +2,10 @@ import React from 'react'
 import { pdf } from '@react-pdf/renderer'
 import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer'
 import { doc, getDoc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import { toast, ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
+import { uploadPdfFile } from './uploadPdfFile'
 
 Font.register({
     family: 'Poppins',
@@ -427,13 +427,11 @@ const generateBsPDF = async (bonSementaraDetail) => {
 
         const sanitizedKategori = bonSementaraDetail.bonSementara[0].kategori.replace(/\//g, '_')
 
-        const storageRef = ref(
+        const downloadURL = await uploadPdfFile(
             storage,
-            `BonSementara/${sanitizedKategori}/${bonSementaraDetail.displayId}/${bonSementaraDetail.displayId}.pdf`
+            `BonSementara/${sanitizedKategori}/${bonSementaraDetail.displayId}/${bonSementaraDetail.displayId}.pdf`,
+            pdfBlob
         )
-        await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' })
-
-        const downloadURL = await getDownloadURL(storageRef)
         return downloadURL
     } catch (error) {
         console.error('Gagal mengunduh:', error)

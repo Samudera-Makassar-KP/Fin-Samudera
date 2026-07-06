@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -9,6 +8,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
 import useFormDraft from '../hooks/useFormDraft'
+import { getUploadablePdfFiles, isPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
 
 const FormLpjMarketing = () => {
     const [todayDate, setTodayDate] = useState('')
@@ -344,27 +344,25 @@ const FormLpjMarketing = () => {
     }
 
     const getUploadableAttachments = (files = []) => {
-        return files.filter(file => file.size > 0);
+        return getUploadablePdfFiles(files);
     }
 
     const handleFileUpload = (event) => {
         const selectedFile = event.target.files[0]; 
 
         if (selectedFile) {
-            const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf');
-
             if (selectedFile.size === 0) {
                 toast.error(`File lampiran tidak boleh kosong`);
                 event.target.value = '';
                 return;
             }
 
-            if (selectedFile.size > 250 * 1024 * 1024) {
+            if (selectedFile.size > PDF_MAX_SIZE_BYTES) {
                 toast.error(`Ukuran file maksimal 250MB`);
                 event.target.value = '';
                 return;
             }
-            if (!isPdf) {
+            if (!isPdfFile(selectedFile)) {
                 toast.error(`File bukan PDF, hanya PDF yang diperbolehkan`);
                 event.target.value = '';
                 return;
@@ -386,10 +384,7 @@ const FormLpjMarketing = () => {
         try {
             const file = uploadableFiles[0];
             const newFileName = `Lampiran_1_${displayId}.pdf`;
-            const storageRef = ref(storage, `LPJ/Marketing_Operasional/${displayId}/${newFileName}`);
-            
-            const snapshot = await uploadBytes(storageRef, file, { contentType: 'application/pdf' });
-            const downloadUrl = await getDownloadURL(snapshot.ref);
+            const downloadUrl = await uploadPdfFile(storage, `LPJ/Marketing_Operasional/${displayId}/${newFileName}`, file);
             
             return downloadUrl; 
         } catch (error) {

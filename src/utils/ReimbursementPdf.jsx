@@ -3,10 +3,10 @@ import { pdf } from '@react-pdf/renderer'
 import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer'
 import Logo from '../assets/images/logo-samudera.png'
 import { doc, getDoc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../firebaseConfig'
 import { toast, ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
+import { uploadPdfFile } from './uploadPdfFile'
 
 Font.register({
     family: 'Poppins',
@@ -527,13 +527,11 @@ const generateReimbursementPDF = async (reimbursementDetail) => {
 
         const sanitizedKategori = reimbursementDetail.kategori.replace(/\//g, '_')
 
-        const storageRef = ref(
+        const downloadURL = await uploadPdfFile(
             storage,
-            `Reimbursement/${sanitizedKategori}/${reimbursementDetail.displayId}/${reimbursementDetail.displayId}.pdf`
+            `Reimbursement/${sanitizedKategori}/${reimbursementDetail.displayId}/${reimbursementDetail.displayId}.pdf`,
+            pdfBlob
         )
-        await uploadBytes(storageRef, pdfBlob, { contentType: 'application/pdf' })
-
-        const downloadURL = await getDownloadURL(storageRef)
         return downloadURL
     } catch (error) {
         console.error('Gagal mengunduh:', error)
