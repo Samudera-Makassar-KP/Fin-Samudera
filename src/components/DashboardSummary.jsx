@@ -63,20 +63,29 @@ const DashboardSummary = ({ uid }) => {
                     0
                 )
 
-                // Cek status LPJ untuk tiap BS yang sudah disetujui
+                // Cek status LPJ untuk tiap BS yang sudah disetujui.
+                // Ambil SEMUA lpj milik user sekali saja (query ini provable oleh Security Rules
+                // karena difilter user.uid, sama seperti query bonSementara/reimbursement),
+                // lalu cocokkan nomorBS-nya di JS - lebih hemat dan tidak kena permission-denied.
+                const lpjSnapshot = await getDocs(
+                    query(collection(db, 'lpj'), where('user.uid', '==', uid))
+                )
+                const lpjByNomorBS = {}
+                lpjSnapshot.docs.forEach((docSnap) => {
+                    const lpjData = docSnap.data()
+                    if (lpjData.nomorBS) {
+                        lpjByNomorBS[lpjData.nomorBS] = lpjData
+                    }
+                })
+
                 let totalSudahLpj = 0
                 let jumlahBsSudahLpj = 0
                 for (const bs of bsDisetujui) {
                     if (!bs.displayId) continue
-                    const lpjSnapshot = await getDocs(
-                        query(collection(db, 'lpj'), where('nomorBS', '==', bs.displayId))
-                    )
-                    if (!lpjSnapshot.empty) {
-                        const lpjData = lpjSnapshot.docs[0].data()
-                        if (lpjData.status === 'Disetujui') {
-                            totalSudahLpj += bs.bonSementara?.[0]?.jumlahBS || 0
-                            jumlahBsSudahLpj += 1
-                        }
+                    const lpjData = lpjByNomorBS[bs.displayId]
+                    if (lpjData && lpjData.status === 'Disetujui') {
+                        totalSudahLpj += bs.bonSementara?.[0]?.jumlahBS || 0
+                        jumlahBsSudahLpj += 1
                     }
                 }
                 const jumlahBsBelumLpj = bsDisetujui.length - jumlahBsSudahLpj
