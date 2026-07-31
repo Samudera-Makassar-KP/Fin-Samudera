@@ -5,10 +5,14 @@ import { httpsCallable } from 'firebase/functions'
 import { useNavigate } from 'react-router-dom'
 import LogoHero from '../assets/images/login-hero.webp'
 import Logo from '../assets/images/logo-samudera.png'
+import FinanceIllustration from '../assets/images/finance.png'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faEye, faEyeSlash, faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faEye, faEyeSlash, faSpinner, faUser, faLock } from '@fortawesome/free-solid-svg-icons'
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
+
+// Ganti nilai ini sesuai kebutuhan rilis Anda (ditampilkan di pojok kanan atas, seperti pada mockup)
+const APP_VERSION = 'v1.0.0'
 
 const LoginPage = () => {
     const [showPassword, setShowPassword] = useState(false)
@@ -62,7 +66,6 @@ const LoginPage = () => {
         setIsResetLoading(true);
 
         try {
-            // Step 1: Cek email di Firestore
             const emailQuery = query(collection(db, 'users'), where('email', '==', email));
             const emailSnapshot = await getDocs(emailQuery);
 
@@ -72,7 +75,6 @@ const LoginPage = () => {
                 return;
             }
 
-            // Step 2: Kirim email reset password via Firebase Authentication
             await sendPasswordResetEmail(auth, email);
             setSuccessMessage('Email reset kata sandi telah dikirim. Silakan periksa email Anda.');
         } catch (err) {
@@ -93,10 +95,7 @@ const LoginPage = () => {
         setIsLoading(true);
 
         try {
-            // Step 1: Login via Firebase Authentication
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
-
-            // Step 2: Ambil profil berdasarkan Auth UID, dengan fallback migrasi email lama
             const userData = await fetchUserProfile(userCredential.user, email);
 
             if (!userData) {
@@ -106,12 +105,11 @@ const LoginPage = () => {
                 return;
             }
 
-            // Step 3: Simpan data pengguna dari profil yang sudah sinkron
             const role = userData.role;
-            
+
             localStorage.setItem('userUid', userData.uid || userCredential.user.uid);
             localStorage.setItem('userRole', role);
-            
+
             if (role === 'Super Admin') {
                 navigate('/manage-users');
             } else if (['Admin', 'Validator', 'Reviewer', 'Employee'].includes(role)) {
@@ -130,173 +128,128 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="flex h-screen flex-col lg:flex-row">
-            <div className="w-full lg:w-[65%] h-full relative">
-                <img src={LogoHero} alt="Login Hero" className="w-full h-full object-cover" />
+        <div
+            className="relative min-h-screen w-full flex items-center justify-center p-4 overflow-hidden bg-cover bg-center"
+            style={{ backgroundImage: `url(${LogoHero})` }}
+        >
+            {/* Overlay tint so the card and watermark text stay readable over the photo */}
+            <div className="absolute inset-0 bg-slate-900/20" />
 
-                <div className="absolute inset-0 bg-black bg-opacity-50 flex justify-center items-center lg:hidden">
-                    <div className="bg-white p-4 md:p-6 rounded-lg w-11/12 max-w-sm md:max-w-md shadow-lg sm:landscape:scale-[0.85] sm:landscape:transform">
-                        <div className="mb-4 md:mb-4 text-center">
-                            <img src={Logo} alt="Logo" className="w-6/12 mx-auto" />
-                        </div>
+            {/* Version watermark, top right - mirrors the small build tag in the mockup */}
+            <span className="absolute top-3 right-4 text-[10px] text-white/80 tracking-wide select-none z-10">
+                {APP_VERSION}
+            </span>
 
-                        <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-2 md:mb-4 text-center">Login</h1>
+            {/* Centered card */}
+            <div className="relative z-10 w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
 
-                        {error && <p className="text-red-500 text-center text-sm md:text-base">{error}</p>}
-                        {successMessage && <p className="text-green-500 text-center text-sm md:text-base">{successMessage}</p>}
+                {/* Left: centered illustration pane */}
+                <div className="hidden md:flex md:w-1/2 items-center justify-center bg-slate-50 p-10">
+                    <img src={FinanceIllustration} alt="Ilustrasi keuangan" className="w-2/3 h-auto object-contain" />
+                </div>
 
-                        <form onSubmit={handleLogin}>
-                            <div className="mb-4 md:mb-6">
-                                <label
-                                    htmlFor="email"
-                                    className="block text-gray-700 font-medium mb-2 text-sm md:text-base"
-                                >
-                                    Email
-                                </label>
+                {/* Right: form pane */}
+                <div className="w-full md:w-1/2 flex flex-col justify-center px-8 py-10 md:px-12">
+                    <div className="mb-6">
+                        <img src={Logo} alt="Logo Samudera Indonesia" className="h-10" />
+                    </div>
+
+                    <h1 className="text-xl font-semibold text-gray-900 mb-6">
+                        Masuk ke akun Anda!
+                    </h1>
+
+                    {error && (
+                        <p className="text-red-500 text-sm mb-4">{error}</p>
+                    )}
+                    {successMessage && (
+                        <p className="text-green-600 text-sm mb-4">{successMessage}</p>
+                    )}
+
+                    <form onSubmit={handleLogin}>
+                        <div className="mb-5">
+                            <label htmlFor="email" className="block text-gray-700 font-medium mb-2 text-sm">
+                                Email
+                            </label>
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                    <FontAwesomeIcon icon={faUser} className="h-4 w-4" />
+                                </span>
                                 <input
-                                    id="email-desktop"
+                                    id="email"
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="user@gmail.com"
-                                    className="w-full px-4 py-2 border rounded-md text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm md:text-base"
+                                    placeholder="user@email.com"
+                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                                 />
                             </div>
-
-                            <div className="mb-6 md:mb-8">
-                                <label
-                                    htmlFor="password"
-                                    className="block text-gray-700 font-medium mb-2 text-sm md:text-base"
-                                >
-                                    Password
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        id="password-desktop"
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        placeholder="Enter your password"
-                                        className="w-full px-4 py-2 border rounded-md text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm md:text-base"
-                                    />
-                                    <span
-                                        onClick={togglePasswordVisibility}
-                                        className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
-                                    >
-                                        <FontAwesomeIcon
-                                            icon={showPassword ? faEyeSlash : faEye}
-                                            className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500"
-                                        />
-                                    </span>
-                                </div>
-                                <div className="flex justify-end mt-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleResetPassword}
-                                        className="text-red-600 text-xs md:text-sm hover:underline"
-                                        disabled={isResetLoading}
-                                    >
-                                        {isResetLoading ? 'Mengirim...' : 'Lupa Kata Sandi?'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                className="w-full bg-red-600 text-white font-semibold py-2 rounded-md hover:bg-red-700 transition duration-300 text-sm md:text-base"
-                                disabled={isLoading}
-                            >
-                                {isLoading ? (
-                                    <>
-                                        <FontAwesomeIcon icon={faSpinner} className="mr-2 animate-spin" />
-                                        Loading...
-                                    </>
-                                ) : (
-                                    'Login'
-                                )}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            {/* Mobile */}
-            <div className="hidden lg:flex lg:w-[35%] bg-white flex-col justify-center px-16">
-                <div className="mb-8">
-                    <img src={Logo} alt="Logo" className="w-8/12 h-full" />
-                </div>
-
-                <h1 className="text-3xl font-bold text-gray-900 mb-8">Login</h1>
-
-                {error && <p className="text-red-500 mb-4">{error}</p>}
-                {successMessage && <p className="text-green-500 mb-4">{successMessage}</p>}
-
-                <form onSubmit={handleLogin}>
-                    <div className="mb-6">
-                        <label htmlFor="email" className="block text-gray-700 font-medium mb-2">
-                            Email
-                        </label>
-                        <input
-                            id="email-mobile"
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="user@gmail.com"
-                            className="w-full px-4 py-3 border rounded-md text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                        />
-                    </div>
-
-                    <div className="mb-8">
-                        <label htmlFor="password" className="block text-gray-700 font-medium mb-2">
-                            Password
-                        </label>
-                        <div className="relative">
-                            <input
-                                id="password-mobile"
-                                type={showPassword ? 'text' : 'password'}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Enter your password"
-                                className="w-full px-4 py-3 border rounded-md text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                            />
-                            <span
-                                onClick={togglePasswordVisibility}
-                                className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
-                            >
-                                <FontAwesomeIcon
-                                    icon={showPassword ? faEyeSlash : faEye}
-                                    className="h-5 w-5 text-gray-500"
-                                />
-                            </span>
                         </div>
-                        <div className="flex justify-end mt-2">
+
+                        <div className="mb-2">
+                            <label htmlFor="password" className="block text-gray-700 font-medium mb-2 text-sm">
+                                Password
+                            </label>
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                    <FontAwesomeIcon icon={faLock} className="h-4 w-4" />
+                                </span>
+                                <input
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter your password"
+                                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                                />
+                                <span
+                                    onClick={togglePasswordVisibility}
+                                    className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-gray-600"
+                                >
+                                    <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} className="h-4 w-4" />
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end mb-6">
                             <button
                                 type="button"
                                 onClick={handleResetPassword}
-                                className="text-red-600 hover:underline"
+                                className="text-red-600 text-xs hover:underline"
                                 disabled={isResetLoading}
                             >
                                 {isResetLoading ? 'Mengirim...' : 'Lupa Kata Sandi?'}
                             </button>
                         </div>
-                    </div>
 
-                    <button
-                        type="submit"
-                        className="w-full bg-red-600 text-white font-semibold py-3 rounded-md hover:bg-red-700 transition duration-300"
-                        disabled={isLoading}
-                    >
-                        {isLoading ? (
-                            <>
-                                <FontAwesomeIcon icon={faSpinner} className="mr-2 animate-spin" />
-                                Loading...
-                            </>
-                        ) : (
-                            'Login'
-                        )}
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            className="w-full bg-red-600 text-white font-semibold py-2.5 rounded-lg hover:bg-red-700 transition duration-300 text-sm disabled:opacity-70"
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <>
+                                    <FontAwesomeIcon icon={faSpinner} className="mr-2 animate-spin" />
+                                    Loading...
+                                </>
+                            ) : (
+                                'Login'
+                            )}
+                        </button>
+                    </form>
+
+                    <p className="text-center text-xs text-gray-400 mt-6 leading-relaxed">
+                        Dengan melanjutkan, Anda menyetujui{' '}
+                        <a href="/disclaimer" className="font-semibold text-gray-500 hover:underline">Kebijakan</a>
+                        {' '}dan{' '}
+                        <a href="/privacy-policy" className="font-semibold text-gray-500 hover:underline">Privasi</a>
+                        {' '}kami.
+                    </p>
+                </div>
             </div>
+
+            <p className="absolute bottom-3 left-0 right-0 text-center text-[11px] text-white/80 select-none z-10">
+                Copyright © {new Date().getFullYear()} Samudera Indonesia. All rights reserved.
+            </p>
         </div>
     )
 }
