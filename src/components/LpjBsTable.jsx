@@ -74,35 +74,50 @@ const LpjBsTable = () => {
                 }
 
                 // 1. AMBIL DATA UTAMA
-                const qLpj = query(collection(db, 'lpj'), where('user.uid', '==', uid))
-                const snapshotLpj = await getDocs(qLpj)
-                const dataLpj = snapshotLpj.docs.map((doc) => ({
-                    id: doc.id,
-                    displayId: doc.data().displayId,
-                    ...doc.data()
-                }))
+                // Query ini difilter user.uid sehingga bisa dibuktikan Firestore Security Rules.
+                let dataLpj = []
+                try {
+                    const qLpj = query(collection(db, 'lpj'), where('user.uid', '==', uid))
+                    const snapshotLpj = await getDocs(qLpj)
+                    dataLpj = snapshotLpj.docs.map((doc) => ({
+                        id: doc.id,
+                        displayId: doc.data().displayId,
+                        ...doc.data()
+                    }))
+                } catch (lpjError) {
+                    console.error('Error fetching lpj data:', lpjError)
+                }
 
                 // 2. AMBIL DATA DRAFT
-                const qDrafts = query(
-                    collection(db, 'drafts'),
-                    where('__name__', '>=', `${uid}_`),
-                    where('__name__', '<=', `${uid}_\uf8ff`)
-                )
-                const snapshotDrafts = await getDocs(qDrafts)
-                const dataDrafts = snapshotDrafts.docs.map((doc) => {
-                    const data = doc.data()
-                    return {
-                        id: doc.id,
-                        displayId: `DRAFT - ${data.nomorBS || 'Baru'}`, // Nama tampilan di tabel
-                        kategori: data.type === 'lpj-umum' ? 'GA/Umum' : 'Marketing/Operasional',
-                        nomorBS: data.nomorBS || '-',
-                        jumlahBS: data.jumlahBS || 0,
-                        tanggalPengajuan: data.tanggalPengajuan || new Date().toISOString(),
-                        status: 'Draft', // Status otomatis
-                        isDraft: true,   // Penanda khusus kalau ini draft
-                        ...data
-                    }
-                })
+                // Query ini pakai range __name__ (id) + rule regex, yang TIDAK bisa dibuktikan
+                // Firestore untuk operasi list, sehingga bisa ditolak permission-denied secara
+                // terpisah dari data lpj utama. Dibungkus try/catch sendiri supaya kalau ini
+                // gagal, data lpj yang asli di atas tetap tampil (tidak ikut kosong).
+                let dataDrafts = []
+                try {
+                    const qDrafts = query(
+                        collection(db, 'drafts'),
+                        where('__name__', '>=', `${uid}_`),
+                        where('__name__', '<=', `${uid}_\uf8ff`)
+                    )
+                    const snapshotDrafts = await getDocs(qDrafts)
+                    dataDrafts = snapshotDrafts.docs.map((doc) => {
+                        const data = doc.data()
+                        return {
+                            id: doc.id,
+                            displayId: `DRAFT - ${data.nomorBS || 'Baru'}`, // Nama tampilan di tabel
+                            kategori: data.type === 'lpj-umum' ? 'GA/Umum' : 'Marketing/Operasional',
+                            nomorBS: data.nomorBS || '-',
+                            jumlahBS: data.jumlahBS || 0,
+                            tanggalPengajuan: data.tanggalPengajuan || new Date().toISOString(),
+                            status: 'Draft', // Status otomatis
+                            isDraft: true,   // Penanda khusus kalau ini draft
+                            ...data
+                        }
+                    })
+                } catch (draftsError) {
+                    console.error('Error fetching drafts (lihat catatan permission-denied di firestore.rules):', draftsError)
+                }
 
                 // 3. GABUNGKAN KEDUANYA
                 const gabunganData = [...dataLpj, ...dataDrafts]

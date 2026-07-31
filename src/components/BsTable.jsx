@@ -108,25 +108,31 @@ const BsTable = () => {
 
     const fetchLpjStatus = async (bonSementaraList) => {
         try {
+            const uid = localStorage.getItem('userUid')
+            if (!uid) return
+
+            // Ambil SEMUA lpj milik user sekali saja (query ini difilter user.uid, jadi bisa
+            // dibuktikan oleh Firestore Security Rules - sama seperti query bonSementara di
+            // atas). Query per-BS yang lama (filter hanya by nomorBS, tanpa user.uid) ditolak
+            // Firestore karena tidak bisa dibuktikan aman untuk operasi list/query.
+            const lpjSnapshot = await getDocs(
+                query(collection(db, 'lpj'), where('user.uid', '==', uid))
+            )
+            const lpjByNomorBS = {}
+            lpjSnapshot.docs.forEach((docSnap) => {
+                const d = docSnap.data()
+                if (d.nomorBS) lpjByNomorBS[d.nomorBS] = d
+            })
+
             const newLpjStatus = {};
 
             for (const bs of bonSementaraList) {
-                // Query to check if there's a matching LPJ document
-                const lpjQuery = query(
-                    collection(db, 'lpj'),
-                    where('nomorBS', '==', bs.displayId)
-                );
+                const lpjData = lpjByNomorBS[bs.displayId]
 
-                const lpjSnapshot = await getDocs(lpjQuery);
-
-                if (lpjSnapshot.empty) {
+                if (!lpjData) {
                     // No LPJ found
                     newLpjStatus[bs.id] = { status: 'Belum LPJ' };
                 } else {
-                    // Get the LPJ document and check its status
-                    const lpjDoc = lpjSnapshot.docs[0];
-                    const lpjData = lpjDoc.data();
-
                     if (lpjData.status === 'Dibatalkan' || lpjData.status === 'Ditolak') {
                         newLpjStatus[bs.id] = {
                             status: 'Belum LPJ',
