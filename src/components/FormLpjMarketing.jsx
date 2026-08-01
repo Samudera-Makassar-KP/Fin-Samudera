@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
+import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -595,8 +595,10 @@ const FormLpjMarketing = () => {
 
             } else {
                 // --- LOGIKA SIMPAN BARU ---
-                const docRef = await addDoc(collection(db, 'lpj'), lpjData)
-                await setDoc(doc(db, 'lpj', docRef.id), { ...lpjData, id: docRef.id })
+                // Generate ID dulu, setDoc SEKALI SAJA supaya operasi ini murni CREATE.
+                const newDocRef = doc(collection(db, 'lpj'))
+                await setDoc(newDocRef, { ...lpjData, id: newDocRef.id })
+
                 
                 // --- PERBAIKAN: Clear Draft yang aman ---
                 if (typeof clearDraft === 'function') {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { doc, setDoc, getDoc, addDoc, collection, runTransaction, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
+import { doc, setDoc, getDoc, collection, runTransaction, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { db } from '../firebaseConfig'
 import Select from 'react-select'
@@ -605,8 +605,11 @@ const FormBs = () => {
 
             } else {
                 // --- LOGIKA JIKA BIKIN BARU ---
-                const docRef = await addDoc(collection(db, 'bonSementara'), bonSementaraData)
-                await setDoc(doc(db, 'bonSementara', docRef.id), { ...bonSementaraData, id: docRef.id })
+                // Generate ID dulu, lalu setDoc SEKALI SAJA supaya operasi ini murni CREATE
+                // (bukan create lalu update ke dokumen yang sama - yang ditolak Security Rules
+                // karena update untuk owner hanya diizinkan saat membatalkan pengajuan).
+                const newDocRef = doc(collection(db, 'bonSementara'))
+                await setDoc(newDocRef, { ...bonSementaraData, id: newDocRef.id })
 
                 const counterRef = doc(db, 'businessUnitCounters', kodeUnitBisnis)
                 await runTransaction(db, async (transaction) => {

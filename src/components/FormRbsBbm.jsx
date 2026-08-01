@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { collection, addDoc, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
+import { collection, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
@@ -590,9 +590,12 @@ const RbsBbmForm = () => {
                 navigate('/reimbursement/cek-pengajuan')
 
             } else {
-                // JIKA BIKIN BARU: Gunakan alur addDoc seperti biasa
-                const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
-                await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
+                // JIKA BIKIN BARU: generate ID dulu, setDoc SEKALI SAJA supaya operasi ini
+                // murni CREATE (bukan create lalu update ke dokumen yang sama - yang ditolak
+                // Security Rules karena update untuk owner hanya diizinkan saat membatalkan).
+                const newDocRef = doc(collection(db, 'reimbursement'))
+                await setDoc(newDocRef, { ...reimbursementData, id: newDocRef.id })
+
                 
                 toast.success('Reimbursement BBM berhasil diajukan!')
                 

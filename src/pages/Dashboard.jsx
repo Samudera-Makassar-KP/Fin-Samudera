@@ -100,7 +100,7 @@ const Dashboard = ({ userUid }) => {
                         <h2 className="text-xl font-medium mb-4">
                             Welcome, <span className="font-bold">{user?.name || 'User'}</span>
                         </h2>
-                        <DashboardSummary uid={uid} />
+                        <DashboardSummary uid={uid} role={user.role} />
                         <BsAlerts scrollToTable={scrollToCreateBsTable} />
                         {user.role === 'Reviewer' && (
                             <div className='flex flex-col xl:flex-row justify-between gap-4 xl:gap-6 mb-6'>
