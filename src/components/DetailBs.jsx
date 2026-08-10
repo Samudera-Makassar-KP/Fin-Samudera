@@ -306,10 +306,10 @@ const DetailBs = () => {
     if (!userData || !bonSementaraDetail) {
         return (
             <div className="container mx-auto py-10 px-4 md:py-8 md:px-0">
-                <h2 className="text-xl font-medium mb-4">
+                <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                     Detail <span className="font-bold">Pengajuan Bon Sementara</span>
                 </h2>
-                <div className="bg-white p-4 md:p-6 rounded-lg mb-6 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg mb-6 shadow-sm transition-colors">
                     {/* Desktop View (xl:1280px and above) */}
                     <div className="hidden xl:block">
                         <div className="grid grid-cols-2 gap-x-16 mb-4 font-medium">
@@ -373,7 +373,7 @@ const DetailBs = () => {
                     <div className="overflow-x-auto -mx-4 md:mx-0 mb-8">
                         <div className="min-w-[640px] md:w-full p-4 md:p-0">
                             {/* Table Header Skeleton */}
-                            <div className="bg-gray-100 grid grid-cols-5 rounded-t-lg">
+                            <div className="bg-gray-100 dark:bg-gray-700 grid grid-cols-5 rounded-t-lg">
                                 {[...Array(5)].map((_, index) => (
                                     <div key={`header-${index}`} className="p-2">
                                         <Skeleton height={24} />
@@ -383,7 +383,7 @@ const DetailBs = () => {
 
                             {/* Table Body Skeleton */}
                             {[...Array(1)].map((_, rowIndex) => (
-                                <div key={`row-${rowIndex}`} className="grid grid-cols-5 border-b">
+                                <div key={`row-${rowIndex}`} className="grid grid-cols-5 border-b dark:border-gray-600">
                                     {[...Array(5)].map((_, colIndex) => (
                                         <div key={`cell-${rowIndex}-${colIndex}`} className="p-2">
                                             <Skeleton height={20} />
@@ -410,11 +410,11 @@ const DetailBs = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4">
+            <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Detail <span className="font-bold">Pengajuan Bon Sementara</span>
             </h2>
 
-            <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+            <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow transition-colors">
                 {/* Responsive grid for user details */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 xl:gap-x-16 mb-6 font-medium">
                     {/* Mobile dan Tablet view (up to xl breakpoint) */}
@@ -518,24 +518,24 @@ const DetailBs = () => {
                 {/* Responsive table wrapper */}
                 <div className="mb-8 overflow-x-auto -mx-4 md:mx-0">
                     <div className="min-w-[640px] md:w-full p-4 md:p-0">
-                        <table className="w-full bg-white border rounded-lg text-sm">
+                        <table className="w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                             <thead>
-                                <tr className="bg-gray-100 text-left">
-                                    <th className="px-4 py-2 border w-auto">Nomor BS</th>
-                                    <th className="px-4 py-2 border w-auto">Kategori</th>
-                                    <th className="px-4 py-2 border w-auto">Aktivitas</th>
-                                    <th className="px-4 py-2 border w-auto">Jumlah BS</th>
-                                    <th className="px-4 py-2 border w-auto">Tanggal Pengajuan</th>
+                                <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                    <th className="px-4 py-2 border dark:border-gray-600 w-auto">Nomor BS</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600 w-auto">Kategori</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600 w-auto">Aktivitas</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600 w-auto">Jumlah BS</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600 w-auto">Tanggal Pengajuan</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {bonSementaraDetail?.bonSementara?.map((item, index) => (
                                     <tr key={index}>
-                                        <td className="px-4 py-2 border">{item.nomorBS}</td>
-                                        <td className="px-4 py-2 border">{item.kategori}</td>
-                                        <td className="px-4 py-2 border whitespace-pre-wrap">{item.aktivitas}</td>
-                                        <td className="px-4 py-2 border">Rp{item.jumlahBS.toLocaleString('id-ID')}</td>
-                                        <td className="px-4 py-2 border">
+                                        <td className="px-4 py-2 border dark:border-gray-600">{item.nomorBS}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">{item.kategori}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600 whitespace-pre-wrap">{item.aktivitas}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">Rp{item.jumlahBS.toLocaleString('id-ID')}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">
                                             {formatDate(bonSementaraDetail.tanggalPengajuan) ?? 'N/A'}
                                         </td>
                                     </tr>
@@ -545,12 +545,12 @@ const DetailBs = () => {
                                 {(bonSementaraDetail?.status === 'Dibatalkan' || bonSementaraDetail?.status === 'Ditolak') && (
                                     <>
                                         <tr>
-                                            <td colSpan="5" className="px-4 py-2 text-left border">
+                                            <td colSpan="5" className="px-4 py-2 text-left border dark:border-gray-600">
                                                 &nbsp;
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td colSpan="5" className="px-4 py-2 text-left border">
+                                            <td colSpan="5" className="px-4 py-2 text-left border dark:border-gray-600">
                                                 <span className="font-semibold">
                                                     {bonSementaraDetail?.status === 'Dibatalkan' ? 'Alasan Pembatalan :' : 'Alasan Penolakan :'}
                                                 </span>{' '}
@@ -573,7 +573,7 @@ const DetailBs = () => {
                             onClick={handleBuatLaporan}
                             className={`px-12 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui'
                                 ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
-                                : 'text-gray-300 bg-transparent border border-gray-200 cursor-not-allowed'
+                                : 'text-gray-400 dark:text-gray-600 bg-transparent border border-gray-200 dark:border-gray-600 cursor-not-allowed'
                                 }`}
                             disabled={bonSementaraDetail?.status !== 'Disetujui'}
                         >
@@ -588,7 +588,7 @@ const DetailBs = () => {
                         <button
                             className={`px-16 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui'
                                 ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                                : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                                 }`}
                             onClick={handleGenerateAndPreviewPDF}
                             disabled={bonSementaraDetail?.status !== 'Disetujui' || isLoading}

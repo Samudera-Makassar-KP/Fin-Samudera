@@ -104,13 +104,13 @@ const BsAlerts = ({ scrollToTable }) => {
 
   return (
     <div
-      className="mb-4 p-4 bg-red-100 rounded-lg border border-red-600 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-2"
+      className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 rounded-lg border border-red-600 dark:border-red-500 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-2"
       role="alert"
     >
       <div className="flex items-center space-x-3">
         <div className="flex-shrink-0">
           <svg
-            className="h-5 w-5 text-red-600"
+            className="h-5 w-5 text-red-600 dark:text-red-400"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -121,7 +121,7 @@ const BsAlerts = ({ scrollToTable }) => {
             />
           </svg>
         </div>
-        <p className="text-sm text-red-800">
+        <p className="text-sm text-red-800 dark:text-red-200">
           {pendingCount > 0 && overdueCount > 0 ? (
             <>Terdapat <span className="font-medium">{pendingCount + overdueCount} Bon Sementara</span> yang belum dipertanggungjawabkan, <span className="font-medium">{overdueCount}</span> diantaranya telah melewati batas waktu.</>
           ) : pendingCount > 0 ? (

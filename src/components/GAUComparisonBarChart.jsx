@@ -12,6 +12,7 @@ import {
     Legend
 } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
+import { useTheme } from '../context/ThemeContext';
 
 // Daftarkan komponen Chart.js dan plugin
 ChartJS.register(
@@ -25,6 +26,8 @@ ChartJS.register(
 );
 
 const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
     // State untuk mengelola tampilan grafik dan data
     const [viewType, setViewType] = useState('monthly');
     const [chartData, setChartData] = useState(null);
@@ -366,10 +369,12 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
                 title: {
                     display: true,
                     text: viewType === 'monthly' ? 'Bulan' : 'Tahun',
+                    color: isDark ? '#e5e7eb' : '#374151',
                     font: { size: 10 }
                 },
                 ticks: {
                     maxRotation: 45,
+                    color: isDark ? '#d1d5db' : '#374151',
                     font: { size: 10 }
                 }
             },
@@ -378,12 +383,17 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
                 title: {
                     display: true,
                     text: showLPJ ? 'Jumlah Item' : 'Jumlah Pengajuan',
+                    color: isDark ? '#e5e7eb' : '#374151',
                     font: { size: 10 }
                 },
                 ticks: {
                     stepSize: 2,
                     precision: 0,
+                    color: isDark ? '#d1d5db' : '#374151',
                     font: { size: 10 }
+                },
+                grid: {
+                    color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
                 }
             }
         },
@@ -454,7 +464,9 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             fontSize: '14px',
             display: 'flex',
             flexWrap: 'nowrap',
-            overflow: 'auto'
+            overflow: 'auto',
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb'
         }),
         valueContainer: (base) => ({
             ...base,
@@ -466,15 +478,28 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             },
             scrollbarWidth: 'none'
         }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
         menu: (base) => ({
             ...base,
-            zIndex: 100
+            zIndex: 100,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff'
+        }),
+        option: (base, state) => ({
+            ...base,
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color
         }),
         multiValue: (base) => ({
             ...base,
             fontSize: '14px',
-            flexShrink: 0
+            flexShrink: 0,
+            backgroundColor: isDark ? '#374151' : base.backgroundColor
         }),
+        multiValueLabel: (base) => ({ ...base, color: isDark ? '#f3f4f6' : base.color }),
     };
 
     if (isLoading || !chartData) {
@@ -489,13 +514,13 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
         <div className="w-full h-[80vh] md:h-[75vh] flex flex-col overflow-hidden">
             <div className="flex flex-col space-y-2 lg:space-y-0 landscape:space-y-0 lg:flex-row lg:items-center lg:justify-between mb-4">
                 <div className="flex items-center justify-between w-full">
-                    <h2 className="text-base md:text-lg font-medium">
+                    <h2 className="text-base md:text-lg font-medium dark:text-gray-100">
                         {showLPJ ? "Perbandingan Pengajuan LPJ BS GA/Umum" : "Perbandingan Pengajuan Reimbursement GA/Umum"}
                     </h2>
                     {onClose && (
                         <button
                             onClick={onClose}
-                            className="block lg:hidden text-gray-500 hover:text-gray-800 text-4xl"
+                            className="block lg:hidden text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-4xl"
                         >
                             &times;
                         </button>
@@ -542,7 +567,7 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
                         {onClose && (
                             <button
                                 onClick={onClose}
-                                className="hidden lg:block text-gray-500 hover:text-gray-800 text-4xl lg:ml-4"
+                                className="hidden lg:block text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-4xl lg:ml-4"
                             >
                                 &times;
                             </button>
@@ -560,8 +585,8 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
                             key={item.id}
                             onClick={() => handleLegendClick(item)}
                             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-all duration-200 ${item.hidden
-                                ? 'bg-gray-100 text-gray-500'
-                                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                                ? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-500'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600'
                             }`}
                         >
                             <span

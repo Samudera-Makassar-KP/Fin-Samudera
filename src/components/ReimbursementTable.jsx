@@ -8,8 +8,10 @@ import Modal from '../components/Modal'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import { useTheme } from '../context/ThemeContext'
 
 const ReimbursementTable = () => {
+    const { theme } = useTheme()
     const [data, setData] = useState({ reimbursements: [] })
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
@@ -213,13 +215,15 @@ const ReimbursementTable = () => {
         }
     }
 
+    const isDark = theme === 'dark'
     const selectStyles = {
         control: (base) => ({
             ...base,
             display: 'flex', // Menggunakan Flexbox
             alignItems: 'center', // Teks berada di tengah vertikal
             justifyContent: 'space-between', // Menjaga ikon dropdown di kanan
-            borderColor: '#e5e7eb',
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
             fontSize: '12px', // Ukuran teks
             height: '32px', // Tinggi field tetap
             padding: '0 4px', // Padding horizontal
@@ -229,15 +233,23 @@ const ReimbursementTable = () => {
             },
             borderRadius: '8px' // Sudut melengkung
         }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
         menu: (base) => ({
             ...base,
-            zIndex: 100
+            zIndex: 100,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff'
         }),
-        option: (base) => ({
+        option: (base, state) => ({
             ...base,
             fontSize: '12px',
             padding: '6px 12px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color
         })
     }
 
@@ -263,9 +275,9 @@ const ReimbursementTable = () => {
 
     if (loading) {
         return (
-            <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-sm transition-colors">
                 <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between mb-2 gap-4">
-                    <h3 className="text-xl font-medium">Reimbursement Diajukan</h3>
+                    <h3 className="text-xl font-medium dark:text-gray-100">Reimbursement Diajukan</h3>
                     <div className="grid grid-cols-2 lg:flex lg:flex-row gap-2">
                         {[...Array(4)].map((_, index) => (
                             <div key={index} className="w-full lg:w-40">
@@ -284,9 +296,9 @@ const ReimbursementTable = () => {
     return (
         <div>
             {shouldShowEmptyState ? (
-                <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-sm transition-colors">
                     <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between mb-2 gap-4">
-                        <h3 className="text-xl font-medium items-center">Reimbursement Diajukan</h3>
+                        <h3 className="text-xl font-medium items-center dark:text-gray-100">Reimbursement Diajukan</h3>
                         <div className="grid grid-cols-2 lg:flex lg:flex-row gap-2">
                             <FilterSelect field="status" label="Status" />
                             <FilterSelect field="kategori" label="Kategori" />
@@ -302,9 +314,9 @@ const ReimbursementTable = () => {
                 </div>
             ) : (
                 // Jika ada data reimbursement
-                <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-sm transition-colors">
                     <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between mb-2 gap-4">
-                        <h3 className="text-xl font-medium">Reimbursement Diajukan</h3>
+                        <h3 className="text-xl font-medium dark:text-gray-100">Reimbursement Diajukan</h3>
                         <div className="grid grid-cols-2 lg:flex lg:flex-row gap-2">
                             <FilterSelect field="status" label="Status" />
                             <FilterSelect field="kategori" label="Kategori" />
@@ -316,37 +328,37 @@ const ReimbursementTable = () => {
                     <div className="w-full">
                         <div className="w-full overflow-x-auto">
                             <div className="inline-block min-w-[800px] w-full">
-                                <table className="w-full bg-white text-sm">
+                                <table className="w-full bg-white dark:bg-gray-800 text-sm dark:text-gray-200">
                                     <thead>
-                                        <tr className="bg-gray-100 text-left">
-                                            <th className="px-2 py-2 border text-center w-auto">No.</th>
-                                            <th className="px-4 py-2 border">Nomor Dokumen</th>
-                                            <th className="px-4 py-2 border">Kategori Reimbursement</th>
-                                            <th className="px-4 py-2 border">Jumlah</th>
-                                            <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                            <th className="py-2 border text-center">Status</th>
-                                            <th className="py-2 border text-center">Aksi</th>
+                                        <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                            <th className="px-2 py-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                            <th className="px-4 py-2 border dark:border-gray-600">Nomor Dokumen</th>
+                                            <th className="px-4 py-2 border dark:border-gray-600">Kategori Reimbursement</th>
+                                            <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
+                                            <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                            <th className="py-2 border dark:border-gray-600 text-center">Status</th>
+                                            <th className="py-2 border dark:border-gray-600 text-center">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {currentReimbursements.map((item, index) => (
                                             <tr key={index}>
-                                                <td className="px-2 py-2 border text-center w-auto">
+                                                <td className="px-2 py-2 border dark:border-gray-600 text-center w-auto">
                                                     {index + 1 + (currentPage - 1) * itemsPerPage}
                                                 </td>
-                                                <td className="px-4 py-2 border">
+                                                <td className="px-4 py-2 border dark:border-gray-600">
                                                     <Link
                                                         to={`/reimbursement/${item.id}`}
-                                                        className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                        className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                     >
                                                         {item.displayId}
                                                     </Link>
                                                 </td>
-                                                <td className="px-4 py-2 border">{item.kategori}</td>
-                                                <td className="px-4 py-2 border">
+                                                <td className="px-4 py-2 border dark:border-gray-600">{item.kategori}</td>
+                                                <td className="px-4 py-2 border dark:border-gray-600">
                                                     Rp{item.totalBiaya.toLocaleString('id-ID')}
                                                 </td>
-                                                <td className="px-4 py-2 border">
+                                                <td className="px-4 py-2 border dark:border-gray-600">
                                                     {formatDate(item.tanggalPengajuan)}
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
@@ -371,7 +383,7 @@ const ReimbursementTable = () => {
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
                                                     <button
-                                                        className="text-red-500 hover:text-red-700 disabled:text-gray-400 disabled:cursor-not-allowed hover"
+                                                        className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed hover"
                                                         onClick={() => handleCancel(item)}
                                                         disabled={item.status !== 'Diajukan'}
                                                     >
@@ -395,8 +407,8 @@ const ReimbursementTable = () => {
                                 disabled={currentPage === 1}
                                 className={`flex items-center px-2 h-9 rounded-full ${
                                     currentPage === 1
-                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                 }`}
                             >
                                 <svg
@@ -429,7 +441,7 @@ const ReimbursementTable = () => {
                                         className={`min-w-[36px] h-9 rounded-full ${
                                             currentPage === 1
                                                 ? 'bg-red-600 text-white'
-                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                         }`}
                                     >
                                         1
@@ -446,7 +458,7 @@ const ReimbursementTable = () => {
                                                 className={`min-w-[36px] h-9 rounded-full ${
                                                     currentPage === i
                                                         ? 'bg-red-600 text-white'
-                                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                                 }`}
                                             >
                                                 {i}
@@ -525,7 +537,7 @@ const ReimbursementTable = () => {
                                                         className={`min-w-[36px] h-9 rounded-full ${
                                                             currentPage === i
                                                                 ? 'bg-red-600 text-white'
-                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                                : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                                         }`}
                                                     >
                                                         {i}
@@ -551,7 +563,7 @@ const ReimbursementTable = () => {
                                                         className={`min-w-[36px] h-9 rounded-full ${
                                                             currentPage === i
                                                                 ? 'bg-red-600 text-white'
-                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                                : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                                         }`}
                                                     >
                                                         {i}
@@ -573,7 +585,7 @@ const ReimbursementTable = () => {
                                                             className={`min-w-[36px] h-9 rounded-full ${
                                                                 currentPage === i
                                                                     ? 'bg-red-600 text-white'
-                                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                                    : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                                             }`}
                                                         >
                                                             {i}
@@ -598,7 +610,7 @@ const ReimbursementTable = () => {
                                                 className={`min-w-[36px] h-9 rounded-full ${
                                                     currentPage === totalPages
                                                         ? 'bg-red-600 text-white'
-                                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                                 }`}
                                             >
                                                 {totalPages}
@@ -616,8 +628,8 @@ const ReimbursementTable = () => {
                                 disabled={currentPage === totalPages}
                                 className={`flex items-center px-2 h-9 rounded-full ${
                                     currentPage === totalPages
-                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                 }`}
                             >
                                 <svg

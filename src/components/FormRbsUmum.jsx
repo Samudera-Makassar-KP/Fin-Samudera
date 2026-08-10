@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons' // Tambah faTimes
 import { useLocation, useNavigate } from 'react-router-dom';
 import { isPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
+import { useTheme } from '../context/ThemeContext'
 
 
 const RbsUmumForm = () => {
@@ -16,6 +17,7 @@ const RbsUmumForm = () => {
     const isEditMode = location.state?.isEditMode || false;
     const editData = location.state?.editData || null;
 
+    const { theme } = useTheme()
     const [todayDate, setTodayDate] = useState('')
     const [userData, setUserData] = useState({
         uid: '',
@@ -608,11 +610,11 @@ const RbsUmumForm = () => {
                     />
                     <label
                         htmlFor="file-upload"
-                        className="w-full xl:w-fit text-center h-full xl:h-10 px-4 py-4 xl:py-2 bg-gray-50 xl:bg-gray-200 border rounded-md cursor-pointer hover:bg-gray-300 hover:border-gray-400 transition duration-300 ease-in-out"
+                        className="w-full xl:w-fit text-center h-full xl:h-10 px-4 py-4 xl:py-2 bg-gray-50 dark:bg-gray-700 xl:bg-gray-200 dark:xl:bg-gray-700 border dark:border-gray-600 rounded-md cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-600 hover:border-gray-400 transition duration-300 ease-in-out dark:text-gray-200"
                     >
                         Upload File
                     </label>
-                    <span className="ml-0 xl:ml-4 text-gray-500 mt-2 xl:mt-0 text-sm">
+                    <span className="ml-0 xl:ml-4 text-gray-500 dark:text-gray-400 mt-2 xl:mt-0 text-sm">
                         Format .pdf Max Size: 250MB
                     </span>
                 </div>
@@ -620,12 +622,12 @@ const RbsUmumForm = () => {
                 {attachmentFiles.length > 0 && (
                     <div className="mt-3 w-full">
                         {attachmentFiles.map((file, index) => (
-                            <div key={index} className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded mb-2 border border-gray-200">
-                                <span className="text-sm text-gray-700 truncate max-w-[80%]">{file.name}</span>
+                            <div key={index} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded mb-2 border border-gray-200 dark:border-gray-600">
+                                <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[80%]">{file.name}</span>
                                 <button
                                     type="button"
                                     onClick={() => removeAttachment(index)}
-                                    className="text-red-500 hover:text-red-700 ml-2 font-bold"
+                                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 ml-2 font-bold"
                                 >
                                     <FontAwesomeIcon icon={faTimes} />
                                 </button>
@@ -637,17 +639,18 @@ const RbsUmumForm = () => {
         )
     }
 
+    const isDark = theme === 'dark'
     const customStyles = {
         control: (base, state) => ({
             ...base,
             padding: '0 7px',
             height: '40px',
             minHeight: '40px',
-            borderColor: '#e5e7eb',
-            backgroundColor: state.isDisabled ? '#f9fafb' : 'white',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
+            backgroundColor: state.isDisabled ? (isDark ? '#374151' : '#f9fafb') : (isDark ? '#1f2937' : 'white'),
             cursor: state.isDisabled ? 'not-allowed' : 'default',
             '&:hover': {
-                borderColor: state.isDisabled ? '#e5e7eb' : '#3b82f6'
+                borderColor: state.isDisabled ? (isDark ? '#4b5563' : '#e5e7eb') : '#3b82f6'
             }
         }),
         valueContainer: (base) => ({
@@ -655,30 +658,42 @@ const RbsUmumForm = () => {
             padding: '0 7px',
             height: '40px',
             minHeight: '40px'
+        }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
+        menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
+        option: (base, state) => ({
+            ...base,
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color,
+            cursor: 'pointer'
         })
     }
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4">
+            <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Tambah <span className="font-bold">Reimbursement GA/Umum</span>
             </h2>
 
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow transition-colors">
                 {/* --- Layout diseragamkan untuk semua role --- */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                     {/* Row 1 */}
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Nama Lengkap</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={userData.nama}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Validator <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -699,16 +714,16 @@ const RbsUmumForm = () => {
 
                     {/* Row 2 */}
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Nomor Rekening</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={userData.accountNumber}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Reviewer 1 <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -729,16 +744,16 @@ const RbsUmumForm = () => {
 
                     {/* Row 3 */}
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Nama Bank</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={userData.bankName}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Reviewer 2 <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -759,16 +774,16 @@ const RbsUmumForm = () => {
 
                     {/* Row 4 */}
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Tanggal Pengajuan</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={formatDate(todayDate)}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Lampiran <span className="text-red-500">*</span>
                         </label>
                         {renderFileUpload()}
@@ -776,7 +791,7 @@ const RbsUmumForm = () => {
 
                     {/* Row 5 */}
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Unit Bisnis <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -794,23 +809,23 @@ const RbsUmumForm = () => {
                     </div>
                 </div>
 
-                <hr className="border-gray-300 my-6" />
+                <hr className="border-gray-300 dark:border-gray-600 my-6" />
 
                 {reimbursements.map((reimbursement, index) => (
                     <div key={index}>
                         {index > 0 && (
-                            <hr className="border-gray-300 my-6 block xl:hidden" />
+                            <hr className="border-gray-300 dark:border-gray-600 my-6 block xl:hidden" />
                         )}
 
                         <div className="flex flex-col xl:flex-row justify-stretch gap-2 mb-2">
                             <div className="flex-1 w-full xl:min-w-44">
                                 {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden">
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
                                         Jenis Reimbursement <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">
+                                    <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
                                         Jenis Reimbursement <span className="text-red-500">*</span>
                                     </label>
                                 )}
@@ -821,7 +836,7 @@ const RbsUmumForm = () => {
                                             placeholder="Jenis lain"
                                             value={reimbursement.jenisLain}
                                             onChange={(e) => handleJenisLainChange(index, e.target.value)}
-                                            className="w-full h-10 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                                         />
                                     ) : (
                                         <Select
@@ -841,17 +856,17 @@ const RbsUmumForm = () => {
 
                             <div className="flex-1 w-full xl:max-w-36">
                                 {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden">
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
                                         Biaya <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">
+                                    <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
                                         Biaya <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                    className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                                     type="text"
                                     value={formatRupiah(reimbursement.biaya)}
                                     onChange={(e) => handleInputChange(index, 'biaya', e.target.value)}
@@ -860,17 +875,17 @@ const RbsUmumForm = () => {
 
                             <div className="flex-1 w-full xl:min-w-36">
                                 {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden">
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
                                         Item <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">
+                                    <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
                                         Item <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                    className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                                     type="text"
                                     value={reimbursement.item}
                                     onChange={(e) => handleInputChange(index, 'item', e.target.value)}
@@ -879,13 +894,13 @@ const RbsUmumForm = () => {
 
                             <div className="flex-1 w-full xl:min-w-36">
                                 {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden">Keterangan</label>
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">Keterangan</label>
                                 )}
                                 {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">Keterangan</label>
+                                    <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">Keterangan</label>
                                 )}
                                 <textarea
-                                    className="w-full h-10 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none resize-none"
+                                    className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none resize-none"
                                     style={{scrollbarWidth: 'none'}}
                                     type="text"
                                     value={reimbursement.keterangan}
@@ -895,17 +910,17 @@ const RbsUmumForm = () => {
 
                             <div className="flex-1 w-full xl:max-w-40">
                                 {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden">
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
                                         Tanggal Aktivitas <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">
+                                    <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
                                         Tanggal Aktivitas <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 <input
-                                    className="w-full h-10 px-4 py-2 border rounded-md bg-transparent hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                    className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-transparent text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                                     type="date"
                                     value={reimbursement.tanggal}
                                     onChange={(e) => handleInputChange(index, 'tanggal', e.target.value)}
@@ -914,13 +929,13 @@ const RbsUmumForm = () => {
 
                             <div className="flex items-end my-2 xl:max-w-20 xl:my-0">
                                 {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 font-medium mb-2 xl:hidden"> </label>
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden"> </label>
                                 )}
                                 {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 font-medium mb-2">&nbsp;</label>
+                                    <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">&nbsp;</label>
                                 )}
                                 <button
-                                    className="w-full h-10 px-4 py-2 bg-transparent text-red-500 border border-red-500 rounded-md hover:bg-red-100 transition duration-300"
+                                    className="w-full h-10 px-4 py-2 bg-transparent text-red-500 dark:text-red-400 border border-red-500 dark:border-red-500 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition duration-300"
                                     onClick={() => handleRemoveForm(index)}
                                 >
                                     Hapus
@@ -932,14 +947,14 @@ const RbsUmumForm = () => {
 
                 <div className="mb-4 w-full text-center xl:text-start">
                     <span
-                        className="text-red-600 font-bold underline cursor-pointer hover:text-red-700"
+                        className="text-red-600 dark:text-red-400 font-bold underline cursor-pointer hover:text-red-700 dark:hover:text-red-300"
                         onClick={handleAddForm}
                     >
                         Tambah
                     </span>
                 </div>
 
-                <hr className="border-gray-300 my-6" />
+                <hr className="border-gray-300 dark:border-gray-600 my-6" />
 
                 <div className="flex justify-end mt-6">
                     <button

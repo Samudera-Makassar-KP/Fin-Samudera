@@ -270,10 +270,10 @@ const DetailLpj = () => {
     if (!userData) {
         return (
             <div className="container mx-auto py-8">
-                <h2 className="text-xl font-medium mb-4">
+                <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                     Detail <span className="font-bold">LPJ Bon Sementara</span>
                 </h2>
-                <div className="bg-white p-4 md:p-6 rounded-lg mb-6 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg mb-6 shadow-sm transition-colors">
                     <div className="hidden xl:block">
                         <div className="grid grid-cols-2 gap-x-16 mb-4 font-medium">
                             <div className="grid grid-cols-[auto_1fr] gap-x-16">
@@ -332,7 +332,7 @@ const DetailLpj = () => {
 
                     <div className="overflow-x-auto -mx-4 md:mx-0 mb-8">
                         <div className="min-w-[640px] md:w-full">
-                            <div className="bg-gray-100 grid grid-cols-7">
+                            <div className="bg-gray-100 dark:bg-gray-700 grid grid-cols-7">
                                 {[...Array(7)].map((_, index) => (
                                     <div key={index} className="p-1">
                                         <Skeleton height={25} />
@@ -341,7 +341,7 @@ const DetailLpj = () => {
                             </div>
 
                             {[...Array(2)].map((_, index) => (
-                                <div key={index} className="grid grid-cols-7 border-b">
+                                <div key={index} className="grid grid-cols-7 border-b dark:border-gray-600">
                                     {[...Array(7)].map((_, colIndex) => (
                                         <div key={colIndex} className="p-1">
                                             <Skeleton height={25} />
@@ -350,7 +350,7 @@ const DetailLpj = () => {
                                 </div>
                             ))}
 
-                            <div className="grid grid-cols-6 border-t">
+                            <div className="grid grid-cols-6 border-t dark:border-gray-600">
                                 <div className="col-span-5 p-1 text-right">
                                     <Skeleton height={30} />
                                 </div>
@@ -358,7 +358,7 @@ const DetailLpj = () => {
                                     <Skeleton height={30} />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-6 border-t">
+                            <div className="grid grid-cols-6 border-t dark:border-gray-600">
                                 <div className="col-span-5 p-1 text-right">
                                     <Skeleton height={30} />
                                 </div>
@@ -366,7 +366,7 @@ const DetailLpj = () => {
                                     <Skeleton height={30} />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-6 border-t">
+                            <div className="grid grid-cols-6 border-t dark:border-gray-600">
                                 <div className="col-span-5 p-1 text-right">
                                     <Skeleton height={30} />
                                 </div>
@@ -392,11 +392,11 @@ const DetailLpj = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4">
+            <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Detail <span className="font-bold">LPJ Bon Sementara</span>
             </h2>
 
-            <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+            <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow transition-colors">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 xl:gap-x-16 mb-6 font-medium">
                     {/* Mobile dan Tablet view */}
                     <div className="xl:hidden">
@@ -565,15 +565,15 @@ const DetailLpj = () => {
 
                 <div className="mb-8 overflow-x-auto -mx-4 md:mx-0">
                     <div className="min-w-[640px] md:w-full p-4 md:p-0">
-                        <table className="w-full bg-white border rounded-lg text-sm">
+                        <table className="w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                             <thead>
-                                <tr className="bg-gray-100 text-left">
+                                <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
                                     <th className="px-4 py-2 border text-center">No.</th>
-                                    <th className="px-4 py-2 border">Item</th>
-                                    <th className="px-4 py-2 border">Biaya</th>
-                                    <th className="px-4 py-2 border">Jumlah</th>
-                                    <th className="px-4 py-2 border">Keterangan</th>
-                                    <th className="px-4 py-2 border">Jumlah Biaya</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Item</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Biaya</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Keterangan</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Jumlah Biaya</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -581,10 +581,10 @@ const DetailLpj = () => {
                                     <tr key={index}>
                                         <td className="px-4 py-2 border w-12 text-center">{index + 1}</td>
                                         <td className="px-4 py-2 border min-w-32">{item.namaItem}</td>
-                                        <td className="px-4 py-2 border">Rp{item.biaya.toLocaleString('id-ID')}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">Rp{item.biaya.toLocaleString('id-ID')}</td>
                                         <td className="px-4 py-2 border w-24">{item.jumlah}</td>
-                                        <td className="px-4 py-2 border whitespace-pre-wrap">{item.keterangan ?? '-'}</td>
-                                        <td className="px-4 py-2 border">
+                                        <td className="px-4 py-2 border dark:border-gray-600 whitespace-pre-wrap">{item.keterangan ?? '-'}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">
                                             Rp{item.jumlahBiaya.toLocaleString('id-ID')}
                                         </td>
                                     </tr>
@@ -597,7 +597,7 @@ const DetailLpj = () => {
 
                                 {(lpjDetail?.status === 'Dibatalkan' || lpjDetail?.status === 'Ditolak') && (
                                     <tr>
-                                        <td colSpan="6" className="px-4 py-2 text-left border">
+                                        <td colSpan="6" className="px-4 py-2 text-left border dark:border-gray-600">
                                             <span className="font-semibold">
                                                 {lpjDetail?.status === 'Dibatalkan' ? 'Alasan Pembatalan :' : 'Alasan Penolakan :'}
                                             </span>{' '}
@@ -609,26 +609,26 @@ const DetailLpj = () => {
                                 )}
 
                                 <tr className="font-semibold">
-                                    <td colSpan="5" className="px-4 py-2 text-right border">
+                                    <td colSpan="5" className="px-4 py-2 text-right border dark:border-gray-600">
                                         Total Biaya :
                                     </td>
-                                    <td className="px-4 py-2 border">
+                                    <td className="px-4 py-2 border dark:border-gray-600">
                                         Rp{lpjDetail?.totalBiaya?.toLocaleString('id-ID')}
                                     </td>
                                 </tr>
                                 <tr className="font-semibold">
-                                    <td colSpan="5" className="px-4 py-2 text-right border">
+                                    <td colSpan="5" className="px-4 py-2 text-right border dark:border-gray-600">
                                         Sisa Lebih Bon Sementara :
                                     </td>
-                                    <td className="px-4 py-2 border">
+                                    <td className="px-4 py-2 border dark:border-gray-600">
                                         Rp{lpjDetail?.sisaLebih?.toLocaleString('id-ID')}
                                     </td>
                                 </tr>
                                 <tr className="font-semibold">
-                                    <td colSpan="5" className="px-4 py-2 text-right border">
+                                    <td colSpan="5" className="px-4 py-2 text-right border dark:border-gray-600">
                                         Sisa Kurang Dibayarkan ke Pegawai :
                                     </td>
-                                    <td className="px-4 py-2 border">
+                                    <td className="px-4 py-2 border dark:border-gray-600">
                                         Rp{lpjDetail?.sisaKurang?.toLocaleString('id-ID')}
                                     </td>
                                 </tr>
@@ -654,7 +654,7 @@ const DetailLpj = () => {
                         <button
                             className={`w-full md:w-auto px-16 py-3 rounded ${lpjDetail?.status === 'Disetujui'
                                 ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                                : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                                 }`}
                             onClick={handleGenerateAndPreviewPDF}
                             disabled={lpjDetail?.status !== 'Disetujui' || isLoading}

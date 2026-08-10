@@ -6,9 +6,12 @@ import { httpsCallable } from 'firebase/functions'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
+import { useTheme } from '../context/ThemeContext'
 
 const AddUserForm = () => {
     const navigate = useNavigate()
+    const { theme } = useTheme()
+    const isDark = theme === 'dark'
 
     const [formData, setFormData] = useState({
         nama: '',
@@ -307,7 +310,8 @@ const AddUserForm = () => {
     const selectStyles = {
         control: (base) => ({
             ...base,
-            borderColor: '#e5e7eb',
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
             '&:hover': {
                 borderColor: '#3b82f6'
             },
@@ -327,76 +331,104 @@ const AddUserForm = () => {
             },
             scrollbarWidth: 'none'
         }),
+        singleValue: (base) => ({
+            ...base,
+            color: isDark ? '#f3f4f6' : '#111827'
+        }),
+        input: (base) => ({
+            ...base,
+            color: isDark ? '#f3f4f6' : '#111827'
+        }),
+        placeholder: (base) => ({
+            ...base,
+            color: isDark ? '#9ca3af' : '#6b7280'
+        }),
         menu: (base) => ({
             ...base,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
             zIndex: 100
+        }),
+        option: (base, state) => ({
+            ...base,
+            backgroundColor: state.isFocused
+                ? (isDark ? '#374151' : '#f3f4f6')
+                : (isDark ? '#1f2937' : '#ffffff'),
+            color: isDark ? '#f3f4f6' : '#111827',
+            fontSize: '14px',
+            padding: '6px 12px',
+            cursor: 'pointer'
         }),
         multiValue: (base) => ({
             ...base,
+            backgroundColor: isDark ? '#374151' : '#e5e7eb',
             fontSize: '14px',
             flexShrink: 0
+        }),
+        multiValueLabel: (base) => ({
+            ...base,
+            color: isDark ? '#f3f4f6' : '#111827'
         }),
     }
 
     return (
         <div className="container mx-auto py-10 md:py-8 md:pb-20">
-            <h2 className="text-xl font-bold mb-4">Manage Users</h2>
+            <h2 className="text-xl font-bold mb-4 dark:text-gray-100">Manage Users</h2>
 
-            <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-xl font-medium mb-4">Tambah Pengguna</h3>
+            <div className="bg-white p-6 rounded-lg shadow dark:bg-gray-800">
+                <h3 className="text-xl font-medium mb-4 dark:text-gray-100">Tambah Pengguna</h3>
                 <form onSubmit={handleSubmit}>
                     <div className='hidden sm:block'>
                         <div className="sm:grid sm:grid-cols-2 gap-6">
                             <div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Nama Lengkap <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Nama Lengkap <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         name="nama"
                                         value={formData.nama}
                                         onChange={handleChange}
-                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Email <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Email <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <input
                                         type="email"
                                         name="email"
                                         value={formData.email}
                                         onChange={handleChange}
-                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                     />
                                 </div>
                             </div>
                             {formData.role !== 'Super Admin' && (
                                 <div>
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Nama Bank <span className="text-red-500">*</span>
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Nama Bank <span className="text-red-500 dark:text-red-400">*</span>
                                         </label>
                                         <input
                                             type="text"
                                             name="bankName"
                                             value={formData.bankName}
                                             onChange={handleChange}
-                                            className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                            className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                         />
                                     </div>
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Nomor Rekening <span className="text-red-500">*</span>
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Nomor Rekening <span className="text-red-500 dark:text-red-400">*</span>
                                         </label>
                                         <input
                                             type="text"
                                             name="accountNumber"
                                             value={formData.accountNumber}
                                             onChange={handleChange}
-                                            className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                            className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                         />
                                     </div>
                                 </div>
@@ -406,8 +438,8 @@ const AddUserForm = () => {
                             <div className="sm:grid sm:grid-cols-2 gap-6">
                                 <div>
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Unit Bisnis <span className="text-red-500">*</span>
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Unit Bisnis <span className="text-red-500 dark:text-red-400">*</span>
                                         </label>
                                         <Select
                                             isMulti
@@ -423,8 +455,8 @@ const AddUserForm = () => {
                                         />
                                     </div>
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Lokasi <span className="text-red-500">*</span>
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Lokasi <span className="text-red-500 dark:text-red-400">*</span>
                                         </label>
                                         <Select
                                             isMulti
@@ -440,8 +472,8 @@ const AddUserForm = () => {
                                         />
                                     </div>
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Department <span className="text-red-500">*</span>
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Department <span className="text-red-500 dark:text-red-400">*</span>
                                         </label>
                                         <Select
                                             isMulti
@@ -459,8 +491,8 @@ const AddUserForm = () => {
                                 </div>
                                 <div>
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Validator {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Validator {formData.role !== 'Reviewer' && <span className="text-red-500 dark:text-red-400">*</span>}
                                         </label>
                                         <Select
                                             isMulti
@@ -476,8 +508,8 @@ const AddUserForm = () => {
                                         />
                                     </div>
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500 dark:text-red-400">*</span>}
                                         </label>
                                         <Select
                                             isMulti
@@ -499,8 +531,8 @@ const AddUserForm = () => {
                             <div>
                                 {formData.role !== 'Super Admin' && (
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Posisi <span className="text-red-500">*</span>
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Posisi <span className="text-red-500 dark:text-red-400">*</span>
                                         </label>
                                         <Select
                                             name="posisi"
@@ -518,8 +550,8 @@ const AddUserForm = () => {
                                     </div>
                                 )}
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Role <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Role <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <Select
                                         name="role"
@@ -540,8 +572,8 @@ const AddUserForm = () => {
                             <div>
                                 {formData.role !== 'Super Admin' && (
                                     <div className="mb-2">
-                                        <label className="block font-medium text-gray-700">
-                                            Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500 dark:text-red-400">*</span>}
                                         </label>
                                         <Select
                                             isMulti
@@ -564,32 +596,32 @@ const AddUserForm = () => {
                     {/* Mobile/small screen layout */}
                     <div className="block sm:hidden">
                         <div className="mb-2">
-                            <label className="block font-medium text-gray-700">
-                                Nama Lengkap <span className="text-red-500">*</span>
+                            <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                Nama Lengkap <span className="text-red-500 dark:text-red-400">*</span>
                             </label>
                             <input
                                 type="text"
                                 name="nama"
                                 value={formData.nama}
                                 onChange={handleChange}
-                                className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                             />
                         </div>
                         <div className="mb-2">
-                            <label className="block font-medium text-gray-700">
-                                Email <span className="text-red-500">*</span>
+                            <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                Email <span className="text-red-500 dark:text-red-400">*</span>
                             </label>
                             <input
                                 type="email"
                                 name="email"
                                 value={formData.email}
                                 onChange={handleChange}
-                                className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                             />
                         </div>
                         <div className="mb-2">
-                            <label className="block font-medium text-gray-700">
-                                Role <span className="text-red-500">*</span>
+                            <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                Role <span className="text-red-500 dark:text-red-400">*</span>
                             </label>
                             <Select
                                 name="role"
@@ -609,8 +641,8 @@ const AddUserForm = () => {
                         {formData.role !== 'Super Admin' && (
                             <div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Posisi <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Posisi <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <Select
                                         name="posisi"
@@ -626,8 +658,8 @@ const AddUserForm = () => {
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Department <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Department <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <Select
                                         isMulti
@@ -643,8 +675,8 @@ const AddUserForm = () => {
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Unit Bisnis <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Unit Bisnis <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <Select
                                         isMulti
@@ -660,8 +692,8 @@ const AddUserForm = () => {
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Lokasi <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Lokasi <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <Select
                                         isMulti
@@ -677,32 +709,32 @@ const AddUserForm = () => {
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Nama Bank <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Nama Bank <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         name="bankName"
                                         value={formData.bankName}
                                         onChange={handleChange}
-                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Nomor Rekening <span className="text-red-500">*</span>
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Nomor Rekening <span className="text-red-500 dark:text-red-400">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         name="accountNumber"
                                         value={formData.accountNumber}
                                         onChange={handleChange}
-                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                        className="mt-1 block w-full border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 hover:border-blue-400 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Validator {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Validator {formData.role !== 'Reviewer' && <span className="text-red-500 dark:text-red-400">*</span>}
                                     </label>
                                     <Select
                                         isMulti
@@ -718,8 +750,8 @@ const AddUserForm = () => {
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Reviewer 1 {formData.role !== 'Reviewer' && <span className="text-red-500 dark:text-red-400">*</span>}
                                     </label>
                                     <Select
                                         isMulti
@@ -735,8 +767,8 @@ const AddUserForm = () => {
                                     />
                                 </div>
                                 <div className="mb-2">
-                                    <label className="block font-medium text-gray-700">
-                                        Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500">*</span>}
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Reviewer 2 {formData.role !== 'Reviewer' && <span className="text-red-500 dark:text-red-400">*</span>}
                                     </label>
                                     <Select
                                         isMulti
@@ -756,7 +788,7 @@ const AddUserForm = () => {
                     </div>
 
                     <div className="flex flex-col sm:flex-row justify-end mt-6 gap-4">
-                        <button onClick={() => navigate(-1)} className="px-16 py-3 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 hover:text-gray-700 w-full sm:w-auto" disabled={isSubmitting}>Cancel</button>
+                        <button onClick={() => navigate(-1)} className="px-16 py-3 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 hover:text-gray-700 w-full sm:w-auto dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600" disabled={isSubmitting}>Cancel</button>
                         <button type="submit" className="px-16 py-3 bg-red-600 text-white rounded hover:bg-red-700 hover:text-gray-200 w-full sm:w-auto" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save'}</button>
                     </div>
                 </form>

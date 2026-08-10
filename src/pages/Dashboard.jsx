@@ -97,7 +97,7 @@ const Dashboard = ({ userUid }) => {
             <Layout>
                 <div className="container mx-auto py-10 md:py-8">
                     <div className="w-full">
-                        <h2 className="text-xl font-medium mb-4">
+                        <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                             Welcome, <span className="font-bold">{user?.name || 'User'}</span>
                         </h2>
                         <DashboardSummary uid={uid} role={user.role} />

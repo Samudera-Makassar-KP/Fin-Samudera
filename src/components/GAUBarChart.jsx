@@ -5,10 +5,13 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import ClipLoader from "react-spinners/ClipLoader";
+import { useTheme } from '../context/ThemeContext';
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend, ChartDataLabels);
 
 const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClose }) => {
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
     const [chartData, setChartData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [originalLabels, setOriginalLabels] = useState({});
@@ -193,13 +196,13 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
     return (
         <div className="w-full h-[80vh] md:h-[75vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between w-full mb-4">
-                <h2 className="text-base md:text-lg font-medium">
+                <h2 className="text-base md:text-lg font-medium dark:text-gray-100">
                     Detail Item {selectedType} - {getPeriodText()}
                 </h2>
                 {onClose && (
                     <button
                         onClick={onClose}
-                        className="text-gray-500 hover:text-gray-800 text-4xl"
+                        className="text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-4xl"
                     >
                         &times;
                     </button>
@@ -238,6 +241,7 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                                         title: {
                                             display: true,
                                             text: "Item",
+                                            color: isDark ? '#e5e7eb' : '#374151',
                                             font: {
                                                 size: 10,
                                             }
@@ -246,6 +250,7 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                                             maxRotation: 45,
                                             minRotation: 0,
                                             autoSkip: false,
+                                            color: isDark ? '#d1d5db' : '#374151',
                                             font: { size: 10 },
                                             callback: function(value) {
                                                 const chart = chartRef.current;
@@ -262,11 +267,15 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                                                 return adaptiveTextTruncate(chartDisplayData.labels[value], maxWidth);
                                             }
                                         },
+                                        grid: {
+                                            color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                                        }
                                     },
                                     y: {
                                         title: {
                                             display: true,
                                             text: "Jumlah",
+                                            color: isDark ? '#e5e7eb' : '#374151',
                                             font: {
                                                 size: 10,
                                             }
@@ -275,17 +284,21 @@ const GAUBarChart = ({ selectedType, selectedMonth, selectedYear, months, onClos
                                             stepSize: 2,
                                             precision: 0,
                                             beginAtZero: true,
+                                            color: isDark ? '#d1d5db' : '#374151',
                                             font: {
                                                 size: 10,
                                             }
                                         },
+                                        grid: {
+                                            color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                                        }
                                     },
                                 },
                             }}
                         />
                     ) : (
                         <div className="flex items-center justify-center h-full">
-                            <p className="text-sm sm:text-base md:text-lg text-gray-500 text-center px-4">
+                            <p className="text-sm sm:text-base md:text-lg text-gray-500 dark:text-gray-400 text-center px-4">
                                 Tidak ada data untuk {selectedType} pada periode {getPeriodText()}.
                             </p>
                         </div>

@@ -125,13 +125,13 @@ const ReportCard = () => {
                     {[...Array(itemCount)].map((_, index) => (
                         <div
                             key={index}
-                            className="bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1"
+                            className="bg-white dark:bg-gray-800 flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1"
                         >
-                            <div className="animate-pulse rounded-full h-20 w-20 bg-gray-200"></div>
+                            <div className="animate-pulse rounded-full h-20 w-20 bg-gray-200 dark:bg-gray-700"></div>
                             <div className="flex-1">
-                                <div className="h-6 bg-gray-200 rounded w-32 mb-1 animate-pulse"></div>
-                                <div className="h-10 bg-gray-200 rounded w-8 mb-1 animate-pulse"></div>
-                                <div className="h-4 bg-gray-200 rounded w-44 animate-pulse"></div>
+                                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-1 animate-pulse"></div>
+                                <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-8 mb-1 animate-pulse"></div>
+                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-44 animate-pulse"></div>
                             </div>
                         </div>
                     ))}
@@ -142,30 +142,30 @@ const ReportCard = () => {
                     className={`hidden md:flex md:flex-row md:gap-4 xl:hidden ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}
                 >
                     {[...Array(itemCount)].map((_, index) => (
-                        <div key={index} className="flex-1 bg-white p-4 rounded-lg shadow-sm">
-                            <div className="animate-pulse rounded-full h-14 w-14 bg-gray-200 mb-1"></div>
-                            <div className="h-5 bg-gray-200 rounded w-32 mb-1 animate-pulse"></div>
-                            <div className="h-7 bg-gray-200 rounded animate-pulse"></div>
+                        <div key={index} className="flex-1 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+                            <div className="animate-pulse rounded-full h-14 w-14 bg-gray-200 dark:bg-gray-700 mb-1"></div>
+                            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-1 animate-pulse"></div>
+                            <div className="h-7 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
                         </div>
                     ))}
                 </div>
 
                 {/* Mobile View (below 768px) */}
                 <div
-                    className={`md:hidden bg-white rounded-lg shadow-sm p-4 ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}
+                    className={`md:hidden bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}
                 >
                     <p className="text-lg font-medium mb-2">Pengajuan Perlu Ditanggapi</p>
                     <div className="flex flex-col">
                         {[...Array(itemCount)].map((_, index) => (
                             <React.Fragment key={index}>
-                                <div className="flex items-center justify-between w-full bg-white p-3 rounded-lg">
+                                <div className="flex items-center justify-between w-full bg-white dark:bg-gray-800 p-3 rounded-lg">
                                     <div className="flex items-center gap-3">
-                                        <div className="animate-pulse rounded-full h-11 w-11 bg-gray-200"></div>
-                                        <div className="h-5 bg-gray-200 rounded w-32 animate-pulse"></div>
+                                        <div className="animate-pulse rounded-full h-11 w-11 bg-gray-200 dark:bg-gray-700"></div>
+                                        <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-32 animate-pulse"></div>
                                     </div>
-                                    <div className="animate-pulse bg-gray-200 h-8 w-8 rounded-full"></div>
+                                    <div className="animate-pulse bg-gray-200 dark:bg-gray-700 h-8 w-8 rounded-full"></div>
                                 </div>
-                                {index !== (itemCount - 1) && <hr className="border-gray-150" />}
+                                {index !== (itemCount - 1) && <hr className="border-gray-150 dark:border-gray-700" />}
                             </React.Fragment>
                         ))}
                     </div>
@@ -185,8 +185,8 @@ const ReportCard = () => {
                     <>
                         <div
                             onClick={handleReimbursementClick}
-                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
-                                ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                            className={`bg-white dark:bg-gray-800 flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
+                                ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                         >
                             <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-6 rounded-full">
                                 <svg
@@ -205,16 +205,16 @@ const ReportCard = () => {
                                 </svg>
                             </div>
                             <div className="flex-1">
-                                <p className="text-lg font-medium text-gray-500">Reimbursement</p>
+                                <p className="text-lg font-medium text-gray-500 dark:text-gray-400">Reimbursement</p>
                                 <div className="text-4xl font-bold">{reimbursementCount}</div>
-                                <p className="text-sm text-gray-500">Pengajuan Perlu Ditanggapi</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</p>
                             </div>
                         </div>
 
                         <div
                             onClick={handleBonSementaraClick}
-                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
-                                ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                            className={`bg-white dark:bg-gray-800 flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
+                                ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                         >
                             <div className="bg-gradient-to-r from-teal-400 to-green-500 p-6 rounded-full">
                                 <svg
@@ -233,16 +233,16 @@ const ReportCard = () => {
                                 </svg>
                             </div>
                             <div className="flex-1">
-                                <p className="text-lg font-medium text-gray-500">Nomor Bon Sementara</p>
+                                <p className="text-lg font-medium text-gray-500 dark:text-gray-400">Nomor Bon Sementara</p>
                                 <div className="text-4xl font-bold">{bonSementaraCount}</div>
-                                <p className="text-sm text-gray-500">Pengajuan Perlu Ditanggapi</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</p>
                             </div>
                         </div>
 
                         <div
                             onClick={handleLpjClick}
-                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
-                                ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                            className={`bg-white dark:bg-gray-800 flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg 
+                                ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                         >
                             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 rounded-full">
                                 <svg
@@ -261,9 +261,9 @@ const ReportCard = () => {
                                 </svg>
                             </div>
                             <div className="flex-1">
-                                <p className="text-lg font-medium text-gray-500">LPJ Bon Sementara</p>
+                                <p className="text-lg font-medium text-gray-500 dark:text-gray-400">LPJ Bon Sementara</p>
                                 <div className="text-4xl font-bold">{lpjCount}</div>
-                                <p className="text-sm text-gray-500">Pengajuan Perlu Ditanggapi</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</p>
                             </div>
                         </div>
                     </>
@@ -272,8 +272,8 @@ const ReportCard = () => {
                     <>
                         <div
                             onClick={handleReimbursementClick}
-                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1 
-                                ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                            className={`bg-white dark:bg-gray-800 flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1 
+                                ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                         >
                             <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-6 rounded-full">
                                 <svg
@@ -292,16 +292,16 @@ const ReportCard = () => {
                                 </svg>
                             </div>
                             <div className="flex-1">
-                                <p className="text-lg font-medium text-gray-500">Reimbursement</p>
+                                <p className="text-lg font-medium text-gray-500 dark:text-gray-400">Reimbursement</p>
                                 <div className="text-4xl font-bold">{reimbursementCount}</div>
-                                <p className="text-sm text-gray-500">Pengajuan Perlu Ditanggapi</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</p>
                             </div>
                         </div>
 
                         <div
                             onClick={handleLpjClick}
-                            className={`bg-white flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1 
-                                ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                            className={`bg-white dark:bg-gray-800 flex items-center space-x-4 px-6 py-4 shadow-sm rounded-lg flex-1 
+                                ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                         >
                             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 rounded-full">
                                 <svg
@@ -320,9 +320,9 @@ const ReportCard = () => {
                                 </svg>
                             </div>
                             <div className="flex-1">
-                                <p className="text-lg font-medium text-gray-500">LPJ Bon Sementara</p>
+                                <p className="text-lg font-medium text-gray-500 dark:text-gray-400">LPJ Bon Sementara</p>
                                 <div className="text-4xl font-bold">{lpjCount}</div>
-                                <p className="text-sm text-gray-500">Pengajuan Perlu Ditanggapi</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</p>
                             </div>
                         </div>
                     </>
@@ -334,8 +334,8 @@ const ReportCard = () => {
                 <div className={`flex flex-row gap-4 ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}>
                     <div
                         onClick={handleReimbursementClick}
-                        className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
-                            ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        className={`flex-1 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm 
+                            ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                     >
                         <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-full w-fit mb-2">
                             <svg
@@ -353,18 +353,18 @@ const ReportCard = () => {
                                 />
                             </svg>
                         </div>
-                        <p className="text-md font-medium text-gray-500">Reimbursement</p>
+                        <p className="text-md font-medium text-gray-500 dark:text-gray-400">Reimbursement</p>
                         <div className="text-xl font-bold">
                             {reimbursementCount}{' '}
-                            <span className="text-sm font-medium text-gray-500">Pengajuan Perlu Ditanggapi</span>
+                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</span>
                         </div>
                     </div>
 
                     {(userRole === 'Reviewer' || userRole === 'Admin') && (
                         <div
                             onClick={handleBonSementaraClick}
-                            className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
-                            ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                            className={`flex-1 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm 
+                            ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                         >
                             <div className="bg-gradient-to-r from-teal-400 to-green-500 p-4 rounded-full w-fit mb-2">
                                 <svg
@@ -382,18 +382,18 @@ const ReportCard = () => {
                                     />
                                 </svg>
                             </div>
-                            <p className="text-md font-medium text-gray-500">Nomor Bon Sementara</p>
+                            <p className="text-md font-medium text-gray-500 dark:text-gray-400">Nomor Bon Sementara</p>
                             <div className="text-xl font-bold">
                                 {bonSementaraCount}{' '}
-                                <span className="text-sm font-medium text-gray-500">Pengajuan Perlu Ditanggapi</span>
+                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</span>
                             </div>
                         </div>
                     )}
 
                     <div
                         onClick={handleLpjClick}
-                        className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
-                            ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        className={`flex-1 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm 
+                            ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                     >
                         <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-4 rounded-full w-fit mb-2">
                             <svg
@@ -411,10 +411,10 @@ const ReportCard = () => {
                                 />
                             </svg>
                         </div>
-                        <p className="text-md font-medium text-gray-500">LPJ Bon Sementara</p>
+                        <p className="text-md font-medium text-gray-500 dark:text-gray-400">LPJ Bon Sementara</p>
                         <div className="text-xl font-bold">
                             {lpjCount}{' '}
-                            <span className="text-sm font-medium text-gray-500">Pengajuan Perlu Ditanggapi</span>
+                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</span>
                         </div>
                     </div>
                 </div>
@@ -426,8 +426,8 @@ const ReportCard = () => {
             >
                 <div
                     onClick={handleReimbursementClick}
-                    className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
-                        ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                    className={`flex-1 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm 
+                        ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                 >
                     <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-4 rounded-full w-fit mb-2">
                         <svg
@@ -445,18 +445,18 @@ const ReportCard = () => {
                             />
                         </svg>
                     </div>
-                    <p className="text-md font-medium text-gray-500">Reimbursement</p>
+                    <p className="text-md font-medium text-gray-500 dark:text-gray-400">Reimbursement</p>
                     <div className="text-xl font-bold">
                         {reimbursementCount}{' '}
-                        <span className="text-sm font-medium text-gray-500">Pengajuan Perlu Ditanggapi</span>
+                        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</span>
                     </div>
                 </div>
 
                 {(userRole === 'Reviewer' || userRole === 'Admin') && (
                     <div
                         onClick={handleBonSementaraClick}
-                        className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
-                        ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        className={`flex-1 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm 
+                        ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                     >
                         <div className="bg-gradient-to-r from-teal-400 to-green-500 p-4 rounded-full w-fit mb-2">
                             <svg
@@ -474,18 +474,18 @@ const ReportCard = () => {
                                 />
                             </svg>
                         </div>
-                        <p className="text-md font-medium text-gray-500">Nomor Bon Sementara</p>
+                        <p className="text-md font-medium text-gray-500 dark:text-gray-400">Nomor Bon Sementara</p>
                         <div className="text-xl font-bold">
                             {bonSementaraCount}{' '}
-                            <span className="text-sm font-medium text-gray-500">Pengajuan Perlu Ditanggapi</span>
+                            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</span>
                         </div>
                     </div>
                 )}
 
                 <div
                     onClick={handleLpjClick}
-                    className={`flex-1 bg-white p-4 rounded-lg shadow-sm 
-                        ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                    className={`flex-1 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm 
+                        ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                 >
                     <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-4 rounded-full w-fit mb-2">
                         <svg
@@ -503,22 +503,22 @@ const ReportCard = () => {
                             />
                         </svg>
                     </div>
-                    <p className="text-md font-medium text-gray-500">LPJ Bon Sementara</p>
+                    <p className="text-md font-medium text-gray-500 dark:text-gray-400">LPJ Bon Sementara</p>
                     <div className="text-xl font-bold">
-                        {lpjCount} <span className="text-sm font-medium text-gray-500">Pengajuan Perlu Ditanggapi</span>
+                        {lpjCount} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Pengajuan Perlu Ditanggapi</span>
                     </div>
                 </div>
             </div>
 
             {/* Mobile View (below 768px) */}
-            <div className={`md:hidden bg-white rounded-lg shadow-sm p-4 ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}>
+            <div className={`md:hidden bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 ${userRole === 'Reviewer' ? 'mb-2' : 'mb-6'}`}>
                 <p className="text-xl font-medium mb-2">Pengajuan Perlu Ditanggapi</p>
                 <div className="flex flex-col">
                     {/* Reimbursement Section */}
                     <div
                         onClick={handleReimbursementClick}
-                        className={`flex items-center justify-between w-full bg-white p-3 rounded-lg 
-                            ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        className={`flex items-center justify-between w-full bg-white dark:bg-gray-800 p-3 rounded-lg 
+                            ${reimbursementCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                     >
                         <div className="flex items-center gap-3">
                             <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-full">
@@ -541,19 +541,19 @@ const ReportCard = () => {
                                 <p className="text-md font-medium">Reimbursement</p>
                             </div>
                         </div>
-                        <div className="bg-gray-100 px-3 py-1 rounded-full">
+                        <div className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
                             <span className="text-sm font-bold">{reimbursementCount}</span>
                         </div>
                     </div>
 
-                    <hr className="border-gray-150" />
+                    <hr className="border-gray-150 dark:border-gray-700" />
 
                     {/* Nomor Bon Section */}
                     {(userRole === 'Reviewer' || userRole === 'Admin') && (
                         <div
                             onClick={handleBonSementaraClick}
-                            className={`flex items-center justify-between w-full bg-white p-3 rounded-lg 
-                            ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                            className={`flex items-center justify-between w-full bg-white dark:bg-gray-800 p-3 rounded-lg 
+                            ${bonSementaraCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                         >
                             <div className="flex items-center gap-3">
                                 <div className="bg-gradient-to-r from-teal-400 to-green-500 p-3 rounded-full">
@@ -576,19 +576,19 @@ const ReportCard = () => {
                                     <p className="text-md font-medium">Nomor Bon Sementara</p>
                                 </div>
                             </div>
-                            <div className="bg-gray-100 px-3 py-1 rounded-full">
+                            <div className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
                                 <span className="text-sm font-bold">{bonSementaraCount}</span>
                             </div>
                         </div>
                     )}
 
-                    <hr className="border-gray-150" />
+                    <hr className="border-gray-150 dark:border-gray-700" />
 
                     {/* LPJ Bon Sementara Section */}
                     <div
                         onClick={handleLpjClick}
-                        className={`flex items-center justify-between w-full bg-white p-3 rounded-lg 
-                            ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                        className={`flex items-center justify-between w-full bg-white dark:bg-gray-800 p-3 rounded-lg 
+                            ${lpjCount > 0 ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700' : ''}`}
                     >
                         <div className="flex items-center gap-3">
                             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-3 rounded-full">
@@ -611,7 +611,7 @@ const ReportCard = () => {
                                 <p className="text-md font-medium">LPJ Bon Sementara</p>
                             </div>
                         </div>
-                        <div className="bg-gray-100 px-3 py-1 rounded-full">
+                        <div className="bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
                             <span className="text-sm font-bold">{lpjCount}</span>
                         </div>
                     </div>

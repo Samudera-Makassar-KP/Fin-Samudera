@@ -59,7 +59,7 @@ const Layout = ({ children }) => {
                     toggleSidebar={toggleSidebar}
                     onLogout={handleLogout}
                 />
-                <div className="flex-1 bg-gray-100 p-4 md:p-6 ml-0 lg:ml-64 overflow-hidden">
+                <div className="flex-1 bg-gray-100 dark:bg-gray-900 p-4 md:p-6 ml-0 lg:ml-64 overflow-hidden">
                     <main className="w-full overflow-hidden">{children}</main>
                 </div>
             </div>

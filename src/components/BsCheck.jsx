@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, getDoc, doc, updateDoc, arrayUnion }
 import { db } from '../firebaseConfig'
 import Modal from './Modal'
 import Select from 'react-select'
+import { useTheme } from '../context/ThemeContext'
 import EmptyState from '../assets/images/EmptyState.png'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
@@ -12,6 +13,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 
 const BsCheck = () => {
+    const { theme } = useTheme()
     const [activeTab, setActiveTab] = useState('pending')
     const [data, setData] = useState({ bonSementara: [] })
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -605,13 +607,15 @@ const BsCheck = () => {
         }))
     }
 
+    const isDark = theme === 'dark'
     const selectStyles = {
         control: (base) => ({
             ...base,
             display: 'flex', // Menggunakan Flexbox
             alignItems: 'center', // Teks berada di tengah vertikal
             justifyContent: 'space-between', // Menjaga ikon dropdown di kanan
-            borderColor: '#e5e7eb',
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
             fontSize: '12px', // Ukuran teks
             height: '32px', // Tinggi field tetap
             padding: '0 4px', // Padding horizontal
@@ -621,15 +625,23 @@ const BsCheck = () => {
             },
             borderRadius: '8px' // Sudut melengkung
         }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
         menu: (base) => ({
             ...base,
-            zIndex: 100
+            zIndex: 100,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff'
         }),
-        option: (base) => ({
+        option: (base, state) => ({
             ...base,
             fontSize: '12px',
             padding: '6px 12px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color
         })
     }
 
@@ -654,17 +666,17 @@ const BsCheck = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4">
+            <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Cek <span className="font-bold">Pengajuan Bon Sementara</span>
             </h2>
 
-            <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-sm transition-colors">
                 <div className="mb-4">
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 xl:gap-24">
                         {/* Dropdown Title Section */}
                         <div className="relative flex-shrink-0">
                             <h3
-                                className="text-xl font-medium cursor-pointer hover:text-gray-700 flex items-center gap-2 transition-all duration-200"
+                                className="text-xl font-medium dark:text-gray-100 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2 transition-all duration-200"
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                             >
                                 {activeTab === 'pending'
@@ -686,11 +698,11 @@ const BsCheck = () => {
                             </h3>
 
                             {isDropdownOpen && (
-                                <div className="absolute top-full left-0 mt-1 bg-white rounded-lg py-1 z-50 min-w-[250px] md:w-auto shadow-lg">
+                                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-700 rounded-lg py-1 z-50 min-w-[250px] md:w-auto shadow-lg">
                                     {getAvailableTabs().map((tab) => (
                                         <div
                                             key={tab.id}
-                                            className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                            className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-600 dark:text-gray-200 cursor-pointer flex items-center justify-between"
                                             onClick={() => {
                                                 setActiveTab(tab.id);
                                                 setIsDropdownOpen(false);
@@ -746,43 +758,43 @@ const BsCheck = () => {
                         <div className="w-full">
                             <div className="w-full overflow-x-auto">
                                 <div className="inline-block min-w-[900px] w-full">
-                                    <table className="w-full bg-white border rounded-lg text-sm">
+                                    <table className="w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                                         <thead>
-                                            <tr className="bg-gray-100 text-left">
-                                                <th className="p-2 border text-center w-auto">No.</th>
-                                                <th className="px-4 py-2 border">Nomor BS</th>
-                                                <th className="px-4 py-2 border">Nama</th>
-                                                <th className="px-4 py-2 border">Kategori BS</th>
-                                                <th className="px-4 py-2 border">Jumlah</th>
-                                                <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                                <th className="p-2 border text-center">Status</th>
-                                                <th className="p-2 border text-center">Aksi</th>
+                                            <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                                <th className="p-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                                <th className="px-4 py-2 border dark:border-gray-600">Nomor BS</th>
+                                                <th className="px-4 py-2 border dark:border-gray-600">Nama</th>
+                                                <th className="px-4 py-2 border dark:border-gray-600">Kategori BS</th>
+                                                <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
+                                                <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                                <th className="p-2 border dark:border-gray-600 text-center">Status</th>
+                                                <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                                 {data.bonSementara.map((item, index) => (
                                                     <tr key={index}>
-                                                        <td className="p-2 border text-center w-auto">{index + 1}</td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             <Link
                                                                 to={`/bon-sementara/${item.id}`}
-                                                                className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
                                                             </Link>
                                                         </td>
-                                                        <td className="px-4 py-2 border">{item.user.nama}</td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">{item.user.nama}</td>
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             {item.bonSementara[0].kategori}
                                                         </td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             Rp
                                                             {item.bonSementara[0].jumlahBS.toLocaleString('id-ID')}
                                                         </td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             {formatDate(item.tanggalPengajuan)}
                                                         </td>
-                                                        <td className="p-2 border text-center">
+                                                        <td className="p-2 border dark:border-gray-600 text-center">
                                                             <span
                                                                 className={`px-4 py-1 rounded-full text-xs font-medium 
                                                     ${item.status === 'Diajukan'
@@ -799,7 +811,7 @@ const BsCheck = () => {
                                                         </td>
                                                         
                                                         {/* --- BAGIAN INI YANG KITA UBAH (TAMBAH TOMBOL EDIT) --- */}
-                                                        <td className="p-2 border text-center">
+                                                        <td className="p-2 border dark:border-gray-600 text-center">
                                                             <div className="flex justify-center space-x-2">
                                                                 
                                                                 {/* Tombol Edit */}
@@ -875,42 +887,42 @@ const BsCheck = () => {
                             <div className="w-full">
                                 <div className="w-full overflow-x-auto">
                                     <div className="inline-block min-w-[1000px] w-full">
-                                        <table className="min-w-full bg-white border rounded-lg text-sm">
+                                        <table className="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                                             <thead>
-                                                <tr className="bg-gray-100 text-left">
-                                                    <th className="p-2 border text-center w-auto">No.</th>
-                                                    <th className="px-4 py-2 border">Nomor BS</th>
-                                                    <th className="px-4 py-2 border">Nama</th>
-                                                    <th className="px-4 py-2 border">Kategori BS</th>
-                                                    <th className="px-4 py-2 border">Jumlah</th>
-                                                    <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                                    <th className="px-4 py-2 border">Tanggal Disetujui</th>
-                                                    <th className="px-4 py-2 border">Aksi</th>
+                                                <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                                    <th className="p-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Nomor BS</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Nama</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Kategori BS</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {filteredApprovedData.bonSementara.map((item, index) => (
                                                     <tr key={index}>
-                                                        <td className="p-2 border text-center w-auto">{index + 1}</td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             <Link
                                                                 to={`/bon-sementara/${item.id}`}
-                                                                className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
                                                             </Link>
                                                         </td>
-                                                        <td className="px-4 py-2 border">{item.user.nama}</td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">{item.user.nama}</td>
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             {item.bonSementara[0].kategori}
                                                         </td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             Rp{item.bonSementara[0].jumlahBS.toLocaleString('id-ID')}
                                                         </td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             {formatDate(item.tanggalPengajuan)}
                                                         </td>
-                                                        <td className="p-4 border">
+                                                        <td className="p-4 border dark:border-gray-600">
                                                             {formatDate(
                                                                 item.statusHistory
                                                                     .filter(
@@ -927,7 +939,7 @@ const BsCheck = () => {
                                                         </td>
 
                                                         {/* --- TAMBAHAN TOMBOL EDIT DI SINI --- */}
-                                                        <td className="p-2 border text-center">
+                                                        <td className="p-2 border dark:border-gray-600 text-center">
                                                             <div className="flex justify-center items-center">
                                                                 {userRole === 'Super Admin' && (
                                                                     <button
@@ -970,55 +982,55 @@ const BsCheck = () => {
                             <div className="w-full">
                                 <div className="w-full overflow-x-auto">
                                     <div className="inline-block min-w-[1000px] w-full">
-                                        <table className="min-w-full bg-white border rounded-lg text-sm">
+                                        <table className="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                                             <thead>
-                                                <tr className="bg-gray-100 text-left">
-                                                    <th className="p-2 border text-center w-auto">No.</th>
-                                                    <th className="px-4 py-2 border">Nomor BS</th>
-                                                    <th className="px-4 py-2 border">Nama</th>
-                                                    <th className="px-4 py-2 border">Kategori BS</th>
-                                                    <th className="px-4 py-2 border">Jumlah</th>
-                                                    <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                                    <th className="px-4 py-2 border">Tanggal Dibatalkan</th>
-                                                    <th className="px-4 py-2 border">Alasan Pembatalan</th>
-                                                    <th className="px-4 py-2 border">Aksi</th>
+                                                <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                                    <th className="p-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Nomor BS</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Nama</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Kategori BS</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Tanggal Dibatalkan</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Alasan Pembatalan</th>
+                                                    <th className="px-4 py-2 border dark:border-gray-600">Aksi</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {filteredCanceledData.bonSementara.map((item, index) => (
                                                     <tr key={index}>
-                                                        <td className="p-2 border text-center w-auto">{index + 1}</td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             <Link
                                                                 to={`/bon-sementara/${item.id}`}
-                                                                className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
                                                             </Link>
                                                         </td>
-                                                        <td className="px-4 py-2 border">{item.user.nama}</td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">{item.user.nama}</td>
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             {item.bonSementara[0].kategori}
                                                         </td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             Rp{item.bonSementara[0].jumlahBS.toLocaleString('id-ID')}
                                                         </td>
-                                                        <td className="px-4 py-2 border">
+                                                        <td className="px-4 py-2 border dark:border-gray-600">
                                                             {formatDate(item.tanggalPengajuan)}
                                                         </td>
-                                                        <td className="p-4 border">
+                                                        <td className="p-4 border dark:border-gray-600">
                                                             {formatDate(
                                                                 item.statusHistory
                                                                     .find(status => status.status === 'Dibatalkan')
                                                                     ?.timestamp
                                                             )}
                                                         </td>
-                                                        <td className="p-4 border truncate max-w-[150px] overflow-hidden whitespace-nowrap">
+                                                        <td className="p-4 border dark:border-gray-600 truncate max-w-[150px] overflow-hidden whitespace-nowrap">
                                                             {item.cancelReason || '-'}
                                                         </td>
 
                                                         {/* --- TAMBAHAN TOMBOL EDIT DI SINI --- */}
-                                                        <td className="p-2 border text-center">
+                                                        <td className="p-2 border dark:border-gray-600 text-center">
                                                             <div className="flex justify-center items-center">
                                                                 {userRole === 'Super Admin' && (
                                                                     <button

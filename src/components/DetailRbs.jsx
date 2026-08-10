@@ -327,10 +327,10 @@ const DetailRbs = () => {
     if (!userData) {
         return (
             <div className="container mx-auto py-10 px-4 md:py-8 md:px-0">
-                <h2 className="text-xl font-medium mb-4">
+                <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                     Detail <span className="font-bold">Reimbursement</span>
                 </h2>
-                <div className="bg-white p-4 md:p-6 rounded-lg mb-6 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg mb-6 shadow-sm transition-colors">
                     <div className="hidden xl:block">
                         <div className="grid grid-cols-2 gap-x-16 mb-4 font-medium">
                             <div className="grid grid-cols-[auto_1fr] gap-x-16">
@@ -389,7 +389,7 @@ const DetailRbs = () => {
 
                     <div className="overflow-x-auto -mx-4 md:mx-0 mb-8">
                         <div className="min-w-[640px] md:w-full p-4 md:p-0">
-                            <div className="bg-gray-100 grid grid-cols-6 rounded-t-lg">
+                            <div className="bg-gray-100 dark:bg-gray-700 grid grid-cols-6 rounded-t-lg">
                                 {[...Array(6)].map((_, index) => (
                                     <div key={`header-${index}`} className="p-2">
                                         <Skeleton height={24} />
@@ -398,7 +398,7 @@ const DetailRbs = () => {
                             </div>
 
                             {[...Array(3)].map((_, rowIndex) => (
-                                <div key={`row-${rowIndex}`} className="grid grid-cols-6 border-b">
+                                <div key={`row-${rowIndex}`} className="grid grid-cols-6 border-b dark:border-gray-600">
                                     {[...Array(6)].map((_, colIndex) => (
                                         <div key={`cell-${rowIndex}-${colIndex}`} className="p-2">
                                             <Skeleton height={20} />
@@ -435,11 +435,11 @@ const DetailRbs = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4">
+            <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Detail <span className="font-bold">Reimbursement</span>
             </h2>
 
-            <div className="bg-white p-4 md:p-6 rounded-lg shadow">
+            <div className="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow transition-colors">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 xl:gap-x-16 mb-6 font-medium">
                     <div className="xl:hidden">
                         <div className="flex flex-wrap justify-between gap-1 md:gap-x-12">
@@ -556,9 +556,9 @@ const DetailRbs = () => {
 
                 <div className="mb-8 overflow-x-auto -mx-4 md:mx-0">
                     <div className="min-w-[640px] md:w-full p-4 md:p-0">
-                        <table className="w-full bg-white border rounded-lg text-sm">
+                        <table className="w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                             <thead>
-                                <tr className="bg-gray-100 text-left">
+                                <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
                                     {columns.map((column) => (
                                         <th
                                             key={column.key}
@@ -573,7 +573,7 @@ const DetailRbs = () => {
                                 {reimbursementDetail?.reimbursements?.map((item, index) => (
                                     <tr key={index}>
                                         {columns.map((column) => (
-                                            <td key={column.key} className="px-4 py-2 border">
+                                            <td key={column.key} className="px-4 py-2 border dark:border-gray-600">
                                                 {renderCell(item, column, index)}
                                             </td>
                                         ))}
@@ -587,7 +587,7 @@ const DetailRbs = () => {
 
                                 {(reimbursementDetail?.status === 'Dibatalkan' || reimbursementDetail?.status === 'Ditolak') && (
                                     <tr>
-                                        <td colSpan={columns.length} className="px-4 py-2 text-left border">
+                                        <td colSpan={columns.length} className="px-4 py-2 text-left border dark:border-gray-600">
                                             <span className="font-semibold">
                                                 {reimbursementDetail?.status === 'Dibatalkan' ? 'Alasan Pembatalan :' : 'Alasan Penolakan :'}
                                             </span>{' '}
@@ -599,10 +599,10 @@ const DetailRbs = () => {
                                 )}
 
                                 <tr className="font-semibold">
-                                    <td colSpan={columns.length - 1} className="px-4 py-2 text-right border">
+                                    <td colSpan={columns.length - 1} className="px-4 py-2 text-right border dark:border-gray-600">
                                         Total Biaya :
                                     </td>
-                                    <td className="px-4 py-2 border">
+                                    <td className="px-4 py-2 border dark:border-gray-600">
                                         Rp{reimbursementDetail?.totalBiaya?.toLocaleString('id-ID')}
                                     </td>
                                 </tr>
@@ -632,7 +632,7 @@ const DetailRbs = () => {
                             className={`w-full md:w-auto px-16 py-3 rounded ${
                                 reimbursementDetail?.status === 'Disetujui'
                                     ? 'text-white bg-red-600 hover:bg-red-700 hover:text-gray-200'
-                                    : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                             }`}
                             onClick={handleGenerateAndPreviewPDF}
                             disabled={reimbursementDetail?.status !== 'Disetujui' || isLoading}

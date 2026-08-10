@@ -8,8 +8,11 @@ import 'react-toastify/dist/ReactToastify.css'
 import Select from 'react-select'
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
+import { useTheme } from '../context/ThemeContext'
 
 const ManageUser = () => {
+    const { theme } = useTheme()
+    const isDark = theme === 'dark'
     const [users, setUsers] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
@@ -202,7 +205,8 @@ const ManageUser = () => {
     const selectStyles = {
         control: (base) => ({
             ...base,
-            borderColor: '#e5e7eb',
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
             '&:hover': {
                 borderColor: '#3b82f6'
             },
@@ -222,20 +226,42 @@ const ManageUser = () => {
             },
             scrollbarWidth: 'none'
         }),
+        singleValue: (base) => ({
+            ...base,
+            color: isDark ? '#f3f4f6' : '#111827'
+        }),
+        input: (base) => ({
+            ...base,
+            color: isDark ? '#f3f4f6' : '#111827'
+        }),
+        placeholder: (base) => ({
+            ...base,
+            color: isDark ? '#9ca3af' : '#6b7280'
+        }),
         menu: (base) => ({
             ...base,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
             zIndex: 100
         }),
-        option: (base) => ({
+        option: (base, state) => ({
             ...base,
+            backgroundColor: state.isFocused
+                ? (isDark ? '#374151' : '#f3f4f6')
+                : (isDark ? '#1f2937' : '#ffffff'),
+            color: isDark ? '#f3f4f6' : '#111827',
             fontSize: '14px',
             padding: '6px 12px',
             cursor: 'pointer'
         }),
         multiValue: (base) => ({
             ...base,
+            backgroundColor: isDark ? '#374151' : '#e5e7eb',
             fontSize: '14px',
             flexShrink: 0
+        }),
+        multiValueLabel: (base) => ({
+            ...base,
+            color: isDark ? '#f3f4f6' : '#111827'
         })
     }
 
@@ -256,10 +282,10 @@ const ManageUser = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-bold mb-4">Manage Users</h2>
+            <h2 className="text-xl font-bold mb-4 dark:text-gray-100">Manage Users</h2>
 
-            <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
-                <h3 className="text-xl font-medium mb-4">Daftar Pengguna</h3>
+            <div className="bg-white p-6 rounded-lg mb-6 shadow-sm dark:bg-gray-800">
+                <h3 className="text-xl font-medium mb-4 dark:text-gray-100">Daftar Pengguna</h3>
 
                 {/* Desktop Layout */}
                 <div className="hidden xl:flex text-sm items-center gap-2 mb-4">
@@ -280,7 +306,7 @@ const ManageUser = () => {
                                 placeholder="Cari pengguna..."
                                 value={searchTerm}
                                 onChange={handleSearch}
-                                className="flex-1 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                className="flex-1 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                             />
                             <FilterSelect field="posisi" label="Posisi" />
                             <FilterSelect field="unit" label="Unit Bisnis" />
@@ -290,7 +316,7 @@ const ManageUser = () => {
 
                             <button
                                 onClick={resetFilters}
-                                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex-none"
+                                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex-none dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                             >
                                 Reset Filter
                             </button>
@@ -331,13 +357,13 @@ const ManageUser = () => {
                                     placeholder="Cari pengguna..."
                                     value={searchTerm}
                                     onChange={handleSearch}
-                                    className="flex-1 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                    className="flex-1 px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                 />
 
                                 <div className="flex flex-row gap-2">
                                     <button
                                         onClick={resetFilters}
-                                        className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                                        className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                                     >
                                         Reset Filter
                                     </button>
@@ -395,7 +421,7 @@ const ManageUser = () => {
                                     placeholder="Cari pengguna..."
                                     value={searchTerm}
                                     onChange={handleSearch}
-                                    className="w-full px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-xs"
+                                    className="w-full px-4 py-2 border rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
                                 />
 
                                 <div className="flex flex-col gap-4">
@@ -407,7 +433,7 @@ const ManageUser = () => {
 
                                     <button
                                         onClick={resetFilters}
-                                        className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                                        className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                                     >
                                         Reset Filter
                                     </button>
@@ -434,38 +460,38 @@ const ManageUser = () => {
                         <div className="w-full">
                             <div className="w-full overflow-x-auto">
                                 <div className="inline-block min-w-[1000px] w-full">
-                                    <table className="min-w-full bg-white border rounded-lg text-sm">
+                                    <table className="min-w-full bg-white border rounded-lg text-sm dark:bg-gray-800 dark:border-gray-600">
                                         <thead>
-                                            <tr className="bg-gray-100 text-left">
-                                                <th className="px-2 py-2 border text-center w-auto">No.</th>
-                                                <th className="px-4 py-2 border break-words">Nama</th>
-                                                <th className="px-4 py-2 border break-words">Email</th>
-                                                <th className="px-4 py-2 border break-words">Posisi</th>
-                                                <th className="px-4 py-2 border break-words">Unit Bisnis</th>
-                                                <th className="px-4 py-2 border break-words">Lokasi</th>
-                                                <th className="px-4 py-2 border break-words">Role</th>
-                                                <th className="px-4 py-2 border break-words">Department</th>
-                                                <th className="px-2 py-2 border text-center">Aksi</th>
+                                            <tr className="bg-gray-100 text-left dark:bg-gray-700">
+                                                <th className="px-2 py-2 border text-center w-auto dark:border-gray-600">No.</th>
+                                                <th className="px-4 py-2 border break-words dark:border-gray-600">Nama</th>
+                                                <th className="px-4 py-2 border break-words dark:border-gray-600">Email</th>
+                                                <th className="px-4 py-2 border break-words dark:border-gray-600">Posisi</th>
+                                                <th className="px-4 py-2 border break-words dark:border-gray-600">Unit Bisnis</th>
+                                                <th className="px-4 py-2 border break-words dark:border-gray-600">Lokasi</th>
+                                                <th className="px-4 py-2 border break-words dark:border-gray-600">Role</th>
+                                                <th className="px-4 py-2 border break-words dark:border-gray-600">Department</th>
+                                                <th className="px-2 py-2 border text-center dark:border-gray-600">Aksi</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {currentUsers.map((user, index) => (
                                                 <tr key={user.id}>
-                                                    <td className="px-2 py-2 border text-center w-auto">
+                                                    <td className="px-2 py-2 border text-center w-auto dark:border-gray-600">
                                                         {index + 1 + (currentPage - 1) * itemsPerPage}
                                                     </td>
-                                                    <td className="px-4 py-2 border">{user.nama}</td>
-                                                    <td className="px-4 py-2 border">{user.email}</td>
-                                                    <td className="px-4 py-2 border">{user.posisi}</td>
-                                                    <td className="px-4 py-2 border">{user.unit}</td>
-                                                    <td className="px-4 py-2 border">{user.lokasi}</td>
-                                                    <td className="px-4 py-2 border">{user.role}</td>
-                                                    <td className="px-4 py-2 border">
+                                                    <td className="px-4 py-2 border dark:border-gray-600">{user.nama}</td>
+                                                    <td className="px-4 py-2 border dark:border-gray-600">{user.email}</td>
+                                                    <td className="px-4 py-2 border dark:border-gray-600">{user.posisi}</td>
+                                                    <td className="px-4 py-2 border dark:border-gray-600">{user.unit}</td>
+                                                    <td className="px-4 py-2 border dark:border-gray-600">{user.lokasi}</td>
+                                                    <td className="px-4 py-2 border dark:border-gray-600">{user.role}</td>
+                                                    <td className="px-4 py-2 border dark:border-gray-600">
                                                         {Array.isArray(user.department)
                                                             ? user.department.join(', ')
                                                             : user.department}
                                                     </td>
-                                                    <td className="px-2 py-2 border text-center">
+                                                    <td className="px-2 py-2 border text-center dark:border-gray-600">
                                                         <div className="flex justify-center space-x-2">
                                                             <button
                                                                 onClick={() => handleEdit(user.uid)}
@@ -522,8 +548,8 @@ const ManageUser = () => {
                             disabled={currentPage === 1}
                             className={`flex items-center px-2 h-9 rounded-full ${
                                 currentPage === 1
-                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                                    : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                             }`}
                         >
                             <svg
@@ -552,7 +578,7 @@ const ManageUser = () => {
                                     className={`min-w-[36px] h-9 rounded-full ${
                                         currentPage === 1
                                             ? 'bg-red-600 text-white'
-                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                            : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                                     }`}
                                 >
                                     1
@@ -569,7 +595,7 @@ const ManageUser = () => {
                                             className={`min-w-[36px] h-9 rounded-full ${
                                                 currentPage === i
                                                     ? 'bg-red-600 text-white'
-                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                    : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                                             }`}
                                         >
                                             {i}
@@ -648,7 +674,7 @@ const ManageUser = () => {
                                                     className={`min-w-[36px] h-9 rounded-full ${
                                                         currentPage === i
                                                             ? 'bg-red-600 text-white'
-                                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                            : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                                                     }`}
                                                 >
                                                     {i}
@@ -674,7 +700,7 @@ const ManageUser = () => {
                                                     className={`min-w-[36px] h-9 rounded-full ${
                                                         currentPage === i
                                                             ? 'bg-red-600 text-white'
-                                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                            : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                                                     }`}
                                                 >
                                                     {i}
@@ -696,7 +722,7 @@ const ManageUser = () => {
                                                         className={`min-w-[36px] h-9 rounded-full ${
                                                             currentPage === i
                                                                 ? 'bg-red-600 text-white'
-                                                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                                : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                                                         }`}
                                                     >
                                                         {i}
@@ -721,7 +747,7 @@ const ManageUser = () => {
                                             className={`min-w-[36px] h-9 rounded-full ${
                                                 currentPage === totalPages
                                                     ? 'bg-red-600 text-white'
-                                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                                    : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                                             }`}
                                         >
                                             {totalPages}
@@ -739,8 +765,8 @@ const ManageUser = () => {
                             disabled={currentPage === totalPages}
                             className={`flex items-center px-2 h-9 rounded-full ${
                                 currentPage === totalPages
-                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                    : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                                    : 'border border-red-600 text-red-600 hover:bg-red-100 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900/30'
                             }`}
                         >
                             <svg
@@ -760,13 +786,13 @@ const ManageUser = () => {
             {/* Modal Konfirmasi Delete */}
             {deleteModal.isOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                        <h3 className="text-lg font-semibold mb-4">Konfirmasi Hapus</h3>
-                        <p className="text-gray-600 mb-6">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full dark:bg-gray-800">
+                        <h3 className="text-lg font-semibold mb-4 dark:text-gray-100">Konfirmasi Hapus</h3>
+                        <p className="text-gray-600 mb-6 dark:text-gray-300">
                             Apakah Anda yakin ingin menghapus pengguna{' '}
-                            <span className="font-semibold">{deleteModal.user?.nama}</span>?
+                            <span className="font-semibold dark:text-gray-100">{deleteModal.user?.nama}</span>?
                             <br />
-                            <span className="text-sm text-red-600 mt-2 block">
+                            <span className="text-sm text-red-600 mt-2 block dark:text-red-400">
                                 Tindakan ini tidak dapat dibatalkan.
                             </span>
                         </p>
@@ -774,7 +800,7 @@ const ManageUser = () => {
                             <button
                                 onClick={cancelDelete}
                                 disabled={isDeleting}
-                                className="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50"
+                                className="px-6 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                             >
                                 Batal
                             </button>

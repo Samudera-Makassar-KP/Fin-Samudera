@@ -2,14 +2,16 @@ import React, { useState, useEffect, useRef } from 'react'
 import { db } from '../firebaseConfig'
 import { doc, getDoc } from 'firebase/firestore'
 import Logo from '../assets/images/logo-samudera.png'
+import LogoWhite from '../assets/images/LOGO BRAND SAMUDERA_WHITE.png'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBars } from '@fortawesome/free-solid-svg-icons'
+import { faBars, faSun, faMoon } from '@fortawesome/free-solid-svg-icons'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal';
 import PasswordChangeModal from './PasswordChangeModal'
 import BankUpdateModal from './BankUpdateModal'
 import { auth } from '../firebaseConfig'
 import { signOut } from "firebase/auth";
+import { useTheme } from '../context/ThemeContext'
 
 function Navbar({ toggleSidebar }) {
     const [user, setUser] = useState(null)
@@ -20,9 +22,10 @@ function Navbar({ toggleSidebar }) {
     const [isLoading, setIsLoading] = useState(false);
     const dropdownRef = useRef(null)
     const navigate = useNavigate()
-    
+    const { theme, toggleTheme } = useTheme()
+
     const role = localStorage.getItem('userRole')
-    
+
     useEffect(() => {
         const uid = localStorage.getItem('userUid')
         const fetchUserData = async () => {
@@ -44,7 +47,7 @@ function Navbar({ toggleSidebar }) {
 
         fetchUserData()
     }, [])
-    
+
     useEffect(() => {
         const body = document.body;
         if (isDropdownOpen) {
@@ -62,7 +65,7 @@ function Navbar({ toggleSidebar }) {
             window.scrollTo(0, parseInt(scrollY || '0') * -1);
         }
     }, [isDropdownOpen]);
-    
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -110,17 +113,29 @@ function Navbar({ toggleSidebar }) {
 
     return (
         <>
-            <nav className="bg-white h-16 flex justify-between items-center px-4 md:px-6 shadow fixed top-0 left-0 right-0 z-20 lg:left-60">
+            <nav className="bg-white dark:bg-gray-800 h-16 flex justify-between items-center px-4 md:px-6 shadow fixed top-0 left-0 right-0 z-20 lg:left-60 transition-colors duration-200">
                 <div className="flex items-center space-x-4">
-                    <button onClick={toggleSidebar} className="lg:hidden text-gray-600">
+                    <button onClick={toggleSidebar} className="lg:hidden text-gray-600 dark:text-gray-300">
                         <FontAwesomeIcon icon={faBars} size="lg" />
                     </button>
-                    <img src={Logo} alt="Samudera Logo" className="h-5 md:h-6" />
+                    <img src={theme === 'dark' ? LogoWhite : Logo} alt="Samudera Logo" className="h-5 md:h-6" />
                 </div>
                 <div className="flex items-center space-x-2 md:space-x-4 relative" ref={dropdownRef}>
+                    <button
+                        onClick={toggleTheme}
+                        aria-label="Toggle theme"
+                        className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    >
+                        {theme === 'dark' ? (
+                            <FontAwesomeIcon icon={faSun} className="text-yellow-400" />
+                        ) : (
+                            <FontAwesomeIcon icon={faMoon} className="text-gray-600" />
+                        )}
+                    </button>
+
                     {user ? (
                         <div className="relative flex items-center">
-                            <span className="font-medium mr-2 hidden sm:block">{user.name}</span>
+                            <span className="font-medium mr-2 hidden sm:block dark:text-gray-100">{user.name}</span>
                             <div
                                 className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white cursor-pointer hover:bg-red-600 transition-colors"
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -129,30 +144,30 @@ function Navbar({ toggleSidebar }) {
                             </div>
 
                             {isDropdownOpen && (
-                                <div className="absolute right-0 top-full mt-2 w-44 md:w-60 bg-white border rounded-lg shadow-lg">
-                                    <div className="p-3 border-b flex items-center space-x-2">
+                                <div className="absolute right-0 top-full mt-2 w-44 md:w-60 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg">
+                                    <div className="p-3 border-b dark:border-gray-700 flex items-center space-x-2">
                                         <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white">
                                             {user.initials}
                                         </div>
-                                        <span className="font-medium truncate">{user.name}</span>
+                                        <span className="font-medium truncate dark:text-gray-100">{user.name}</span>
                                     </div>
                                     <ul className="py-1">
                                         <li
-                                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                            className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 cursor-pointer"
                                             onClick={handleChangePassword}
                                         >
                                             Ganti Kata Sandi
                                         </li>
                                         {role !== 'Super Admin' && (
                                             <li
-                                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 cursor-pointer"
                                                 onClick={handleUpdateAccountInfo}
                                             >
                                                 Perbarui Informasi Rekening
                                             </li>
                                         )}
                                         <li
-                                            className="px-4 py-2 hover:bg-gray-100 text-red-600 cursor-pointer"
+                                            className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 cursor-pointer"
                                             onClick={handleLogout}
                                         >
                                             Logout
@@ -162,11 +177,11 @@ function Navbar({ toggleSidebar }) {
                             )}
                         </div>
                     ) : (
-                        <span>Please login</span>
+                        <span className="dark:text-gray-100">Please login</span>
                     )}
                 </div>
             </nav>
-            
+
             <Modal
                 showModal={showLogoutModal}
                 title="Konfirmasi Logout"

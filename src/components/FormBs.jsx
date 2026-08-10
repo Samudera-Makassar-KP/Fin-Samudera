@@ -7,8 +7,10 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { useTheme } from '../context/ThemeContext'
 
 const FormBs = () => {
+    const { theme } = useTheme()
     const location = useLocation()
     const navigate = useNavigate()
     const isEditMode = location.state?.isEditMode || false
@@ -246,16 +248,17 @@ const FormBs = () => {
         )
     }
 
+    const isDark = theme === 'dark'
     const customStyles = {
         control: (base, state) => ({
             ...base,
             padding: '0 7px',
             height: '40px',
             minHeight: '40px',
-            borderColor: '#e5e7eb',
-            backgroundColor: state.isDisabled ? '#f9fafb' : 'white', // Warna background saat disabled
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
+            backgroundColor: state.isDisabled ? (isDark ? '#374151' : '#f9fafb') : (isDark ? '#1f2937' : 'white'),
             '&:hover': {
-                borderColor: state.isDisabled ? '#e5e7eb' : '#3b82f6'
+                borderColor: state.isDisabled ? (isDark ? '#4b5563' : '#e5e7eb') : '#3b82f6'
             }
         }),
         valueContainer: (base) => ({
@@ -263,6 +266,18 @@ const FormBs = () => {
             padding: '0 7px',
             height: '40px',
             minHeight: '40px'
+        }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
+        menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
+        option: (base, state) => ({
+            ...base,
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color,
+            cursor: 'pointer'
         })
     }
 
@@ -648,24 +663,24 @@ const FormBs = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4">
+            <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Ajukan <span className="font-bold">Bon Sementara</span>
             </h2>
 
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow transition-colors">
                 {/* --- Layout diseragamkan untuk semua role --- */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nama Lengkap</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Nama Lengkap</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={userData.nama}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Unit Bisnis <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -685,16 +700,16 @@ const FormBs = () => {
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nomor Rekening</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Nomor Rekening</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={userData.accountNumber}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Reviewer 1 <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -716,16 +731,16 @@ const FormBs = () => {
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Nama Bank</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Nama Bank</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={userData.bankName}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Reviewer 2 <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -747,16 +762,16 @@ const FormBs = () => {
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 xl:gap-6 mb-2 lg:mb-3">
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">Tanggal Pengajuan</label>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Tanggal Pengajuan</label>
                         <input
-                            className="w-full h-10 px-4 py-2 border rounded-md text-gray-500 bg-gray-50 cursor-not-allowed"
+                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 cursor-not-allowed"
                             type="text"
                             value={formatDate(todayDate)}
                             disabled
                         />
                     </div>
                     <div>
-                        <label className="block text-gray-700 font-medium mb-2">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Kategori BS <span className="text-red-500">*</span>
                         </label>
                         <Select
@@ -773,7 +788,7 @@ const FormBs = () => {
                     </div>
                 </div>
 
-                <hr className="border-gray-300 my-6" />
+                <hr className="border-gray-300 dark:border-gray-600 my-6" />
 
                 {bonSementara.map((bon, index) => (
                     <div
@@ -783,12 +798,12 @@ const FormBs = () => {
                         <div className="flex flex-col md:flex-row gap-2 flex-1">
                             <div className="flex-1">
                                 {index === 0 && (
-                                    <label className="block text-gray-700 font-medium mb-2">
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                                         Nomor BS <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 <input
-                                    className="w-full border border-gray-300 bg-gray-50 text-gray-500 rounded-md h-10 px-4 py-2 cursor-not-allowed"
+                                    className="w-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md h-10 px-4 py-2 cursor-not-allowed"
                                     type="text"
                                     value={bon.nomorBS}
                                     placeholder="Pilih Unit Bisnis untuk generate BS"
@@ -799,12 +814,12 @@ const FormBs = () => {
 
                             <div className="flex-1">
                                 {index === 0 && (
-                                    <label className="block text-gray-700 font-medium mb-2">
+                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                                         Jumlah BS <span className="text-red-500">*</span>
                                     </label>
                                 )}
                                 <input
-                                    className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
+                                    className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
                                     type="text"
                                     value={formatRupiah(bon.jumlahBS)}
                                     onChange={(e) => handleInputChange(index, "jumlahBS", e.target.value)}
@@ -814,12 +829,12 @@ const FormBs = () => {
 
                         <div className="flex-1">
                             {index === 0 && (
-                                <label className="block text-gray-700 font-medium mb-2">
+                                <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                                     Aktivitas (Keterangan) <span className="text-red-500">*</span>
                                 </label>
                             )}
                             <textarea
-                                className="w-full border border-gray-300 text-gray-900 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2 resize-none"
+                                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2 resize-none"
                                 style={{scrollbarWidth: 'none'}}  
                                 type="text"
                                 value={bon.aktivitas}
@@ -829,7 +844,7 @@ const FormBs = () => {
                     </div>
                 ))}
 
-                <hr className="border-gray-300 my-6" />
+                <hr className="border-gray-300 dark:border-gray-600 my-6" />
 
                 <div className="flex justify-end mt-6">
                     <button

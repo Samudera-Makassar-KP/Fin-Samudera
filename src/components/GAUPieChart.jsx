@@ -9,10 +9,12 @@ import GAUComparisonChart from "./GAUComparisonBarChart";
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
+import { useTheme } from '../context/ThemeContext';
 
 ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
 const GAUPieChart = () => {
+    const { theme } = useTheme();
     // State untuk mengelola data dan tampilan
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [chartData, setChartData] = useState(null);
@@ -249,13 +251,15 @@ const GAUPieChart = () => {
     const handleUnitChange = (option) => setSelectedUnit(option);
 
     // Style untuk select
+    const isDark = theme === 'dark';
     const selectStyles = {
         control: (base) => ({
             ...base,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderColor: '#e5e7eb',
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
             fontSize: '12px',
             height: '32px',
             padding: '0 4px',
@@ -265,21 +269,28 @@ const GAUPieChart = () => {
             },
             borderRadius: '8px'
         }),
-        menu: (base) => ({ ...base, zIndex: 100 }),
-        option: (base) => ({
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
+        menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
+        option: (base, state) => ({
             ...base,
             fontSize: '12px',
             padding: '6px 12px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color
         })
     };
 
     return (
-        <div className="bg-white px-6 py-4 flex flex-col w-full shadow-sm rounded-lg">
+        <div className="bg-white dark:bg-gray-800 px-6 py-4 flex flex-col w-full shadow-sm rounded-lg transition-colors">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                 <div className="relative">
                     <h2
-                        className="text-xl font-medium cursor-pointer hover:text-gray-700 flex items-center gap-2 transition-all duration-200"
+                        className="text-xl font-medium dark:text-gray-100 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2 transition-all duration-200"
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     >
                         {showLPJ ? "Pengajuan GA/Umum (LPJ BS)" : "Pengajuan GA/Umum (Reimbursement)"}
@@ -298,11 +309,11 @@ const GAUPieChart = () => {
 
                     {isDropdownOpen && (
                         <div
-                            className="absolute top-full left-0 mt-1 bg-white rounded-lg py-1 z-50 min-w-[250px] md:w-auto"
+                            className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-700 rounded-lg py-1 z-50 min-w-[250px] md:w-auto shadow-lg"
                             onMouseLeave={() => setIsDropdownOpen(false)}
                         >
                             <div
-                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-600 dark:text-gray-200 cursor-pointer flex items-center justify-between"
                                 onClick={() => {
                                     setShowLPJ(false);
                                     setIsDropdownOpen(false);
@@ -326,7 +337,7 @@ const GAUPieChart = () => {
                                 )}
                             </div>
                             <div
-                                className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-600 dark:text-gray-200 cursor-pointer flex items-center justify-between"
                                 onClick={() => {
                                     setShowLPJ(true);
                                     setIsDropdownOpen(false);
@@ -364,7 +375,7 @@ const GAUPieChart = () => {
                 )}
             </div>
 
-            <hr className="border-gray-100 my-2" />
+            <hr className="border-gray-100 dark:border-gray-700 my-2" />
 
             <div className="flex flex-col w-full h-full gap-4 xl:gap-2">
                 <div className="flex flex-col md:flex-row gap-2">
@@ -428,7 +439,7 @@ const GAUPieChart = () => {
                         chartData ? (
                             chartData.labels.length === 0 ? (
                                 <div className="w-full h-40 xl:h-full flex justify-center items-center">
-                                    <p className="text-gray-500 text-sm text-center px-4">
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm text-center px-4">
                                         {showLPJ ? "Tidak ada pengajuan LPJ Bon Sementara GA/Umum" : "Tidak ada pengajuan Reimbursement GA/Umum"} untuk Bisnis Unit dan periode yang dipilih
                                     </p>
                                 </div>
@@ -504,7 +515,7 @@ const GAUPieChart = () => {
                     }}
                     style={{ width: '100%', height: '100%' }}
                 >
-                    <div className="bg-white rounded-lg shadow-lg px-4 lg:px-6 py-4 md:py-6 relative w-11/12 max-w-6xl">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg px-4 lg:px-6 py-4 md:py-6 relative w-11/12 max-w-6xl">
                         <GAUComparisonChart
                             rawData={rawData}
                             onClose={() => setIsComparisonModalOpen(false)}
@@ -524,7 +535,7 @@ const GAUPieChart = () => {
                     }}
                     style={{ width: '100%', height: '100%' }}
                 >
-                    <div className="bg-white rounded-lg shadow-lg px-4 lg:px-6 py-4 md:py-6 relative w-11/12 max-w-6xl">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg px-4 lg:px-6 py-4 md:py-6 relative w-11/12 max-w-6xl">
                         <GAUBarChart
                             selectedType={selectedCategory}
                             selectedMonth={selectedMonth}

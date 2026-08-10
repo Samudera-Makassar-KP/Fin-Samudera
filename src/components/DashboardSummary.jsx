@@ -204,22 +204,22 @@ const DashboardSummary = ({ uid, role }) => {
             label: 'Jumlah BS bulan ini',
             value: formatRupiah(summary.nominalBS),
             caption: `${summary.jumlahBS} pengajuan`,
-            valueClass: 'text-gray-900',
-            bgClass: 'bg-gray-50'
+            valueClass: 'text-gray-900 dark:text-gray-100',
+            bgClass: 'bg-gray-50 dark:bg-gray-700/50'
         },
         {
             label: 'Jumlah RBS bulan ini',
             value: formatRupiah(summary.nominalRbs),
             caption: `${summary.jumlahRbs} pengajuan`,
-            valueClass: 'text-gray-900',
-            bgClass: 'bg-gray-50'
+            valueClass: 'text-gray-900 dark:text-gray-100',
+            bgClass: 'bg-gray-50 dark:bg-gray-700/50'
         },
         {
             label: 'Sudah di-LPJ-kan',
             value: formatRupiah(summary.totalSudahLpj),
             caption: `${summary.jumlahBsSudahLpj} BS selesai LPJ`,
-            valueClass: 'text-green-700',
-            bgClass: 'bg-green-50'
+            valueClass: 'text-green-700 dark:text-green-400',
+            bgClass: 'bg-green-50 dark:bg-green-900/20'
         },
         {
             label: 'Selisih belum LPJ',
@@ -228,8 +228,8 @@ const DashboardSummary = ({ uid, role }) => {
                 summary.jumlahBsBelumLpj > 0
                     ? `${summary.jumlahBsBelumLpj} BS belum dipertanggungjawabkan`
                     : 'Semua BS sudah dipertanggungjawabkan',
-            valueClass: summary.selisih > 0 ? 'text-amber-700' : 'text-gray-900',
-            bgClass: summary.selisih > 0 ? 'bg-amber-50' : 'bg-gray-50'
+            valueClass: summary.selisih > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100',
+            bgClass: summary.selisih > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50'
         },
         ...(isApprover
             ? [
@@ -237,15 +237,15 @@ const DashboardSummary = ({ uid, role }) => {
                     label: `LPJ ${approverLabel} bulan ini`,
                     value: formatRupiah(summary.nominalLpjDiproses),
                     caption: `${summary.jumlahLpjDiproses} LPJ`,
-                    valueClass: 'text-blue-700',
-                    bgClass: 'bg-blue-50'
+                    valueClass: 'text-blue-700 dark:text-blue-400',
+                    bgClass: 'bg-blue-50 dark:bg-blue-900/20'
                 },
                 {
                     label: `RBS ${approverLabel} bulan ini`,
                     value: formatRupiah(summary.nominalRbsDiproses),
                     caption: `${summary.jumlahRbsDiproses} RBS`,
-                    valueClass: 'text-blue-700',
-                    bgClass: 'bg-blue-50'
+                    valueClass: 'text-blue-700 dark:text-blue-400',
+                    bgClass: 'bg-blue-50 dark:bg-blue-900/20'
                 }
             ]
             : []),
@@ -255,19 +255,19 @@ const DashboardSummary = ({ uid, role }) => {
                     label: 'BS di-approve bulan ini',
                     value: formatRupiah(summary.nominalBsDiapprove),
                     caption: `${summary.jumlahBsDiapprove} BS`,
-                    valueClass: 'text-blue-700',
-                    bgClass: 'bg-blue-50'
+                    valueClass: 'text-blue-700 dark:text-blue-400',
+                    bgClass: 'bg-blue-50 dark:bg-blue-900/20'
                 }
             ]
             : [])
     ]
 
     return (
-        <div className="bg-white p-6 rounded-lg mb-6 shadow-sm">
-            <h3 className="text-xl font-medium mb-4">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-sm transition-colors">
+            <h3 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Ringkasan bulan ini
                 {isApprover && (
-                    <span className="text-sm font-normal text-gray-400 ml-2">
+                    <span className="text-sm font-normal text-gray-400 dark:text-gray-500 ml-2">
                         (termasuk {isValidator ? 'validasi' : 'review'} Anda sebagai {role})
                     </span>
                 )}
@@ -275,14 +275,14 @@ const DashboardSummary = ({ uid, role }) => {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {cards.map((card) => (
                     <div key={card.label} className={`rounded-lg p-4 ${card.bgClass}`}>
-                        <p className="text-sm text-gray-500 mb-2">{card.label}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{card.label}</p>
                         {loading ? (
-                            <div className="h-7 w-24 bg-gray-200 rounded animate-pulse" />
+                            <div className="h-7 w-24 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />
                         ) : (
                             <>
                                 <p className={`text-2xl font-semibold ${card.valueClass}`}>{card.value}</p>
                                 {card.caption && (
-                                    <p className="text-xs text-gray-400 mt-1">{card.caption}</p>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{card.caption}</p>
                                 )}
                             </>
                         )}

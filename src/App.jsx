@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Login from './pages/LoginPage';
 import RbsBbm from './pages/RbsBbm';
 import RbsOperasional from './pages/RbsOperasional';
@@ -20,12 +20,19 @@ import BsCheckPage from './pages/BsCheckPage';
 import DetailBsPage from './pages/DetailBsPage';
 import ReportExportPage from './pages/ReportExportPage';
 import Dashboard from './pages/Dashboard';
+import AnnouncementManagerPage from './pages/AnnouncementManagerPage';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
+import AnnouncementPopup from './components/AnnouncementPopup';
+import { ThemeProvider } from './context/ThemeContext';
 
 const AppContent = () => {
+    const location = useLocation();
+    const isLoginPage = location.pathname === '/';
+
     return (
         <SessionTimeoutHandler timeoutDuration={60 * 60 * 1000}> {/* 60 menit timeout */}
             <div>
+                {!isLoginPage && <AnnouncementPopup />}
                 <Routes>
                     {/* Login Routes */}
                     <Route path="/" element={<Login />} />
@@ -137,6 +144,12 @@ const AppContent = () => {
                         </ProtectedRoute>
                     } />
 
+                    <Route path="/manage-announcements" element={
+                        <ProtectedRoute allowedRoles={['Super Admin']}>
+                            <AnnouncementManagerPage />
+                        </ProtectedRoute>
+                    } />
+
                     {/* 404 Route */}
                     <Route path="*" element={<NotFoundPage />} />
                 </Routes>
@@ -147,9 +160,11 @@ const AppContent = () => {
 
 const App = () => {
     return (
-        <BrowserRouter>
-            <AppContent />
-        </BrowserRouter>
+        <ThemeProvider>
+            <BrowserRouter>
+                <AppContent />
+            </BrowserRouter>
+        </ThemeProvider>
     );
 }
 

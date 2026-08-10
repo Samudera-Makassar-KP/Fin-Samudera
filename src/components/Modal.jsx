@@ -46,20 +46,20 @@ const Modal = ({
             onClick={handleBackdropClick}
         >
             <div
-                className="bg-white rounded-lg p-4 lg:p-6 max-w-md w-full mx-4 relative sm:landscape:scale-90 sm:landscape:transform"
+                className="bg-white dark:bg-gray-800 rounded-lg p-4 lg:p-6 max-w-md w-full mx-4 relative sm:landscape:scale-90 sm:landscape:transform transition-colors"
                 onClick={(e) => e.stopPropagation()}
             >
-                <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2">{title}</h2>
+                <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 dark:text-gray-100">{title}</h2>
 
-                <p className="mb-2 md:mb-3 text-gray-600 text-sm md:text-base">{message}</p>
+                <p className="mb-2 md:mb-3 text-gray-600 dark:text-gray-300 text-sm md:text-base">{message}</p>
 
                 {showCancelReason && (
                     <div className="mb-4">
-                        <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             {reasonLabel} <span className="text-red-500">*</span>
                         </label>
                         <textarea
-                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm md:text-base"
                             rows="3"
                             value={cancelReason}
                             onChange={handleReasonChange}
@@ -70,7 +70,7 @@ const Modal = ({
 
                 <div className="flex justify-end space-x-2">
                     <button
-                        className="bg-gray-200 text-gray-600 px-4 py-2 rounded text-sm md:text-base hover:bg-gray-300 hover:text-gray-700 transition-colors"
+                        className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-4 py-2 rounded text-sm md:text-base hover:bg-gray-300 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
                         onClick={onClose}
                     >
                         {cancelText}

@@ -63,16 +63,16 @@ const BsTimerDisplay = ({ approvalDate, lpjStatus, lpjStatusHistory }) => {
     const getDisplayStyle = () => {
         if (lpjStatus === 'Sudah LPJ') {
             return {
-                bgColor: 'bg-green-50 border border-green-400',
-                textColor: 'text-green-700',
-                subTextColor: 'text-green-600',
+                bgColor: 'bg-green-50 border border-green-400 dark:bg-green-900/20 dark:border-green-700',
+                textColor: 'text-green-700 dark:text-green-400',
+                subTextColor: 'text-green-600 dark:text-green-400',
                 icon: (
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        className="w-4 h-4 text-green-500"
+                        className="w-4 h-4 text-green-500 dark:text-green-400"
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -84,16 +84,16 @@ const BsTimerDisplay = ({ approvalDate, lpjStatus, lpjStatusHistory }) => {
         }
         if ((lpjStatus === 'Sedang LPJ' || lpjStatus === 'Belum LPJ') && isOverdue) {
             return {
-                bgColor: 'bg-red-50 border border-red-400',
-                textColor: 'text-red-700',
-                subTextColor: 'text-red-600',
+                bgColor: 'bg-red-50 border border-red-400 dark:bg-red-900/20 dark:border-red-700',
+                textColor: 'text-red-700 dark:text-red-400',
+                subTextColor: 'text-red-600 dark:text-red-400',
                 icon: (
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        className="w-4 h-4 text-red-500"
+                        className="w-4 h-4 text-red-500 dark:text-red-400"
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -107,16 +107,16 @@ const BsTimerDisplay = ({ approvalDate, lpjStatus, lpjStatusHistory }) => {
         }
         if (lpjStatus === 'Sedang LPJ') {
             return {
-                bgColor: 'bg-blue-50 border border-blue-400',
-                textColor: 'text-blue-700',
-                subTextColor: 'text-blue-600',
+                bgColor: 'bg-blue-50 border border-blue-400 dark:bg-blue-900/20 dark:border-blue-700',
+                textColor: 'text-blue-700 dark:text-blue-400',
+                subTextColor: 'text-blue-600 dark:text-blue-400',
                 icon: (
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        className="w-4 h-4 text-blue-500"
+                        className="w-4 h-4 text-blue-500 dark:text-blue-400"
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -128,16 +128,16 @@ const BsTimerDisplay = ({ approvalDate, lpjStatus, lpjStatusHistory }) => {
             };
         }
         return {
-            bgColor: 'bg-yellow-50 border border-yellow-400',
-            textColor: 'text-yellow-700',
-            subTextColor: 'text-yellow-600',
+            bgColor: 'bg-yellow-50 border border-yellow-400 dark:bg-yellow-900/20 dark:border-yellow-700',
+            textColor: 'text-yellow-700 dark:text-yellow-400',
+            subTextColor: 'text-yellow-600 dark:text-yellow-400',
             icon: (
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    className="w-4 h-4 text-yellow-500"
+                    className="w-4 h-4 text-yellow-500 dark:text-yellow-400"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"

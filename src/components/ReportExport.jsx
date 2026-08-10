@@ -4,12 +4,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, or, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import Select from 'react-select';
+import { useTheme } from '../context/ThemeContext';
 import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import EmptyState from '../assets/images/EmptyState.png';
 import * as XLSX from 'xlsx';
 
 const ReportExport = () => {
+    const { theme } = useTheme();
     const navigate = useNavigate(); // INISIALISASI navigate
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [documentType, setDocumentType] = useState('reimbursement');
@@ -332,10 +334,12 @@ const ReportExport = () => {
         }));
     };
 
+    const isDark = theme === 'dark';
     const selectStyles = {
         control: (base) => ({
             ...base,
-            borderColor: '#e5e7eb',
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
             '&:hover': {
                 borderColor: '#3b82f6'
             },
@@ -355,21 +359,31 @@ const ReportExport = () => {
             },
             scrollbarWidth: 'none'
         }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
         menu: (base) => ({
             ...base,
-            zIndex: 100
+            zIndex: 100,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff'
         }),
-        option: (base) => ({
+        option: (base, state) => ({
             ...base,
             fontSize: '14px',
             padding: '6px 12px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color
         }),
         multiValue: (base) => ({
             ...base,
             fontSize: '14px',
-            flexShrink: 0
-        })
+            flexShrink: 0,
+            backgroundColor: isDark ? '#374151' : base.backgroundColor
+        }),
+        multiValueLabel: (base) => ({ ...base, color: isDark ? '#f3f4f6' : base.color })
     }
 
     const getTotalPages = () => {
@@ -431,7 +445,7 @@ const ReportExport = () => {
                     onClick={() => onPageChange(1)}
                     className={`min-w-[36px] h-9 rounded-full ${currentPage === 1
                         ? 'bg-red-600 text-white'
-                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                         }`}
                 >
                     1
@@ -447,7 +461,7 @@ const ReportExport = () => {
                             onClick={() => onPageChange(i)}
                             className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                 ? 'bg-red-600 text-white'
-                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                 }`}
                         >
                             {i}
@@ -506,7 +520,7 @@ const ReportExport = () => {
                                     onClick={() => onPageChange(i)}
                                     className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                         ? 'bg-red-600 text-white'
-                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                         }`}
                                 >
                                     {i}
@@ -523,7 +537,7 @@ const ReportExport = () => {
                                     onClick={() => onPageChange(i)}
                                     className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                         ? 'bg-red-600 text-white'
-                                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                         }`}
                                 >
                                     {i}
@@ -540,7 +554,7 @@ const ReportExport = () => {
                                         onClick={() => onPageChange(i)}
                                         className={`min-w-[36px] h-9 rounded-full ${currentPage === i
                                             ? 'bg-red-600 text-white'
-                                            : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                            : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                             }`}
                                     >
                                         {i}
@@ -560,7 +574,7 @@ const ReportExport = () => {
                             onClick={() => onPageChange(totalPages)}
                             className={`min-w-[36px] h-9 rounded-full ${currentPage === totalPages
                                 ? 'bg-red-600 text-white'
-                                : 'border border-red-600 text-red-600 hover:bg-red-100'
+                                : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                                 }`}
                         >
                             {totalPages}
@@ -579,8 +593,8 @@ const ReportExport = () => {
                     onClick={() => onPageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                     className={`flex items-center px-2 h-9 rounded-full ${currentPage === 1
-                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                         }`}
                 >
                     <svg
@@ -603,8 +617,8 @@ const ReportExport = () => {
                     onClick={() => onPageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
                     className={`flex items-center px-2 h-9 rounded-full ${currentPage === totalPages
-                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                        : 'border border-red-600 text-red-600 hover:bg-red-100'
+                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                        : 'border border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'
                         }`}
                 >
                     <svg
@@ -628,17 +642,17 @@ const ReportExport = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-medium mb-4">
+            <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Ekspor <span className="font-bold">Laporan Pengajuan</span>
             </h2>
 
-            <div className="bg-white p-6 rounded-lg shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm transition-colors">
                 <div className="mb-4">
                     <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 xl:gap-24">
                         {/* Bagian Judul */}
                         <div className="relative flex-shrink-0">
                             <h3
-                                className="text-xl font-medium cursor-pointer hover:text-gray-700 flex items-center gap-2 transition-all duration-200"
+                                className="text-xl font-medium dark:text-gray-100 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2 transition-all duration-200"
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                             >
                                 {documentType === 'reimbursement' && 'Pengajuan Reimbursement'}
@@ -659,14 +673,14 @@ const ReportExport = () => {
 
                             {isDropdownOpen && (
                                 <div
-                                    className="absolute top-full left-0 mt-1 bg-white rounded-lg py-1 z-50 min-w-[250px] md:w-auto"
+                                    className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-700 rounded-lg py-1 z-50 min-w-[250px] md:w-auto shadow-lg"
                                     onMouseLeave={() => setIsDropdownOpen(false)}
                                 >
                                     {/* Dropdown Options */}
                                     {["reimbursement", "bonSementara", "lpj"].map((type) => (
                                         <div
                                             key={type}
-                                            className="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                                            className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-600 dark:text-gray-200 cursor-pointer flex items-center justify-between"
                                             onClick={() => {
                                                 handleDocumentChange(type);
                                                 setIsDropdownOpen(false);
@@ -761,7 +775,7 @@ const ReportExport = () => {
                                         }
                                         className="flex items-center justify-center px-4 py-2 bg-red-600 text-white rounded 
                                          hover:bg-red-700 hover:text-gray-200 
-                                         disabled:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed 
+                                         disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:text-gray-300 dark:disabled:text-gray-500 disabled:cursor-not-allowed 
                                          flex-shrink-0 w-full xl:w-auto"
                                     >
                                         <svg
@@ -816,53 +830,53 @@ const ReportExport = () => {
                                 <div>
                                     <div className="w-full overflow-x-auto">
                                         <div className="inline-block min-w-full">
-                                            <table className="min-w-full bg-white border rounded-lg text-sm">
+                                            <table className="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                                                 <thead>
-                                                    <tr className="bg-gray-100 text-left">
-                                                        <th className="p-2 border text-center w-auto">No.</th>
-                                                        <th className="px-4 py-2 border">Nomor Dokumen</th>
-                                                        <th className="px-4 py-2 border">Nama</th>
-                                                        <th className="px-4 py-2 border">Bisnis Unit</th>
-                                                        <th className="px-4 py-2 border">Kategori</th>
-                                                        <th className="px-4 py-2 border">Total Biaya</th>
-                                                        <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                                        <th className="px-4 py-2 border">Tanggal Disetujui/Dibatalkan</th>
-                                                        <th className="px-4 py-2 border">Disetujui/Dibatalkan Oleh</th>
-                                                        <th className="p-2 border text-center">Status</th>
+                                                    <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                                        <th className="p-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Nomor Dokumen</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Nama</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Bisnis Unit</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Kategori</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Total Biaya</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Dibatalkan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Dibatalkan Oleh</th>
+                                                        <th className="p-2 border dark:border-gray-600 text-center">Status</th>
                                                         {/* Kolom Aksi */}
-                                                        <th className="p-2 border text-center">Aksi</th>
+                                                        <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {getCurrentPageData().map((item, index) => (
                                                         <tr key={item.id}>
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 {index + 1 + (currentPage - 1) * itemsPerPage}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 <Link
                                                                     to={`/reimbursement/${item.id}`}
-                                                                    className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                    className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                                 >
                                                                     {item.displayId}
                                                                 </Link>
                                                             </td>
-                                                            <td className="px-4 py-2 border">{item.user.nama}</td>
-                                                            <td className="px-4 py-2 border">{item.user.unit}</td>
-                                                            <td className="px-4 py-2 border">{item.kategori}</td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{item.user.nama}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{item.user.unit}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{item.kategori}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 Rp{item.totalBiaya.toLocaleString('id-ID')}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {formatDate(item.tanggalPengajuan)}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {formatDate(item.statusHistory[item.statusHistory.length - 1].timestamp)}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {getApproverName(item.statusHistory)}
                                                             </td>
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 <span className={`px-4 py-1 rounded-full text-xs font-medium ${item.status === 'Disetujui'
                                                                     ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
                                                                     : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
@@ -872,7 +886,7 @@ const ReportExport = () => {
                                                             </td>
                                                             
                                                             {/* --- BAGIAN AKSI YANG DIPERBAIKI --- */}
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 <div className="flex justify-center items-center gap-2">
                                                                     {/* Tombol Edit: Sekarang memanggil handleEditClick */}
                                                                     <button 
@@ -917,52 +931,52 @@ const ReportExport = () => {
                                 <div>
                                     <div className="w-full overflow-x-auto">
                                         <div className="inline-block min-w-full">
-                                            <table className="min-w-full bg-white border rounded-lg text-sm">
+                                            <table className="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                                                 <thead>
-                                                    <tr className="bg-gray-100 text-left">
-                                                        <th className="p-2 border text-center w-auto">No.</th>
-                                                        <th className="px-4 py-2 border">Nomor BS</th>
-                                                        <th className="px-4 py-2 border">Nama</th>
-                                                        <th className="px-4 py-2 border">Bisnis Unit</th>
-                                                        <th className="px-4 py-2 border">Kategori</th>
-                                                        <th className="px-4 py-2 border">Jumlah BS</th>
-                                                        <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                                        <th className="px-4 py-2 border">Tanggal Disetujui/Dibatalkan</th>
-                                                        <th className="px-4 py-2 border">Disetujui/Dibatalkan Oleh</th>
-                                                        <th className="p-2 border text-center">Status</th>
-                                                        <th className="p-2 border text-center">Aksi</th>
+                                                    <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                                        <th className="p-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Nomor BS</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Nama</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Bisnis Unit</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Kategori</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Jumlah BS</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Dibatalkan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Dibatalkan Oleh</th>
+                                                        <th className="p-2 border dark:border-gray-600 text-center">Status</th>
+                                                        <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {getCurrentPageData().map((bs, index) => (
                                                         <tr key={`${bs.id}-${index}`}>
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 {index + 1 + (currentPage - 1) * itemsPerPage}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 <Link
                                                                     to={`/bon-sementara/${bs.id}`}
-                                                                    className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                    className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                                 >
                                                                     {bs.nomorBS}
                                                                 </Link>
                                                             </td>
-                                                            <td className="px-4 py-2 border">{bs.user.nama}</td>
-                                                            <td className="px-4 py-2 border">{bs.user.unit}</td>
-                                                            <td className="px-4 py-2 border">{bs.kategori}</td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{bs.user.nama}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{bs.user.unit}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{bs.kategori}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 Rp{(bs.jumlahBS || 0).toLocaleString('id-ID')}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {formatDate(bs.tanggalPengajuan)}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {formatDate(bs.statusHistory[bs.statusHistory.length - 1].timestamp)}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {getApproverName(bs.statusHistory)}
                                                             </td>
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 <span className={`px-4 py-1 rounded-full text-xs font-medium ${bs.status === 'Disetujui'
                                                                     ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
                                                                     : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
@@ -972,7 +986,7 @@ const ReportExport = () => {
                                                             </td>
 
                                                             {/* --- BAGIAN AKSI YANG DIPERBAIKI (TOMBOL BIRU) --- */}
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 <div className="flex justify-center items-center gap-2">
                                                                     
                                                                     {/* Ganti Link jadi Button supaya handleEditClick jalan */}
@@ -1017,52 +1031,52 @@ const ReportExport = () => {
                                 <div>
                                     <div className="w-full overflow-x-auto">
                                         <div className="inline-block min-w-full">
-                                            <table className="min-w-full bg-white border rounded-lg text-sm">
+                                            <table className="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
                                                 <thead>
-                                                    <tr className="bg-gray-100 text-left">
-                                                        <th className="p-2 border text-center w-auto">No.</th>
-                                                        <th className="px-4 py-2 border">Nomor Dokumen</th>
-                                                        <th className="px-4 py-2 border">Nama</th>
-                                                        <th className="px-4 py-2 border">Bisnis Unit</th>
-                                                        <th className="px-4 py-2 border">Kategori</th>
-                                                        <th className="px-4 py-2 border">Total Biaya</th>
-                                                        <th className="px-4 py-2 border">Tanggal Pengajuan</th>
-                                                        <th className="px-4 py-2 border">Tanggal Disetujui/Dibatalkan</th>
-                                                        <th className="px-4 py-2 border">Disetujui/Dibatalkan Oleh</th>
-                                                        <th className="p-2 border text-center">Status</th>
-                                                        <th className="p-2 border text-center">Aksi</th>
+                                                    <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                                        <th className="p-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Nomor Dokumen</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Nama</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Bisnis Unit</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Kategori</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Total Biaya</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Dibatalkan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Dibatalkan Oleh</th>
+                                                        <th className="p-2 border dark:border-gray-600 text-center">Status</th>
+                                                        <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {getCurrentPageData().map((item, index) => (
                                                         <tr key={item.id}>
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 {index + 1 + (currentPage - 1) * itemsPerPage}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 <Link
                                                                     to={`/lpj/${item.id}`}
-                                                                    className="text-black hover:text-gray-700 hover:underline cursor-pointer"
+                                                                    className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                                 >
                                                                     {item.displayId}
                                                                 </Link>
                                                             </td>
-                                                            <td className="px-4 py-2 border">{item.user.nama}</td>
-                                                            <td className="px-4 py-2 border">{item.user.unit}</td>
-                                                            <td className="px-4 py-2 border">{item.kategori}</td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{item.user.nama}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{item.user.unit}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">{item.kategori}</td>
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 Rp{item.totalBiaya.toLocaleString('id-ID')}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {formatDate(item.tanggalPengajuan)}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {formatDate(item.statusHistory[item.statusHistory.length - 1].timestamp)}
                                                             </td>
-                                                            <td className="px-4 py-2 border">
+                                                            <td className="px-4 py-2 border dark:border-gray-600">
                                                                 {getApproverName(item.statusHistory)}
                                                             </td>
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 <span className={`px-4 py-1 rounded-full text-xs font-medium ${item.status === 'Disetujui'
                                                                     ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
                                                                     : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
@@ -1072,7 +1086,7 @@ const ReportExport = () => {
                                                             </td>
 
                                                             {/* --- BAGIAN AKSI YANG DIPERBAIKI (TOMBOL BIRU) --- */}
-                                                            <td className="p-2 border text-center">
+                                                            <td className="p-2 border dark:border-gray-600 text-center">
                                                                 <div className="flex justify-center items-center gap-2">
                                                                     
                                                                     {/* Tombol Edit menggunakan onClick, bukan Link */}
