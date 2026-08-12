@@ -604,15 +604,20 @@ const FormLpjMarketing = () => {
                 
                 // --- PERBAIKAN: Clear Draft yang aman ---
                 if (typeof clearDraft === 'function') {
-                    await clearDraft();
+                    const draftCleared = await clearDraft();
+                    if (!draftCleared) {
+                        console.warn('Draft tidak berhasil dihapus otomatis setelah submit.')
+                    }
                 }
                 
                 toast.success('LPJ Marketing/Operasional berhasil dibuat')
                 resetForm()
                 setIsSubmitting(false)
                 
-                // --- PERBAIKAN: Arahkan kembali ke tabel ---
-                navigate('/lpj/cek-pengajuan')
+                // Diarahkan ke dashboard, bukan /lpj/cek-pengajuan (rute itu khusus
+                // Reviewer/Validator/Admin/Super Admin -> Employee biasa akan ditolak
+                // ProtectedRoute dan berujung ke halaman 404).
+                navigate('/dashboard')
             }
         } catch (error) {
             console.error('Error submitting lpj:', error)

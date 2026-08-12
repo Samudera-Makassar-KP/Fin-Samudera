@@ -326,6 +326,7 @@ const RbsOperasionalForm = () => {
         'PT Samudera Agencies Indonesia': 'SAI',
         'PT SILKargo Indonesia': 'SKI',
         'PT PAD Samudera Perdana': 'SP',
+        'PT Masaji Kargosentra Tama': 'MKT',
         'Samudera Indonesia': 'SMDR',
         'Panitia': 'PNTA',
     }

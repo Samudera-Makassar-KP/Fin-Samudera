@@ -339,28 +339,28 @@ const FormBs = () => {
             const counterDoc = await getDoc(counterRef);
 
             const today = new Date();
-            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const year = today.getFullYear().toString();
 
             if (!counterDoc.exists()) {
                 await setDoc(counterRef, {
                     lastNumber: 500,
-                    lastResetMonth: month
+                    lastResetYear: year
                 });
                 return '0000501';
             }
 
-            const lastResetMonth = counterDoc.data().lastResetMonth || '00';
+            const lastResetYear = counterDoc.data().lastResetYear || '0000';
 
-            if (lastResetMonth !== month) {
+            if (lastResetYear !== year) {
                 await setDoc(counterRef, {
                     lastNumber: 500,
-                    lastResetMonth: month
+                    lastResetYear: year
                 });
                 return '0000501';
             }
 
             const currentNumber = counterDoc.data().lastNumber;
-            return (currentNumber + 1).toString().padStart(7, '00005');
+            return (currentNumber + 1).toString().padStart(7, '0');
         } catch (error) {
             console.error('Error getting current counter:', error);
             return '0000501';
@@ -630,10 +630,10 @@ const FormBs = () => {
                 await runTransaction(db, async (transaction) => {
                     const counterDoc = await transaction.get(counterRef)
                     const today = new Date()
-                    const month = (today.getMonth() + 1).toString().padStart(2, '0')
+                    const year = today.getFullYear().toString()
 
                     let newLastNumber
-                    if (!counterDoc.exists() || counterDoc.data().lastResetMonth !== month) {
+                    if (!counterDoc.exists() || counterDoc.data().lastResetYear !== year) {
                         newLastNumber = 501
                     } else {
                         newLastNumber = counterDoc.data().lastNumber + 1
@@ -641,7 +641,7 @@ const FormBs = () => {
 
                     transaction.set(counterRef, {
                         lastNumber: newLastNumber,
-                        lastResetMonth: month
+                        lastResetYear: year
                     })
                 })
 
@@ -651,7 +651,7 @@ const FormBs = () => {
                 resetForm()
                 setIsSubmitting(false)
                 
-                const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '00005')
+                const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '0')
                 setCurrentCounter(nextSequence)
             }
         } catch (error) {

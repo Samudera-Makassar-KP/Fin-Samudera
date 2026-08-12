@@ -589,7 +589,10 @@ const FormLpjUmum = () => {
 
                 // --- PERBAIKAN: Hapus Draft setelah berhasil simpan baru ---
                 if (typeof clearDraft === 'function') {
-                    await clearDraft();
+                    const draftCleared = await clearDraft();
+                    if (!draftCleared) {
+                        console.warn('Draft tidak berhasil dihapus otomatis setelah submit.')
+                    }
                 }
 
                 console.log('LPJ berhasil dibuat:', {
@@ -601,8 +604,10 @@ const FormLpjUmum = () => {
                 resetForm()
                 setIsSubmitting(false)
 
-                // --- PERBAIKAN: Arahkan ke halaman Cek Pengajuan ---
-                navigate('/lpj/cek-pengajuan')
+                // Diarahkan ke dashboard, bukan /lpj/cek-pengajuan (rute itu khusus
+                // Reviewer/Validator/Admin/Super Admin -> Employee biasa akan ditolak
+                // ProtectedRoute dan berujung ke halaman 404).
+                navigate('/dashboard')
             }
         } catch (error) {
             console.error('Error submitting lpj:', error)
