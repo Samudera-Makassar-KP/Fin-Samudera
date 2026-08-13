@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, setLogLevel } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
@@ -20,6 +20,11 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const functions = getFunctions(app, functionsRegion);
 const storage = getStorage(app)
+
+// Matikan log internal SDK Firestore (termasuk warning kosmetik seperti
+// "BloomFilterError") -- tetap tampilkan error fatal saat development,
+// senyap total saat production.
+setLogLevel(process.env.NODE_ENV === 'production' ? 'silent' : 'error');
 
 export default app;
 
