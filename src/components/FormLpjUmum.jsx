@@ -748,7 +748,13 @@ const FormLpjUmum = () => {
     }
 
     
-    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-umum', 'draft')
+    // PENTING: draftId diikat ke nomorBS, BUKAN string statis 'draft'.
+    // Sebelumnya semua LPJ (untuk BS apa pun) berbagi SATU slot draft yang sama,
+    // sehingga draft lama milik BS-A ikut ter-load / menimpa form BS-B yang baru
+    // mau dikerjakan. Dengan ini, setiap nomor BS punya slot draft sendiri-sendiri
+    // (${uid}_lpj-umum_${nomorBS}), jadi "Load Draft"/auto-load hanya aktif kalau
+    // memang ada draft tersimpan untuk nomor BS yang sedang dikerjakan saat ini.
+    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS || 'baru')
 
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {

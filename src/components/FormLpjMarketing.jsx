@@ -762,7 +762,10 @@ const FormLpjMarketing = () => {
     }
 
     // --- PERBAIKAN: Gunakan ID statis 'draft' ---
-    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-marketing', 'draft');
+    // PENTING: draftId diikat ke nomorBS, BUKAN string statis 'draft' -- lihat
+    // catatan yang sama di FormLpjUmum.jsx. Tanpa ini, draft LPJ untuk satu BS
+    // bisa tertimpa/salah muat oleh draft BS lain karena semua berbagi 1 slot.
+    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-marketing', nomorBS || 'baru');
 
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {
