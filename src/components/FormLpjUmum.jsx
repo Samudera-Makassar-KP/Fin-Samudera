@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
@@ -837,12 +837,29 @@ const FormLpjUmum = () => {
         }
     }, [initialLpjState, loadDraft, todayDate])
 
+    // Guard supaya auto-load draft dari navigasi (klik draft di tabel) cuma
+    // jalan SEKALI. Sebelumnya pakai window.history.replaceState untuk "membersihkan"
+    // location.state, tapi itu tidak benar-benar mengubah location.state versi
+    // React Router -- akibatnya effect di bawah terus menganggap kondisinya
+    // terpenuhi dan memicu ulang dirinya sendiri terus-menerus (infinite loop,
+    // toast "Draft berhasil dimuat" menumpuk, browser sampai men-throttle navigasi).
+    const draftAutoLoadedRef = useRef(false)
+
     useEffect(() => {
-        if (location.state && location.state.nomorBS && hasDraft) {
+        if (
+            location.state &&
+            location.state.nomorBS &&
+            hasDraft &&
+            !draftAutoLoadedRef.current
+        ) {
+            draftAutoLoadedRef.current = true
             handleLoadDraft();
-            window.history.replaceState({}, document.title);
+            // Bersihkan location.state lewat React Router sendiri (bukan
+            // window.history langsung) supaya location.state benar-benar hilang
+            // dari state React Router, bukan cuma dari address bar.
+            navigate(location.pathname, { replace: true, state: {} })
         }
-    }, [handleLoadDraft, hasDraft, location.state]);
+    }, [handleLoadDraft, hasDraft, location.state, location.pathname, navigate]);
 
     return (
         <div className="container mx-auto py-10 md:py-8">

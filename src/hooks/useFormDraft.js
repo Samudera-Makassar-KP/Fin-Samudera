@@ -17,7 +17,7 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
         return doc(db, 'drafts', `${userData.uid}_${draftType}_${idSpesifik}`)
     }, [db, userData?.uid, draftType, draftId])
 
-    const saveDraft = async (formData) => {
+    const saveDraft = useCallback(async (formData) => {
         try {
             const draftRef = getDraftRef()
             if (!draftRef) {
@@ -40,9 +40,9 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
             toast.error('Gagal menyimpan draft')
             return false
         }
-    }
+    }, [getDraftRef, draftType])
 
-    const loadDraft = async () => {
+    const loadDraft = useCallback(async () => {
         try {
             const draftRef = getDraftRef()
             if (!draftRef) return null
@@ -60,13 +60,13 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
             toast.error('Gagal memuat draft')
             return null
         }
-    }
+    }, [getDraftRef])
 
     // --- FUNGSI CLEARDRAFT WAJIB ADA ---
     // PENTING: return true/false supaya pemanggil (handleSubmit) TAHU kalau
     // penghapusan draft gagal, alih-alih gagal diam-diam seperti sebelumnya
     // (itu penyebab draft "nyangkut" walau dokumen sudah tersubmit).
-    const clearDraft = async () => {
+    const clearDraft = useCallback(async () => {
         try {
             const draftRef = getDraftRef()
             if (!draftRef) {
@@ -83,7 +83,7 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
             toast.warning('LPJ berhasil disubmit, tapi draft lama gagal dihapus otomatis. Silakan hapus manual di halaman Cek Pengajuan.')
             return false
         }
-    }
+    }, [getDraftRef])
 
     useEffect(() => {
         const checkExistingDraft = async () => {
