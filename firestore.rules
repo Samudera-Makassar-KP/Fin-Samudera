@@ -24,6 +24,16 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    // Reviewer/Validator/Admin/Super Admin -- role yang berhak melihat daftar
+    // pengajuan orang lain (dipakai BsCheck.jsx, ReimbursementCheck.jsx,
+    // LpjBsCheck.jsx untuk tab "Disetujui" / tab Super Admin, yang query-nya
+    // TIDAK difilter per-uid, hanya difilter di JS setelah data diterima).
+    function isElevatedRole() {
+      return signedIn()
+        && hasUserDoc(request.auth.uid)
+        && get(userPath(request.auth.uid)).data.role in ['Reviewer', 'Validator', 'Admin', 'Super Admin'];
+    }
+
     function validString(value, maxLength) {
       return value is string && value.size() > 0 && value.size() <= maxLength;
     }
@@ -178,8 +188,19 @@ service cloud.firestore {
     }
 
     match /drafts/{draftId} {
-      allow read, create, update, delete: if signedIn()
+      // get/create/update/delete: dievaluasi per dokumen tunggal, regex boleh dipakai di sini.
+      allow get, create, update, delete: if signedIn()
         && draftId.matches(request.auth.uid + '_.*');
+
+      // list: WAJIB pakai operator perbandingan range (bukan regex/matches).
+      // Firestore hanya bisa membuktikan keamanan operasi "list"/query kalau
+      // operator rule-nya sama dengan operator yang dipakai query itu sendiri.
+      // LpjBsTable.jsx melakukan query where('__name__','>=',uid+'_') dan
+      // where('__name__','<=',uid+'_\uf8ff') -- rule di bawah harus persis begitu.
+      // Ini pola resmi yang direkomendasikan Firebase untuk query prefix document ID.
+      allow list: if signedIn()
+        && draftId >= request.auth.uid + '_'
+        && draftId < request.auth.uid + '_\uf8ff';
     }
 
     match /counters/{counterId} {
@@ -187,25 +208,63 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Nomor urut BS & RBS. FormBs.jsx / FormRbsBbm.jsx / FormRbsOperasional.jsx /
+    // FormRbsUmum.jsx menulis ke koleksi 'businessUnitCounters' -- BEDA dari
+    // /counters di atas. Tanpa rule ini, pembuatan nomor BS/RBS baru akan gagal
+    // permission-denied walau tidak terlihat di error LPJ ini.
+    match /businessUnitCounters/{unitCode} {
+      allow read, create, update: if signedIn();
+      allow delete: if false;
+    }
+
     match /bonSementara/{docId} {
-      allow read: if canReadWorkflow(resource.data);
+      // get: dokumen tunggal, tetap ketat lewat canReadWorkflow.
+      allow get: if canReadWorkflow(resource.data);
+
+      // list: query broad (status saja, tanpa filter uid) dipakai tab "Disetujui"
+      // & tab Super Admin -- Firestore tidak bisa membuktikan canReadWorkflow untuk
+      // query semacam itu, jadi elevated role diberi akses list lebih longgar.
+      // Employee tetap aman karena query mereka (LpjBsTable dkk.) sudah difilter
+      // where('user.uid','==',uid) yang cocok persis dengan isWorkflowOwner.
+      allow list: if isElevatedRole()
+        || (signedIn() && resource.data.user.uid == request.auth.uid);
+
       allow create: if canCreateWorkflow(request.resource.data);
       allow update: if canUpdateWorkflow();
       allow delete: if isSuperAdmin();
     }
 
     match /reimbursement/{docId} {
-      allow read: if canReadWorkflow(resource.data);
+      allow get: if canReadWorkflow(resource.data);
+      allow list: if isElevatedRole()
+        || (signedIn() && resource.data.user.uid == request.auth.uid);
       allow create: if canCreateWorkflow(request.resource.data);
       allow update: if canUpdateWorkflow();
       allow delete: if isSuperAdmin();
     }
 
     match /lpj/{docId} {
-      allow read: if canReadWorkflow(resource.data);
+      allow get: if canReadWorkflow(resource.data);
+      allow list: if isElevatedRole()
+        || (signedIn() && resource.data.user.uid == request.auth.uid);
       allow create: if canCreateWorkflow(request.resource.data);
       allow update: if canUpdateWorkflow();
       allow delete: if isSuperAdmin();
+    }
+
+    // Pengumuman (dipakai AnnouncementPopup.jsx). Sebelumnya tidak didefinisikan
+    // sama sekali sehingga jatuh ke deny-all paling bawah -> permission-denied.
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Koleksi alert (dipakai BSAlerts.jsx). SESUAIKAN nama koleksi di bawah
+    // ('alerts') dengan nama asli yang dipakai di BSAlerts.jsx kalau berbeda --
+    // cek baris `collection(db, '...')` di file itu.
+    match /alerts/{alertId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /{document=**} {
