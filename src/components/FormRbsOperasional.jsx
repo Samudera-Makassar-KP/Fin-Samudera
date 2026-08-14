@@ -326,7 +326,6 @@ const RbsOperasionalForm = () => {
         'PT Samudera Agencies Indonesia': 'SAI',
         'PT SILKargo Indonesia': 'SKI',
         'PT PAD Samudera Perdana': 'SP',
-        'PT Masaji Kargosentra Tama': 'MKT',
         'Samudera Indonesia': 'SMDR',
         'Panitia': 'PNTA',
     }
@@ -578,12 +577,15 @@ const RbsOperasionalForm = () => {
                 navigate('/reimbursement/cek-pengajuan')
 
             } else {
-                // JIKA BIKIN BARU: Gunakan addDoc
-                const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
-                await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
+                // JIKA BIKIN BARU: satu kali tulis saja (create), BUKAN addDoc lalu
+                // setDoc lagi ke ID yang sama -- lihat catatan yang sama di
+                // FormRbsUmum.jsx untuk penjelasan lengkap kenapa pola lama ini
+                // menyebabkan toast error walau dokumennya sudah tersimpan.
+                const newDocRef = doc(collection(db, 'reimbursement'))
+                await setDoc(newDocRef, { ...reimbursementData, id: newDocRef.id })
 
                 console.log('Reimbursement berhasil dibuat:', {
-                    firestoreId: docRef.id,
+                    firestoreId: newDocRef.id,
                     displayId: displayId
                 })
                 toast.success('Reimbursement Operasional berhasil diajukan!')

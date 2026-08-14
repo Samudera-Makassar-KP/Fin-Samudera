@@ -328,7 +328,6 @@ const RbsUmumForm = () => {
         'PT Samudera Agencies Indonesia': 'SAI',
         'PT SILKargo Indonesia': 'SKI',
         'PT PAD Samudera Perdana': 'SP',
-        'PT Masaji Kargosentra Tama': 'MKT',
         'Samudera Indonesia': 'SMDR',
         'Panitia': 'PNTA',
     }
@@ -579,9 +578,14 @@ const RbsUmumForm = () => {
                 navigate('/reimbursement/cek-pengajuan')
 
             } else {
-                // JIKA BIKIN BARU: Gunakan addDoc
-                const docRef = await addDoc(collection(db, 'reimbursement'), reimbursementData)
-                await setDoc(doc(db, 'reimbursement', docRef.id), { ...reimbursementData, id: docRef.id })
+                // JIKA BIKIN BARU: satu kali tulis saja (create), BUKAN addDoc lalu
+                // setDoc lagi ke ID yang sama. Firestore menganggap setDoc kedua itu
+                // sebagai operasi UPDATE (karena dokumennya sudah ada), dan rule
+                // canUpdateWorkflow() menolak Employee biasa yang baru submit
+                // dokumennya sendiri -- itu sebabnya toast error muncul padahal
+                // dokumennya sudah kadung tersimpan dari addDoc pertama.
+                const newDocRef = doc(collection(db, 'reimbursement'))
+                await setDoc(newDocRef, { ...reimbursementData, id: newDocRef.id })
 
                 toast.success('Reimbursement GA/Umum berhasil diajukan!')
 
