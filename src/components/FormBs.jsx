@@ -620,17 +620,24 @@ const FormBs = () => {
 
             } else {
                 // --- LOGIKA JIKA BIKIN BARU ---
-                // Generate ID dulu, lalu setDoc SEKALI SAJA supaya operasi ini murni CREATE
-                // (bukan create lalu update ke dokumen yang sama - yang ditolak Security Rules
-                // karena update untuk owner hanya diizinkan saat membatalkan pengajuan).
+                // PENTING: nomor BS final HARUS di-generate di dalam transaksi yang sama
+                // dengan increment counter. Nomor yang tampil saat pilih Unit Bisnis
+                // (generateNomorBS/handleUnitChange) hanya PREVIEW dari pembacaan counter
+                // tanpa increment - kalau dua user submit hampir bersamaan dengan unit
+                // yang sama, preview mereka bisa sama persis dan nomor duplikat itu yang
+                // ikut tersimpan. Dengan menggenerate nomor final di sini, di dalam
+                // runTransaction, Firestore akan otomatis retry transaksi jika terjadi
+                // konflik baca-tulis pada counter, sehingga tidak mungkin dua submit
+                // mendapat nomor akhir yang sama.
                 const newDocRef = doc(collection(db, 'bonSementara'))
-                await setDoc(newDocRef, { ...bonSementaraData, id: newDocRef.id })
-
                 const counterRef = doc(db, 'businessUnitCounters', kodeUnitBisnis)
-                await runTransaction(db, async (transaction) => {
+
+                const finalNomorBS = await runTransaction(db, async (transaction) => {
                     const counterDoc = await transaction.get(counterRef)
                     const today = new Date()
                     const year = today.getFullYear().toString()
+                    const month = (today.getMonth() + 1).toString().padStart(2, '0')
+                    const tanggalKode = `${year.slice(-2)}${month}`
 
                     let newLastNumber
                     if (!counterDoc.exists() || counterDoc.data().lastResetYear !== year) {
@@ -643,16 +650,28 @@ const FormBs = () => {
                         lastNumber: newLastNumber,
                         lastResetYear: year
                     })
+
+                    const sequence = newLastNumber.toString().padStart(7, '0')
+                    const nomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`
+
+                    transaction.set(newDocRef, {
+                        ...bonSementaraData,
+                        id: newDocRef.id,
+                        displayId: nomorBS,
+                        bonSementara: bonSementaraData.bonSementara.map((item) => ({
+                            ...item,
+                            nomorBS
+                        }))
+                    })
+
+                    return nomorBS
                 })
 
-                toast.success('Bon Sementara berhasil diajukan!')
+                toast.success(`Bon Sementara berhasil diajukan! Nomor: ${finalNomorBS}`)
 
                 setAlreadyFetchBS(false) 
                 resetForm()
                 setIsSubmitting(false)
-                
-                const nextSequence = (parseInt(currentCounter) + 1).toString().padStart(7, '0')
-                setCurrentCounter(nextSequence)
             }
         } catch (error) {
             console.error('Error submitting bon sementara:', error)
