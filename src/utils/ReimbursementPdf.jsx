@@ -212,6 +212,34 @@ const getApprovedReviewerNames = async (reimbursementDetail) => {
     return { reviewer1Name, reviewer2Name }
 }
 
+// Detail item yang sebenarnya diminta -- sebelumnya PDF cuma menampilkan
+// `item.jenis` (kategori, mis. "E-Toll"/"ATK"), TIDAK PERNAH menampilkan detail
+// aslinya (Item/Kebutuhan yang diisi user, atau Plat+Liter untuk baris BBM),
+// jadi orang yang baca hasil cetak tidak tahu permintaan sebenarnya apa selain
+// kategorinya saja. Field detail berbeda nama tergantung kategori dokumen (lihat
+// DetailRbs.jsx getColumns): GA/Umum -> `item`, Operasional -> `kebutuhan`,
+// BBM (dokumen kategori BBM ATAU baris BBM di dalam Operasional/GA-Umum, dikenali
+// dari prefix "BBM " pada jenis -- lihat rekapanAggregation.js) -> Plat+Liter.
+const getItemDetailText = (item, kategori) => {
+    const jenisValue = typeof item.jenis === 'string' ? item.jenis : ''
+    const isBbmItem = jenisValue.startsWith('BBM ') || kategori === 'BBM'
+
+    if (isBbmItem) {
+        const parts = []
+        if (item.lokasi) parts.push(item.lokasi)
+        if (item.plat) parts.push(`Plat ${item.plat}`)
+        if (item.liter) parts.push(`${item.liter} L`)
+        return parts.join(' - ')
+    }
+
+    if (kategori === 'Operasional') {
+        return item.kebutuhan || ''
+    }
+
+    // GA/Umum & kategori lain
+    return item.item || ''
+}
+
 const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedValidator }) => {
     if (!reimbursementDetail || reimbursementDetail.status !== 'Disetujui') {
         return null
@@ -365,41 +393,51 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                     </View>
 
                     {/* Data Row */}
-                    {reimbursementDetail.reimbursements?.map((item, index) => (
-                        <View key={index} style={[styles.tableRow, { borderBottom: 0 }]}>
-                            <View style={[styles.tableCell, { width: '6%', textAlign: 'center' }]}>
-                                <Text>{index + 1}</Text>
+                    {reimbursementDetail.reimbursements?.map((item, index) => {
+                        const itemDetail = getItemDetailText(item, reimbursementDetail.kategori)
+                        return (
+                            <View key={index} style={[styles.tableRow, { borderBottom: 0 }]}>
+                                <View style={[styles.tableCell, { width: '6%', textAlign: 'center' }]}>
+                                    <Text>{index + 1}</Text>
+                                </View>
+                                <View
+                                    style={[
+                                        styles.tableCell,
+                                        { width: '68%', justifyContent: 'center', alignItems: 'flex-start', flexDirection: 'column' }
+                                    ]}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={{ width: 100 }}>
+                                            {item.tanggal
+                                                ? new Date(item.tanggal)
+                                                    .toLocaleDateString('en-GB', {
+                                                        day: '2-digit',
+                                                        month: 'short',
+                                                        year: '2-digit'
+                                                    })
+                                                    .replace(/\./g, '')
+                                                    .replace(/\s/g, '-')
+                                                : '-'}
+                                        </Text>
+                                        <Text style={{ marginLeft: 12 }}>{item.jenis || '-'}</Text>
+                                    </View>
+                                    {itemDetail ? (
+                                        <Text style={{ marginTop: 2, fontSize: 7, color: '#555' }}>
+                                            {itemDetail}
+                                        </Text>
+                                    ) : null}
+                                </View>
+                                <View style={[styles.tableCell, { width: '12%', alignItems: 'flex-start' }]}>
+                                    <Text style={{ flexWrap: 'wrap', textAlign: 'left', overflow: 'hidden' }}>
+                                        {(item.keterangan || '').replace(/(\d)/g, '$1\u200B')}
+                                    </Text>
+                                </View>
+                                <View style={[styles.tableCell, { width: '14%', textAlign: 'right', borderRight: 0 }]}>
+                                    <Text>{(item.biaya || 0).toLocaleString('id-ID')}</Text>
+                                </View>
                             </View>
-                            <View
-                                style={[
-                                    styles.tableCell,
-                                    { width: '68%', justifyContent: 'flex-start', alignItems: 'center', flexDirection: 'row' }
-                                ]}
-                            >
-                                <Text style={{ width: 100 }}>
-                                    {item.tanggal
-                                        ? new Date(item.tanggal)
-                                            .toLocaleDateString('en-GB', {
-                                                day: '2-digit',
-                                                month: 'short',
-                                                year: '2-digit'
-                                            })
-                                            .replace(/\./g, '')
-                                            .replace(/\s/g, '-')
-                                        : '-'}
-                                </Text>
-                                <Text style={{ marginLeft: 12 }}>{item.jenis || '-'}</Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '12%', alignItems: 'flex-start' }]}>
-                                <Text style={{ flexWrap: 'wrap', textAlign: 'left', overflow: 'hidden' }}>
-                                    {(item.keterangan || '').replace(/(\d)/g, '$1\u200B')}
-                                </Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '14%', textAlign: 'right', borderRight: 0 }]}>
-                                <Text>{(item.biaya || 0).toLocaleString('id-ID')}</Text>
-                            </View>
-                        </View>
-                    ))}
+                        )
+                    })}
 
                     {/* Empty Row */}
                     <View style={[styles.tableRow, { borderBottom: 0 }]}>
