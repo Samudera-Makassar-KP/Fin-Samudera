@@ -106,12 +106,32 @@ service cloud.firestore {
         );
     }
 
+    // Daftar approver (validator/reviewer1/reviewer2) opsional tergantung modul
+    // (mis. BS tidak punya 'validator'), tapi kalau ada HARUS berupa list -- bukan
+    // sekadar string/uid tunggal yang bisa dipalsukan jadi apa saja.
+    function validApproverList(list) {
+      return list == null || (list is list && list.size() <= 5);
+    }
+
     function validWorkflowCreate(data) {
       return data.user is map
         && data.user.uid is string
         && data.user.uid.size() > 0
         && validOptionalString(data.displayId, 80)
-        && validOptionalString(data.status, 80);
+        // WAJIB 'Diajukan' -- sebelumnya validOptionalString(data.status, 80)
+        // mengizinkan STRING APA PUN termasuk 'Disetujui', jadi klien yang
+        // menulis langsung ke Firestore (bypass UI resmi) bisa membuat dokumen
+        // yang langsung berstatus disetujui tanpa melalui approval sama sekali.
+        // Semua form (FormBs.jsx, FormRbsUmum/Operasional/Bbm.jsx,
+        // FormLpjUmum/Marketing.jsx) selalu create dengan status: 'Diajukan'.
+        && data.status == 'Diajukan'
+        // .get(key, default) WAJIB dipakai, bukan data.user.validator langsung --
+        // BS (FormBs.jsx) tidak pernah menyertakan key 'validator' sama sekali di
+        // objek user-nya, dan mengakses key map yang tidak ada lewat dot-notation
+        // membuat evaluasi rule ERROR (dianggap deny), bukan mengembalikan null.
+        && validApproverList(data.user.get('validator', null))
+        && validApproverList(data.user.get('reviewer1', null))
+        && validApproverList(data.user.get('reviewer2', null));
     }
 
     function keepsWorkflowIdentity() {
@@ -159,9 +179,31 @@ service cloud.firestore {
         && validOptionalString(request.resource.data.cancelReason, 500);
     }
 
+    // Transisi status maju yang sah dalam alur approval (dipakai bareng workflow
+    // 2 tahap seperti BS: Diajukan->Diproses->Disetujui, maupun 3 tahap seperti
+    // RBS/LPJ: Diajukan->Divalidasi->Diproses->Disetujui). 'Ditolak' TIDAK
+    // dibatasi dari status mana asalnya di sini -- itu sudah dijaga di sisi
+    // aplikasi (lihat handleSubmitReject) dan tetap mensyaratkan pelaku ada di
+    // daftar validator/reviewer1/reviewer2 dokumen tsb (isWorkflowApprover).
+    function isValidForwardTransition(fromStatus, toStatus) {
+      return (fromStatus == 'Diajukan' && (toStatus == 'Divalidasi' || toStatus == 'Diproses'))
+        || (fromStatus == 'Divalidasi' && toStatus == 'Diproses')
+        || (fromStatus == 'Diproses' && toStatus == 'Disetujui');
+    }
+
     function canApproverUpdateWorkflow() {
       return (isWorkflowApprover(resource.data) || isCurrentApprover(resource.data))
-        && workflowStatusUpdateKeysOnly();
+        && workflowStatusUpdateKeysOnly()
+        // Sebelumnya tidak ada pengecekan ini -- seorang approver (mis.
+        // Validator) yang lolos workflowStatusUpdateKeysOnly() bisa saja
+        // mengirim request yang direkayasa untuk melompat langsung ke status
+        // 'Disetujui', melewati Reviewer 1/2. Sekarang transisi maju wajib
+        // sah lewat isValidForwardTransition(); reject ('Ditolak') tetap bebas
+        // dari status manapun (lihat komentar di atas).
+        && (
+          request.resource.data.status == 'Ditolak'
+          || isValidForwardTransition(resource.data.status, request.resource.data.status)
+        );
     }
 
     // Menandai pengajuan yang sudah Disetujui sebagai sudah di-TF finance
@@ -215,8 +257,37 @@ service cloud.firestore {
         && draftId < request.auth.uid + '_\uf8ff';
     }
 
+    // Bentuk dokumen counter selalu {lastNumber: int >= 0, lastResetYear: "YYYY"}
+    // (lihat runTransaction di FormBs.jsx dkk). Sebelumnya rule mengizinkan
+    // signedIn() menulis field APA PUN dengan nilai APA PUN ke counter ini --
+    // termasuk employee biasa yang bisa me-reset/menurunkan lastNumber dan
+    // memicu ulang bug duplikasi nomor dokumen yang sudah diperbaiki (lihat
+    // Bagian C/13.7 di SUMMARY_PENGEMBANGAN.md). Sekarang nilai & tipe field
+    // divalidasi, dan lastNumber tidak boleh MENURUN kecuali lastResetYear ikut
+    // berubah (reset tahun baru -- perilaku sah yang sudah ada di kode).
+    function validCounterFields(data) {
+      return data.keys().hasOnly(['lastNumber', 'lastResetYear'])
+        && data.lastNumber is int
+        && data.lastNumber >= 0
+        && data.lastResetYear is string
+        && data.lastResetYear.size() == 4;
+    }
+
+    function validCounterUpdate() {
+      return validCounterFields(request.resource.data)
+        && (
+          request.resource.data.lastResetYear != resource.data.lastResetYear
+          || request.resource.data.lastNumber >= resource.data.lastNumber
+        );
+    }
+
+    // Koleksi lama, sudah tidak dipakai kode manapun (client maupun functions/
+    // index.js) -- tetap dijaga dengan validasi bentuk yang sama, bukan
+    // signedIn() bebas nilai apa pun, untuk jaga-jaga kalau dipakai lagi nanti.
     match /counters/{counterId} {
-      allow read, create, update: if signedIn();
+      allow read: if signedIn();
+      allow create: if signedIn() && validCounterFields(request.resource.data);
+      allow update: if signedIn() && validCounterUpdate();
       allow delete: if false;
     }
 
@@ -227,7 +298,9 @@ service cloud.firestore {
     // /counters di atas. Tanpa rule ini, pembuatan nomor baru akan gagal
     // permission-denied walau tidak terlihat di error LPJ ini.
     match /businessUnitCounters/{counterId} {
-      allow read, create, update: if signedIn();
+      allow read: if signedIn();
+      allow create: if signedIn() && validCounterFields(request.resource.data);
+      allow update: if signedIn() && validCounterUpdate();
       allow delete: if false;
     }
 

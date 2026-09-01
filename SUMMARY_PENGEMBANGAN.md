@@ -6,7 +6,7 @@ Saat ini laporan pencapaian KPI Biaya Ops GA (contoh: "Detil Data & Informasi Pe
 
 Dibutuhkan versi **live** dari laporan ini di dalam aplikasi: menu baru "Rekapan" yang otomatis terisi dari setiap pengajuan (BS, Reimbursement BBM/Operasional/Umum) yang sudah melalui sistem — tanpa rekap manual lagi. Selain itu, halaman Cek Pengajuan Super Admin (BS/RBS/LPJ) juga perlu ditingkatkan agar bisa menampilkan semua status sekaligus dan mendukung pencarian by nama/unit bisnis.
 
-Dokumen ini berisi tujuh bagian:
+Dokumen ini berisi delapan bagian:
 - **Bagian A** — Menu Rekapan Unit Bisnis (bagian 2–10)
 - **Bagian B** — Peningkatan Laporan/Cek Pengajuan Super Admin (bagian 11–12)
 - **Bagian C** — Perbaikan Bug Kritis: Duplikasi Nomor BS & Kode Unit Bisnis Hilang di RBS (bagian 13)
@@ -14,6 +14,7 @@ Dokumen ini berisi tujuh bagian:
 - **Bagian E** — Plat No Kendaraan, Kategori BBM di RBS/LPJ, & Perluasan Rekapan BBM, 2026-09-01 (bagian 15)
 - **Bagian F** — Filter Checkbox Rekapan, Aksi Cetak/Transferred Reimbursement, Reported BS, & Deploy Produksi, 2026-09-01 (bagian 16)
 - **Bagian G** — Perbaikan Bug Kritis: Reject RBS/LPJ Silent Fail untuk Reviewer1/Reviewer2, 2026-09-01 (bagian 17)
+- **Bagian H** — Audit & Pengetatan Firestore Rules, Verifikasi Edit/Hapus Super Admin, 2026-09-01 (bagian 18)
 
 ## 1.1 Struktur Folder Project
 
@@ -560,3 +561,51 @@ Dua dokumen LPJ yang sempat "di-reject" tapi gagal diam-diam (`LPJ.MRO.SKEL.2609
 - [x] Konfirmasi `BsCheck.jsx` tidak terdampak (alur 2 tahap, tidak bergantung pada field bermasalah)
 - [x] `CI=true npm run build` sukses (0 warning/error)
 - [ ] User perlu reject ulang 2 dokumen LPJ yang datanya "tersangkut" akibat bug ini (lihat 17.4)
+
+---
+
+# BAGIAN H — Audit & Pengetatan Firestore Rules, Verifikasi Edit/Hapus Super Admin (2026-09-01)
+
+**Status: SUDAH DIPERBAIKI & DI-DEPLOY.**
+
+## 18.1 Permintaan User
+
+User minta dicek: (1) apakah fungsi Edit dan Hapus untuk Super Admin di halaman Cek Pengajuan (BS/RBS/LPJ) sudah bekerja dengan baik, dan (2) apakah Firestore Rules sudah cukup ketat.
+
+## 18.2 Hasil Cek Edit & Hapus Super Admin
+
+**Edit — sudah benar.** Ditelusuri lewat kode (tidak ada kredensial untuk tes langsung di browser): `BsCheck.jsx`/`ReimbursementCheck.jsx`/`LpjBsCheck.jsx` → `FormBs.jsx`/`FormRbsUmum.jsx`/dst. Alur edit Super Admin cuma pernah `updateDoc` field konten (`bonSementara`/`reimbursements`, `totalBiaya`, `statusHistory`, opsional `lampiran`), tidak pernah menyentuh `user`/`displayId` — jadi `keepsWorkflowIdentity()` selalu lolos, dan `isSuperAdmin()` di `canUpdateWorkflow()` memberi bypass tanpa syarat field apa pun. Konsisten di ketiga modul.
+
+**Hapus — TIDAK ADA di UI untuk dokumen pengajuan.** `firestore.rules` punya `allow delete: if isSuperAdmin();` di `bonSementara`/`reimbursement`/`lpj`, tapi tidak ada tombol/handler hapus sama sekali di `BsCheck.jsx`, `ReimbursementCheck.jsx`, maupun `LpjBsCheck.jsx` — izinnya ada di level database, fiturnya tidak ada di aplikasi. **Belum diputuskan** apakah ini memang disengaja (dibiarkan) atau perlu ditambah fitur hapusnya — belum ada keputusan/permintaan eksplisit dari user soal ini.
+
+Terpisah dari itu, **Hapus/Edit User (Manage User)** sudah benar dan aman: `deleteManagedUser`/`createManagedUser` adalah Cloud Functions yang verifikasi `role === 'Super Admin'` di server (`requireSuperAdmin`), tidak bergantung ke client sama sekali.
+
+## 18.3 Temuan Audit Firestore Rules & Perbaikan
+
+Ditemukan 3 celah signifikan (diurutkan dari paling kritis), semua sudah diperbaiki di `firestore.rules`:
+
+**🔴 Kritis — `canCreateWorkflow()` tidak validasi `status` saat create.** Sebelumnya `validWorkflowCreate()` cuma cek `validOptionalString(data.status, 80)` — STRING APA PUN diterima, termasuk `'Disetujui'`. Artinya seseorang bisa menulis langsung ke Firestore (bypass UI resmi, lewat SDK/console) membuat dokumen `bonSementara`/`reimbursement`/`lpj` yang LANGSUNG berstatus Disetujui, tanpa melalui approval sama sekali — bug self-approval penuh. Diperbaiki: `data.status == 'Diajukan'` wajib (dikonfirmasi seluruh 6 form pengajuan selalu create dengan status ini), plus validasi `validator`/`reviewer1`/`reviewer2` (kalau ada) harus berupa list, bukan sembarang tipe.
+
+**🟠 Tinggi — `canApproverUpdateWorkflow()` tidak validasi transisi status.** Sebelumnya siapa pun yang terdaftar sebagai validator/reviewer1/reviewer2 pada dokumen bisa mengirim request yang direkayasa untuk melompat langsung ke `status: 'Disetujui'`, melewati tahap approval lain — rule cuma cek SIAPA yang boleh menyentuh field, bukan transisi APA yang sah. Diperbaiki: tambah `isValidForwardTransition()` yang membatasi transisi maju sesuai alur asli (`Diajukan→Divalidasi/Diproses`, `Divalidasi→Diproses`, `Diproses→Disetujui`); transisi ke `'Ditolak'` tetap bebas dari status manapun (sudah dijaga di sisi aplikasi, lihat Bagian G).
+
+**🟠 Tinggi — `/counters` & `/businessUnitCounters` tanpa validasi field.** Sebelumnya `allow create, update: if signedIn()` — Employee biasa pun bisa menulis field/nilai APA PUN ke counter nomor dokumen, berpotensi me-reset/menurunkan `lastNumber` dan memicu ulang bug duplikasi nomor dokumen yang sudah diperbaiki di Bagian C/13.7. Diperbaiki: `validCounterFields()` (cuma field `lastNumber`/`lastResetYear`, tipe & rentang benar) + `validCounterUpdate()` (lastNumber tidak boleh menurun kecuali `lastResetYear` ikut berubah, sesuai perilaku reset tahun baru yang memang sah di kode).
+
+**Catatan teknis penting:** percobaan pertama menambah validasi approver list (`data.user.validator` dkk) sempat salah — mengakses key map yang tidak ada (BS tidak punya field `validator` sama sekali di `user`) lewat dot-notation langsung MEMBUAT RULE ERROR (dianggap deny), bukan `null`. Ketahuan sebelum deploy lewat review manual, diperbaiki pakai `data.user.get('validator', null)` (accessor aman Firestore Rules untuk key yang mungkin tidak ada).
+
+## 18.4 Temuan yang BELUM Diperbaiki (Perlu Keputusan User)
+
+**🟡 Moderat — `/users/{uid}` read terlalu longgar.** `allow read: if signedIn()` mengizinkan SIAPA PUN yang login membaca profil lengkap user lain, termasuk `bankName` & `accountNumber` (nomor rekening bank asli), bukan cuma nama. Ini saat ini DIPAKAI SECARA SENGAJA oleh fitur plat BBM (Bagian E — query seluruh koleksi `users` untuk dropdown plat lintas user), jadi tidak bisa langsung diperketat tanpa perubahan skema (mis. pindahkan `bankName`/`accountNumber` ke subcollection privat yang cuma bisa dibaca pemilik + Super Admin). **Belum dikerjakan** — butuh keputusan user karena perlu refactor beberapa titik baca.
+
+**🟡 Minor — `storage.rules` mengizinkan `write` (upload/timpa) tanpa cek kepemilikan path** di `Reimbursement/`, `BonSementara/`, `LPJ/` — siapa pun yang login bisa menimpa file lampiran di path manapun kalau tahu/menebak path-nya. Risiko lebih rendah (perlu menebak path persis), **belum dikerjakan**.
+
+## 18.5 Task Development — Bagian H
+
+- [x] Verifikasi Edit Super Admin (BS/RBS/LPJ) — struktur kode sudah benar
+- [x] Verifikasi Hapus Super Admin — TIDAK ADA di UI meski rule mengizinkan; dilaporkan sebagai gap, bukan bug
+- [x] Verifikasi Edit/Hapus User di Manage User — sudah benar, terverifikasi via Cloud Function `requireSuperAdmin`
+- [x] `canCreateWorkflow()`: wajibkan `status == 'Diajukan'` saat create + validasi tipe `validator`/`reviewer1`/`reviewer2`
+- [x] `canApproverUpdateWorkflow()`: tambah `isValidForwardTransition()` untuk cegah lompat status
+- [x] `/counters` & `/businessUnitCounters`: tambah `validCounterFields()`/`validCounterUpdate()`
+- [x] Deploy `firestore.rules` yang sudah diperketat ke produksi
+- [ ] (Butuh keputusan user) Perketat read `/users/{uid}` — perlu refactor plat-picker BBM dulu
+- [ ] (Opsional, prioritas rendah) Perketat `storage.rules` supaya write terikat kepemilikan path
