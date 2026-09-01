@@ -609,3 +609,29 @@ Ditemukan 3 celah signifikan (diurutkan dari paling kritis), semua sudah diperba
 - [x] Deploy `firestore.rules` yang sudah diperketat ke produksi
 - [ ] (Butuh keputusan user) Perketat read `/users/{uid}` — perlu refactor plat-picker BBM dulu
 - [ ] (Opsional, prioritas rendah) Perketat `storage.rules` supaya write terikat kepemilikan path
+
+---
+
+# BAGIAN I — Detail Item di PDF/Print RBS (2026-09-01)
+
+**Status: SUDAH DIPERBAIKI & DI-DEPLOY.**
+
+## 19.1 Masalah
+
+Hasil cetak/PDF RBS (Print RBS Form, dihasilkan `generateReimbursementPDF` di `src/utils/ReimbursementPdf.jsx` -- dipakai bersama oleh `DetailRbs.jsx` dan menu Cetak di `ReimbursementTable.jsx`, jadi berlaku untuk SEMUA kategori RBS: BBM/Operasional/GA-Umum) cuma menampilkan tanggal + `item.jenis` (kategori, mis. "E-Toll") di kolom ACTIVITIES NAME, dan kolom KETERANGAN sering kosong (field `keterangan` opsional, banyak pengajuan tidak mengisinya). Akibatnya orang yang baca hasil cetak tidak tahu **detail permintaan sebenarnya** -- cuma tahu kategorinya, bukan barang/kebutuhan/plat kendaraan spesifiknya.
+
+## 19.2 Perbaikan
+
+`ReimbursementPdf.jsx` — kolom ACTIVITIES NAME sekarang menampilkan baris kedua berisi detail item, diambil sesuai kategori dokumen (fungsi baru `getItemDetailText`, meniru pola yang sudah dipakai `DetailRbs.jsx` untuk kolom Item/Kebutuhan):
+- **GA/Umum** → field `item.item`
+- **Operasional** → field `item.kebutuhan`
+- **BBM** (dokumen kategori BBM, ATAU baris BBM di dalam Operasional/GA-Umum yang dikenali dari prefix `"BBM "` pada `item.jenis` — sama seperti logika `aggregateBbm`) → gabungan `item.lokasi` (Lokasi Pertamina) + `Plat {item.plat}` + `{item.liter} L`, hanya bagian yang terisi yang ditampilkan.
+
+Detail ditampilkan di baris kedua, font lebih kecil (7pt, abu-abu), di bawah baris tanggal+jenis yang sudah ada — kolom KETERANGAN (catatan bebas terpisah) tidak diubah.
+
+## 19.3 Task Development — Bagian I
+
+- [x] Tambah `getItemDetailText()` di `ReimbursementPdf.jsx`, sadar kategori (GA/Umum/Operasional/BBM + baris BBM campuran)
+- [x] Render detail item sebagai baris kedua di kolom ACTIVITIES NAME
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [ ] Verifikasi visual PDF asli di browser — butuh cetak ulang dokumen sungguhan oleh user (tidak ada kredensial untuk generate PDF asli di sesi ini)
