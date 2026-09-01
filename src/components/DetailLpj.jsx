@@ -580,7 +580,12 @@ const DetailLpj = () => {
                                 {lpjDetail?.lpj?.map((item, index) => (
                                     <tr key={index}>
                                         <td className="px-4 py-2 border w-12 text-center">{index + 1}</td>
-                                        <td className="px-4 py-2 border min-w-32">{item.namaItem}</td>
+                                        <td className="px-4 py-2 border min-w-32">
+                                            {item.namaItem}
+                                            {item.plat && (
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">Plat: {item.plat}</div>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-2 border dark:border-gray-600">Rp{item.biaya.toLocaleString('id-ID')}</td>
                                         <td className="px-4 py-2 border w-24">{item.jumlah}</td>
                                         <td className="px-4 py-2 border dark:border-gray-600 whitespace-pre-wrap">{item.keterangan ?? '-'}</td>

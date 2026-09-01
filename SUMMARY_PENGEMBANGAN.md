@@ -1,169 +1,461 @@
-# Summary Pengembangan Fin Samudera
+# Project.md — Fin-Samudera: Fitur Rekapan & Peningkatan Cek Pengajuan Super Admin
 
-Tanggal update: 06 Juli 2026
+## 1. Latar Belakang
 
-## Status Terbaru
+Saat ini laporan pencapaian KPI Biaya Ops GA (contoh: "Detil Data & Informasi Pencapaian KPI Juli 2026 — Biaya Ops GA") masih dibuat manual/terpisah dari sistem — berisi rekap bulanan per Unit Bisnis untuk kategori ATK, RTK, BBM, dst.
 
-Project sudah diperbarui melalui branch `dev`, dideploy ke Firebase, dan siap digabungkan kembali ke `main`.
+Dibutuhkan versi **live** dari laporan ini di dalam aplikasi: menu baru "Rekapan" yang otomatis terisi dari setiap pengajuan (BS, Reimbursement BBM/Operasional/Umum) yang sudah melalui sistem — tanpa rekap manual lagi. Selain itu, halaman Cek Pengajuan Super Admin (BS/RBS/LPJ) juga perlu ditingkatkan agar bisa menampilkan semua status sekaligus dan mendukung pencarian by nama/unit bisnis.
 
-Status produksi:
+Dokumen ini berisi lima bagian:
+- **Bagian A** — Menu Rekapan Unit Bisnis (bagian 2–10)
+- **Bagian B** — Peningkatan Laporan/Cek Pengajuan Super Admin (bagian 11–12)
+- **Bagian C** — Perbaikan Bug Kritis: Duplikasi Nomor BS & Kode Unit Bisnis Hilang di RBS (bagian 13)
+- **Bagian D** — Audit Kode Menyeluruh & Perbaikan Tambahan, 2026-09-01 (bagian 14)
+- **Bagian E** — Plat No Kendaraan, Kategori BBM di RBS/LPJ, & Perluasan Rekapan BBM, 2026-09-01 (bagian 15)
 
-- Firebase project: `samudera-web-cbf2f`
-- Hosting URL: `https://samudera-web-cbf2f.web.app`
-- Custom domain: `https://smdr-mks.com`
-- Cloud Functions aktif: `asia-southeast2`
-- Runtime Cloud Functions aktif: Node.js 22
-- Credential email runtime: Firebase Secret Manager `EMAIL` dan `EMAIL_PASSWORD`
+## 1.1 Struktur Folder Project
 
-Catatan deploy 06 Juli 2026:
+Stack: React (CRA) + Firebase (Firestore, Functions, Hosting, Storage). Berikut struktur source code aktual (di luar `node_modules`, `build`, `.git`):
 
-- Deploy pertama ke `asia-southeast2` sempat gagal sebagian karena error internal Firebase saat membuat function di region baru.
-- Function parsial di `asia-southeast2` sudah dibersihkan.
-- Deploy ulang berhasil penuh.
-- Semua function lama di `us-central1` sudah dihapus agar tidak ada trigger ganda.
-- Firebase Hosting sudah release versi baru.
+```
+Fin-Samudera/
+├── .env
+├── .firebaserc
+├── firebase.json
+├── firestore.rules              # 273 baris — rules Firestore (termasuk isElevatedRole())
+├── storage.rules
+├── tailwind.config.js
+├── package.json
+│
+├── functions/                   # Cloud Functions (Node.js)
+│   ├── index.js                 # 1305 baris — seluruh Cloud Functions project ini
+│   └── package.json
+│
+├── public/
+│   ├── index.html
+│   └── logo-tanpa-tulisan.png
+│
+└── src/
+    ├── App.jsx                  # 170 baris — routing utama aplikasi
+    ├── firebaseConfig.js
+    ├── index.js / index.css
+    │
+    ├── assets/
+    │   ├── fonts/                (Optima, Poppins — dipakai util PDF)
+    │   └── images/
+    │
+    ├── context/
+    │   └── ThemeContext.jsx
+    │
+    ├── hooks/
+    │   └── useFormDraft.js
+    │
+    ├── components/               # komponen inti (form, tabel, modal, chart)
+    │   ├── FormBs.jsx                    # 893 baris  — Form BS (Bon Sementara)
+    │   ├── FormRbsBbm.jsx                # 1002 baris — Form RBS BBM
+    │   ├── FormRbsUmum.jsx               # 987 baris  — Form RBS Umum
+    │   ├── FormRbsOperasional.jsx        # 990 baris  — Form RBS Operasional
+    │   ├── FormLpjUmum.jsx
+    │   ├── FormLpjMarketing.jsx
+    │   ├── FormAddUser.jsx / FormEditUser.jsx
+    │   ├── BsCheck.jsx                   # 1088 baris — Cek Pengajuan BS (termasuk tab Super Admin)
+    │   ├── ReimbursementCheck.jsx        # 1159 baris — Cek Pengajuan RBS (termasuk tab Super Admin)
+    │   ├── LpjBsCheck.jsx                # 1196 baris — Cek Pengajuan LPJ (termasuk tab Super Admin)
+    │   ├── BsTable.jsx / ReimbursementTable.jsx / LpjBsTable.jsx
+    │   ├── DetailBs.jsx / DetailRbs.jsx / DetailLpj.jsx
+    │   ├── DashboardSummary.jsx
+    │   ├── GAUBarChart.jsx / GAUComparisonBarChart.jsx / GAUPieChart.jsx
+    │   ├── ReportCard.jsx / ReportExport.jsx
+    │   ├── ManageUser.jsx
+    │   ├── Navbar.jsx / Sidebar.jsx / sidebarWrapper.jsx
+    │   ├── Modal.jsx / ModalPDF.jsx
+    │   ├── BankUpdateModal.jsx / DefaultBankModal.jsx / PasswordChangeModal.jsx
+    │   ├── AnnouncementPopup.jsx
+    │   ├── BSAlerts.jsx / bsTimerDisplay.jsx
+    │   ├── Login.jsx
+    │   ├── SessionTimeoutHandler.js
+    │   ├── protectedRoute.jsx
+    │   └── routesConfig.jsx
+    │
+    ├── pages/                    # wrapper halaman (route-level) di atas components/
+    │   ├── Dashboard.jsx
+    │   ├── BsPage.jsx / BsCheckPage.jsx / DetailBsPage.jsx
+    │   ├── RbsUmum.jsx / RbsOperasional.jsx / RbsBbm.jsx / RbsCheckPage.jsx / DetailRbsPage.jsx
+    │   ├── LpjUmum.jsx / LpjMarketing.jsx / LpjCheckPage.jsx / DetailLpjPage.jsx
+    │   ├── ManageUserPage.jsx / AddUserPage.jsx / EditUserPage.jsx
+    │   ├── AnnouncementManager.jsx / AnnouncementManagerPage.jsx
+    │   ├── ReportExportPage.jsx
+    │   ├── LoginPage.jsx / Layout.jsx / NotFoundPage.jsx
+    │
+    └── utils/
+        ├── BsPdf.jsx / ReimbursementPdf.jsx / LpjPdf.jsx   # generator PDF
+        └── uploadPdfFile.js
+```
 
-## Ringkasan Yang Sudah Dikerjakan
+**Catatan relevan untuk rencana pengembangan di dokumen ini:**
+- Bagian A (Rekapan) → komponen baru akan masuk ke `src/components/RekapanUnitBisnis.jsx` + `src/pages/RekapanPage.jsx`, route baru didaftarkan di `App.jsx` (170 baris, cukup ringkas untuk ditambah 1 route + role guard).
+- Bagian B (Cek Pengajuan Super Admin) → menyentuh 3 file besar: `BsCheck.jsx` (1088 baris), `ReimbursementCheck.jsx` (1159 baris), `LpjBsCheck.jsx` (1196 baris) — masing-masing punya bagian khusus tab Super Admin yang perlu di-refactor.
+- Bagian C (bug BS/RBS) → menyentuh `FormBs.jsx`, `FormRbsUmum.jsx`, `FormRbsOperasional.jsx`, dan (untuk field Liter di Bagian A) `FormRbsBbm.jsx` — keempatnya punya `UNIT_CODES`/`BUSINESS_UNIT_CODES` sendiri-sendiri, cocok dengan temuan di bagian 13.5.
+- Semua Cloud Function project ini ada dalam **satu file** `functions/index.js` (1305 baris) — kalau Bagian A memilih pendekatan agregasi server-side (Opsi B di bagian 7), trigger baru akan ditambahkan di file ini.
+- `firestore.rules` (273 baris) sudah berisi `isElevatedRole()` yang dipakai sebagai basis rules di seluruh dokumen ini.
 
-1. Mengecek ulang log `sendApprovalReminders`.
-   Scheduler terbukti berjalan pada 05 Juli 2026 dan 06 Juli 2026 pukul 09:00 WITA, tetapi saat itu email reminder masih gagal karena credential email belum tersedia di runtime function.
+---
 
-2. Memigrasikan credential email dari Firebase Runtime Config lama ke Firebase Secret Manager.
-   Function sekarang membaca `EMAIL` dan `EMAIL_PASSWORD` sebagai secret v2, dengan fallback ke config lama untuk kompatibilitas sementara.
+# BAGIAN A — Menu Rekapan Unit Bisnis
 
-3. Memverifikasi credential SMTP secara lokal.
-   Hasil verifikasi: koneksi SMTP valid tanpa mengirim email percobaan ke user.
+## 2. Tujuan Fitur
 
-4. Upgrade runtime Cloud Functions.
-   Semua function produksi sekarang berjalan dengan Node.js 22.
+Menampilkan rekapan biaya per Unit Bisnis, per bulan, per kategori (BBM, Meeting, Entertainment, Meal Meeting, dan kategori GA/Umum lain), dengan detail tambahan khusus BBM (liter pemakaian per plat per bulan) — dan rekap ini **update otomatis** setiap ada pengajuan baru, tanpa proses manual.
 
-5. Upgrade package Functions.
-   `firebase-functions` sudah naik ke versi terbaru `7.2.5`.
-   `firebase-functions-test` sudah naik ke `3.5.0`.
-   `firebase-admin` ditahan di `13.10.0` karena `firebase-functions@7.2.5` belum kompatibel dengan peer dependency `firebase-admin@14.x`.
+## 3. Pengguna & Akses
 
-6. Merapikan region Cloud Functions.
-   Semua callable, Firestore trigger, dan scheduler sudah dipindahkan ke `asia-southeast2`.
+| Role | Akses ke menu Rekapan |
+|---|---|
+| Employee | Tidak ada |
+| Validator | Ya — hanya Unit Bisnis tempat dia jadi Validator |
+| Reviewer | Tidak ada |
+| Admin / Super Admin | **Ya — dan justru ini use case utamanya** (lihat catatan di bawah) |
 
-7. Menyesuaikan frontend callable Functions.
-   Frontend sekarang memakai region `asia-southeast2` melalui `getFunctions(app, region)`.
+> **Catatan penting soal prioritas:** meski awalnya diminta sebagai menu untuk Validator, kebutuhan intinya justru untuk **Admin/GA** — dipakai untuk screenshot tabel rekap sebagai bahan laporan PPT bulanan (menggantikan proses rekap manual yang selama ini dibuat terpisah, seperti contoh gambar KPI Juli 2026 yang dikirim). Ini berarti:
+> - Admin harus bisa melihat rekap untuk **SEMUA Unit Bisnis sekaligus** (bukan cuma UB yang jadi tanggung jawabnya), lewat dropdown UB yang sama.
+> - **Tampilan tabel harus benar-benar rapi & siap-screenshot** — layout, warna header, dan struktur kolom (bulan Jan–Des + Total) sebaiknya semirip mungkin dengan format PPT existing yang dikirim, supaya Admin tinggal screenshot tanpa perlu edit lagi di PPT.
+> - Prioritas desain: kerapian visual untuk kebutuhan dokumentasi/pelaporan, bukan cuma fungsi lihat data.
 
-8. Refactor helper upload PDF.
-   Semua upload PDF utama sekarang memakai helper bersama `src/utils/uploadPdfFile.js` agar metadata `application/pdf`, batas 250MB, validasi PDF, dan pola download URL konsisten.
+- Kalau Validator ditugaskan di **lebih dari satu Unit Bisnis**, tampilkan **dropdown pilihan UB** di halaman ini. Sumber daftar UB: field `unit`/`validator` pada dokumen `users/{uid}` milik Validator yang login.
+- Kalau hanya 1 UB, dropdown tetap ditampilkan tapi terisi otomatis (konsisten dengan role yang punya banyak UB).
 
-9. Deploy production.
-   Firebase Functions dan Hosting sudah dideploy ulang sampai selesai.
+## 4. Struktur Data yang Sudah Ada (dipakai sebagai sumber rekap)
 
-## Checklist Telah Dikerjakan
+| Koleksi | Field relevan untuk rekap |
+|---|---|
+| `reimbursement` (RBS Umum & Operasional) | `user.unit`, `status`, `reimbursements[].jenisReimbursement` (`Entertaint`, `Meals Meeting`, dll), `reimbursements[].biaya`, `reimbursements[].tanggalAktivitas` |
+| `reimbursement` (RBS BBM) | `user.unit`, `status`, `reimbursements[].plat`, `reimbursements[].biaya`, `reimbursements[].tanggalAktivitas` |
+| `bonSementara` | `user.unit`, `status`, `kategori`, `jumlahBS`, `tanggalPengajuan` |
+| `lpj` | Dipakai kalau rekap ingin berbasis "sudah di-LPJ-kan", bukan cuma "diajukan" |
 
-- [x] Cek log reminder scheduler 05 Juli 2026 pukul 09:00 WITA.
-- [x] Cek log reminder scheduler 06 Juli 2026 pukul 09:00 WITA.
-- [x] Identifikasi penyebab reminder gagal: credential email tidak tersedia di runtime function.
-- [x] Buat Secret Manager `EMAIL` dan `EMAIL_PASSWORD`.
-- [x] Update helper email Cloud Functions agar membaca Secret Manager v2.
-- [x] Verifikasi SMTP credential tanpa mengirim email user.
-- [x] Upgrade runtime Cloud Functions ke Node.js 22.
-- [x] Upgrade `firebase-functions` ke versi terbaru.
-- [x] Uji breaking compatibility dependency dan menahan `firebase-admin` di versi kompatibel.
-- [x] Pindahkan Cloud Functions ke `asia-southeast2`.
-- [x] Hapus function lama `us-central1` setelah deploy baru berhasil.
-- [x] Update frontend agar callable Functions memakai `asia-southeast2`.
-- [x] Refactor helper upload PDF untuk form LPJ, RBS, dan generator PDF.
-- [x] Validasi syntax Cloud Functions dengan `node --check`.
-- [x] Validasi load package Functions v7.
-- [x] Build production React berhasil.
-- [x] Deploy Firebase Functions berhasil.
-- [x] Deploy Firebase Hosting berhasil.
-- [x] Update dokumentasi summary project.
+**Catatan:** field `jenisReimbursement` untuk kategori Meeting/Entertainment sudah ada di form RBS Umum (`Entertaint`, `Meals Meeting`) — kategori-kategori itu **sudah bisa direkap tanpa perubahan form**.
 
-## Checklist Belum Dikerjakan
+## 5. Kebutuhan Data Tambahan (gap yang perlu ditambahkan ke form)
 
-- [ ] Verifikasi log reminder setelah scheduler baru berjalan berikutnya pada 07 Juli 2026 pukul 09:00 WITA.
-- [ ] Buat automated test untuk rules Firestore dan Storage.
-- [ ] Buat automated test untuk form LPJ, reimbursement, BS, upload lampiran, dan approval.
-- [ ] Audit dan perbaiki vulnerability dependency. Saat install Functions masih terdeteksi 31 vulnerability.
-- [ ] Refactor logic approval menjadi state machine yang konsisten.
-- [ ] Buat environment staging Firebase terpisah.
-- [ ] Tambahkan monitoring error dan alert otomatis.
-- [ ] Tambahkan backup berkala Firestore dan Storage.
+- **Field "Liter" belum ada di `FormRbsBbm.jsx`.** Form BBM saat ini hanya menyimpan `plat` dan `biaya` (Rupiah) — TIDAK menyimpan jumlah liter. Untuk menampilkan "berapa liter pemakaian setiap bulan" per plat, field **Liter** wajib ditambahkan ke form BBM (input number, disimpan sejajar `biaya` dan `plat` di setiap baris `reimbursements[]`). Hanya berlaku pengajuan baru, tanpa backfill data lama.
+- **Rekap berdasarkan `tanggalAktivitas`** (keputusan final, lihat bagian 9).
+- **Hanya status `Disetujui` (final) yang dihitung ke rekap** (keputusan final, lihat bagian 9) — rekap baru terisi setelah pengajuan full-approved, bukan real-time sejak submit.
 
-## Catatan Teknis Penting
+## 6. Desain Halaman / Menu Baru
 
-- Reminder email 05 dan 06 Juli 2026 gagal sebelum migrasi secret. Setelah deploy 06 Juli 2026, function sudah memiliki Secret Manager dan SMTP credential sudah valid, tetapi pengiriman reminder aktual perlu dicek pada jadwal berikutnya.
-- Jangan trigger scheduler manual tanpa koordinasi, karena dapat mengirim email reminder sungguhan ke validator atau reviewer di luar jam 09:00.
-- Region Functions sekarang sudah dekat dengan Firestore `asia-southeast2`, sehingga latency dan risiko lintas region lebih baik dibanding sebelumnya.
-- `firebase-functions@7.2.5` belum menerima `firebase-admin@14.x`, jadi admin SDK dipilih versi tertinggi yang kompatibel di seri 13.
-- Bundle frontend masih sekitar 901 kB gzip. Aplikasi berjalan, tetapi masih perlu code splitting untuk performa jangka panjang.
-- Firebase Runtime Config lama masih ada sebagai fallback sementara, tetapi sebaiknya dipensiunkan setelah semua function stabil memakai Secret Manager.
+**Nama menu:** "Rekapan" — muncul khusus untuk role Validator/Admin/Super Admin (Reviewer tidak diberi akses)
 
-## Rekomendasi Pengembangan Untuk Seluruh Karyawan
+**Struktur halaman:**
+1. Dropdown **Unit Bisnis** (Admin: semua UB; Validator: UB penempatannya saja)
+2. Dropdown **Tahun** (default: tahun berjalan)
+3. Tabel per kategori, format serupa contoh gambar yang dikirim, dengan tambahan:
+   - **BBM**: bukan cuma total Rupiah per bulan, tapi **drill-down per Plat Nomor** → baris tambahan menampilkan liter per bulan per plat
+   - **Meeting** (Meals Meeting)
+   - **Entertainment** (Entertaint)
+   - Kategori GA/Umum lain sesuai `jenisReimbursement`: `ATK` sudah ada, `RTK` perlu ditambahkan sebagai opsi baru (lihat Open Question #3 di bagian 9 — `RTG` yang sudah ada BUKAN `RTK`, keduanya kategori berbeda)
+4. Kolom bulan Januari–Desember + kolom **Total**, sama seperti contoh gambar.
 
-1. Dashboard personal karyawan.
-   Tampilkan pengajuan aktif, tugas approval, status dokumen, riwayat, dan dokumen yang tertunda.
+**Kebutuhan khusus untuk screenshot/PPT (Admin/GA):**
+- Header tabel warna merah solid (sesuai brand & contoh gambar), teks bulan putih, rata tengah.
+- Baris per Unit Bisnis, kolom bulan rapi, angka rata kanan format ribuan (mis. `1,020,000`), tanpa simbol "Rp" berulang tiap sel.
+- Setiap kategori sebagai tabel terpisah dengan judul kategori di baris header merah, sama seperti pemisahan "ATK / RTK / BBM" di contoh gambar.
+- Pertimbangkan tombol **"Download sebagai PNG"** per tabel kategori (pakai `html2canvas`) supaya Admin tidak perlu screenshot manual.
+- Kolom bulan yang belum lewat tetap ditampilkan kosong/placeholder (bukan dihilangkan) — supaya struktur tabel identik dengan template PPT yang sudah ada.
 
-2. Notification center di aplikasi.
-   Selain email, user perlu pusat notifikasi internal agar approval, revisi, penolakan, dan dokumen selesai tidak terlewat.
+## 7. Logika Agregasi ("terposting otomatis")
 
-3. SLA approval dan eskalasi.
-   Tambahkan batas waktu approval per tahap, indikator terlambat, dan eskalasi otomatis ke atasan atau Super Admin.
+**A. Agregasi di sisi client (query + hitung manual saat halaman dibuka)**
+- Query dokumen `reimbursement`/`bonSementara` untuk UB & tahun terpilih, jumlahkan di JavaScript per bulan/kategori/plat.
+- ✅ Simpel, tidak perlu Cloud Function. ❌ Bisa lambat kalau data sudah ribuan dokumen — tapi rules `list` (`isElevatedRole()`) sudah mendukung query broad ini, **tidak perlu ubah rules**.
 
-4. Delegasi approval.
-   User yang cuti, dinas, atau tidak tersedia bisa mendelegasikan approval sementara dengan periode tertentu.
+**B. Agregasi di sisi server (Cloud Function → koleksi ringkasan `rekapUnitBisnis/{unit}_{tahun}`)**
+- Trigger `onCreate`/`onUpdate` di `reimbursement`/`bonSementara` → update angka rekap otomatis.
+- ✅ Halaman rekap tinggal baca 1 dokumen kecil — cepat & skalabel. ❌ Effort tambahan bikin & pasang Cloud Function.
 
-5. PWA atau mobile friendly.
-   Approval dari ponsel akan mempercepat proses untuk karyawan lapangan dan approver yang sering mobile.
+**Keputusan (2026-09-01):** pakai pendekatan A (client-side) untuk MVP, optimasi ke B kalau data membesar dan halaman terasa lambat.
 
-6. Timeline dokumen end-to-end.
-   Setiap BS, RBS, dan LPJ sebaiknya punya timeline: dibuat, divalidasi, direview, disetujui, ditolak, direvisi, dan selesai.
+## 8. Firestore Rules Tambahan
 
-7. Revisi dokumen terstruktur.
-   Dokumen yang ditolak bisa diperbaiki dan submit ulang tanpa membuat dokumen baru, lengkap dengan catatan perubahan.
+Rules `/reimbursement` dan `/bonSementara` sudah mendukung `list` untuk Validator/Admin lewat `isElevatedRole()` — pendekatan A **tidak perlu rule baru**.
 
-8. Template biaya dan kategori standar.
-   Form akan lebih cepat dan laporan lebih rapi jika item biaya umum, kategori, dan validasi nominal distandarkan.
+Kalau pakai pendekatan B, tambahan match block:
+```
+match /rekapUnitBisnis/{docId} {
+  allow read: if isElevatedRole();
+  allow write: if false; // hanya lewat Cloud Function (Admin SDK, bypass rules)
+}
+```
 
-9. OCR lampiran.
-   Bukti PDF atau scan dapat dibaca otomatis untuk membantu validasi tanggal, nominal, dan vendor.
+## 9. Open Questions — Bagian A (SUDAH DIPUTUSKAN, 2026-09-01)
 
-10. Export laporan fleksibel.
-    Tambahkan filter tanggal, unit, departemen, status, kategori, karyawan, dan approver dengan export Excel/PDF.
+1. **Status pengajuan yang dihitung** — **Hanya `Disetujui` (final).** Rekap mencerminkan angka yang sudah final/disetujui, sesuai kebutuhan laporan resmi ke manajemen.
+2. **Basis tanggal rekap** — **`tanggalAktivitas`** (tanggal kejadian biaya sebenarnya, bukan tanggal submit).
+3. **Kategori ATK & RTK** — dicek langsung ke kode: `ATK` **sudah ada** di `jenisOptions` (`FormRbsUmum.jsx`), tapi yang ada bukan `RTK` melainkan **`RTG`** — dan sudah dikonfirmasi **RTG ≠ RTK, kategori berbeda**. Jadi perlu **opsi kategori baru `RTK`** ditambahkan ke `jenisOptions` `FormRbsUmum.jsx` (terpisah dari `RTG` yang sudah ada). Catatan tambahan: `FormRbsOperasional.jsx` sama sekali tidak punya kategori ATK/RTG/RTK — kategori GA/Umum ini hanya masuk lewat RBS Umum.
+4. **Role Reviewer** — **Tidak diberi akses.** Menu Rekapan khusus Validator, Admin, dan Super Admin.
+5. **Field Liter BBM** — **Cukup untuk pengajuan baru ke depan.** Tidak perlu backfill manual data BBM lama; rekap liter untuk bulan-bulan sebelum fitur ini live akan kosong/tidak lengkap (hanya kolom Rupiah yang lengkap untuk data lama).
+6. **Pendekatan agregasi** — **Client-side** (sesuai rekomendasi MVP di bagian 7 Opsi A).
 
-11. Arsip dokumen digital.
-    Buat pencarian arsip untuk Finance, GA, dan auditor internal agar dokumen lama mudah ditemukan.
+## 10. Ringkasan Task Development — Bagian A
 
-12. Profil karyawan mandiri.
-    Karyawan bisa memperbarui data bank, kontak, unit, lokasi, dan data dasar dengan approval bila diperlukan.
+**Status: SELESAI DIIMPLEMENTASIKAN (2026-09-01)**, kecuali item yang ditandai opsional/di luar scope. Riset kode saat implementasi (lihat rencana pengembangan di sesi ini) menemukan bahwa breakdown per kategori (ATK/RTK/dst) cuma bisa akurat dari `reimbursement` — `bonSementara` (BS) cuma punya kategori kasar dan `lpj` punya field nama item yang tadinya teks bebas. Keputusan final: sertakan `reimbursement` + `lpj` (BS tidak ikut breakdown per kategori), dengan syarat form LPJ diubah dulu jadi dropdown kategori (lihat item baru di bawah).
 
-13. Help center dan SOP digital.
-    Tambahkan panduan pengajuan, contoh lampiran, aturan reimbursement, dan FAQ.
+- [x] Tambah field **Liter** ke `FormRbsBbm.jsx` (input + validasi + simpan ke `reimbursements[].liter`, termasuk alur edit) — hanya berlaku pengajuan baru, tanpa backfill data lama. Kolom Liter juga ditambahkan ke tabel detail (`DetailRbs.jsx`).
+- [x] Tambah opsi kategori **`RTK`** (baru, terpisah dari `RTG`) ke `jenisOptions` di `FormRbsUmum.jsx`
+- [x] **(Tambahan di luar rencana awal)** Ubah field `namaItem` di `FormLpjUmum.jsx` & `FormLpjMarketing.jsx` dari input teks bebas jadi dropdown kategori (mengikuti `jenisOptions` RBS Umum/Operasional masing-masing + fallback "Lainnya"), supaya LPJ bisa direkap per kategori. Data LPJ lama yang masih teks bebas otomatis dipetakan ke mode "Lainnya" saat diedit (tidak hilang, tapi tetap tidak akurat direkap sampai dibetulkan manual).
+- [x] Buat util agregasi baru `src/utils/rekapanAggregation.js` (fungsi murni: `aggregateByCategory`, `aggregateBbm`, dll)
+- [x] Buat komponen halaman baru `RekapanPage.jsx` + route `/rekapan` di `App.jsx` (role: **Validator, Admin, Super Admin** — Reviewer TIDAK termasuk)
+- [x] Buat komponen `RekapanUnitBisnis.jsx`: dropdown UB (Admin/Super Admin dapat opsi "Semua Unit Bisnis") + tahun, tabel kategori per bulan, drill-down BBM per plat (liter & Rupiah)
+- [x] Implementasi agregasi **client-side**: query `reimbursement`/`lpj` dengan `status == 'Disetujui'` (satu kali fetch, filter unit/tahun di client — pola sama seperti `ReportExport.jsx`)
+- [x] Tambah item menu "Rekapan" di sidebar, tampil kondisional sesuai role (Validator/Admin/Super Admin)
+- [x] Styling tabel rekap mengikuti brand (header merah `#ED1C24`, grid rapi, scroll horizontal di layar sempit)
+- [ ] (Opsional, belum dikerjakan) Tombol export tabel ke PNG per kategori — `html2canvas` belum ter-install, perlu keputusan dependency baru terpisah
 
-14. Role dan permission berbasis custom claims.
-    Role penting seperti Super Admin, Admin, Validator, dan Reviewer sebaiknya diperkuat dengan Firebase Auth custom claims.
+**Verifikasi yang sudah dilakukan:** `CI=true npm run build` sukses (0 warning/error). Smoke-test manual di browser (role di-spoof lewat `localStorage` untuk melewati gate client-side `ProtectedRoute`, memakai akun dev yang sebenarnya tidak elevated) mengonfirmasi: route `/rekapan` accessible, dropdown Unit Bisnis & Tahun terisi dari data Firestore user login, query `reimbursement`/`lpj` yang ditolak Firestore Rules (`permission-denied`, karena akun tes tidak elevated) ditangani dengan baik oleh `try/catch` — tampil pesan "Belum ada data" alih-alih crash, tabel header merah render sesuai brand dengan scroll horizontal yang benar.
 
-15. Audit trail lengkap.
-    Catat field yang berubah, nilai lama, nilai baru, aktor, timestamp, dan alasan perubahan untuk semua aksi penting.
+**Belum diverifikasi (perlu dicek user langsung dengan akun Validator/Admin/Super Admin sungguhan):** angka rekap yang benar-benar terisi dari data `Disetujui` asli, karena tidak ada kredensial role elevated yang tersedia untuk pengujian otomatis.
+- [ ] (Kalau pendekatan B) Tambah rules Firestore untuk koleksi rekap baru
 
-16. Monitoring operasional.
-    Tambahkan alert untuk error Functions, kegagalan email, kegagalan upload, login bermasalah, dan dokumen stuck.
+---
 
-17. Backup berkala.
-    Siapkan backup Firestore dan Storage dengan bucket khusus, retensi jelas, dan uji restore berkala.
+# BAGIAN B — Peningkatan Laporan/Cek Pengajuan Super Admin
 
-18. Environment staging.
-    Buat project Firebase staging terpisah agar perubahan besar dapat diuji tanpa menyentuh data produksi.
+**Status: SELESAI DIIMPLEMENTASIKAN (2026-09-01)**
 
-19. Integrasi HR atau payroll.
-    Sinkronkan data user, unit, posisi, dan status aktif karyawan agar tidak perlu input manual berulang.
+**Berlaku untuk ketiga modul:** `BsCheck.jsx`, `ReimbursementCheck.jsx` (RBS), `LpjBsCheck.jsx`.
 
-20. Laporan manajemen.
-    Buat dashboard tren pengeluaran, rata-rata waktu approval, outstanding, dokumen terlambat, dan volume pengajuan per unit.
+**Koreksi premis dari riset kode saat implementasi:** tidak ada "tab khusus Super Admin" yang terpisah — ketiga file memakai tab yang SAMA (`Perlu Ditanggapi`/`Riwayat Persetujuan`/`Pengajuan Dibatalkan`) untuk semua role, cuma **query di baliknya** yang beda per role. Perubahan "semua status sekaligus" di bawah ini **khusus berlaku untuk role Super Admin** (keputusan user) — Reviewer/Validator/Admin tetap pakai 3 tab seperti sebelumnya, karena workflow mereka memang berbasis "apa yang perlu saya proses", bukan audit/overview.
 
-## Prioritas Pengembangan Berikutnya
+## 11. Tampilkan Semua Status Sekaligus + Pencarian Nama/Unit Bisnis
 
-1. Cek log `sendApprovalReminders` pada 07 Juli 2026 setelah pukul 09:00 WITA.
-2. Implementasikan monitoring error dan alert otomatis untuk kegagalan email atau Functions.
-3. Siapkan backup berkala Firestore dan Storage.
-4. Buat environment staging Firebase sebelum perubahan workflow besar.
-5. Refactor approval menjadi state machine bersama untuk BS, RBS, dan LPJ.
-6. Tambahkan automated test untuk rules, form, upload, dan approval.
-7. Audit vulnerability dependency dan lakukan upgrade bertahap.
+### 11.1 Semua Status dalam Satu Tampilan
+
+Saat ini tab Super Admin di ketiga file memisahkan data lewat beberapa query berbeda per status (mis. `pendingQ` untuk `Diajukan/Diproses`, `approvedQ` untuk `Diproses/Disetujui`, `canceledQ` untuk status batal). Permintaan baru: Super Admin bisa lihat **SEMUA status sekaligus** — `Diajukan`, `Diproses`/`Divalidasi`, `Disetujui`, `Ditolak`, `Dibatalkan`, dan status lain yang ada — tanpa pindah-pindah tab.
+
+- Ganti pendekatan filter-per-tab dengan **satu tabel utuh** (atau tab "Semua Status" sebagai default), dengan kolom **Status** berbadge warna (biru=Diajukan, ungu=Divalidasi, hijau=Disetujui, dst. — sama seperti tabel dashboard yang sudah ada) supaya tetap mudah dibedakan meski tergabung.
+- Query dasar cukup `where('status', 'in', [...semua status valid...])` — rules `list` Super Admin (`isElevatedRole()`) sudah mendukung ini, **tidak perlu perubahan rules**.
+- Filter status tetap disediakan sebagai **dropdown filter tambahan** (bukan tab terpisah), default menampilkan semua.
+
+### 11.2 Kolom "Nama" & Pencarian Nama/Unit Bisnis/Nomor Dokumen
+
+**Koreksi premis dari riset kode:** kolom **Nama sudah ada** di ketiga tabel sebelum sesi ini (`item.user.nama`, sudah didenormalisasi langsung ke tiap dokumen sejak awal oleh form-form pengajuan) — jadi seluruh diskusi "Opsi A vs Opsi B" (lookup `users` vs denormalisasi) di bawah ini **tidak relevan/tidak diperlukan**, sudah otomatis terpenuhi. Yang benar-benar dikerjakan cuma search box-nya.
+
+- [x] Search box (satu `<input>` teks) di atas tabel unified Super Admin: mencari substring case-insensitive ke **Nama, Unit Bisnis, DAN Nomor Dokumen** sekaligus (keputusan user: cakupan diperluas dari draft awal yang cuma Nama+Unit).
+
+### 11.3 Task Development — Bagian B
+
+- [x] Refactor bagian fetch Super Admin di `BsCheck.jsx`, `ReimbursementCheck.jsx`, `LpjBsCheck.jsx`: ganti 2-3 query per-status jadi **1 query tanpa filter status** (`getDocs(collection(db, '...'))`) — rules `isElevatedRole()` sudah mendukung list broad ini tanpa perubahan. Blok fetch untuk role lain (Reviewer/Validator/Admin) **tidak disentuh**.
+- [x] UI: tab pending/approved/canceled diganti 1 tabel + dropdown filter Status (default "Semua Status") + search box, **khusus saat role Super Admin** — komponen baru `SuperAdminAllStatusTable` di masing-masing file.
+- [x] Extract helper warna badge status baru `src/utils/statusBadge.js` (`getStatusBadgeClass`), dipakai di tabel unified baru (tabel lama tidak diubah, biar blast radius kecil).
+- [x] ~~Tambah fetch `users` + map uid→nama~~ — tidak diperlukan, Nama sudah ada di setiap dokumen.
+
+**Bug tersembunyi yang ikut ketutup:** query Super Admin lama tidak pernah mengambil status `'Ditolak'` (di ketiga file), dan `ReimbursementCheck.jsx`/`LpjBsCheck.jsx` juga tidak pernah mengambil `'Dibatalkan'` untuk Super Admin — dokumen dengan status itu sama sekali tidak terlihat Super Admin di mana pun sebelumnya. Query tunggal baru otomatis mencakup semua status, menutup celah ini.
+
+## 12. Open Questions — Bagian B (SUDAH DIPUTUSKAN, 2026-09-01)
+
+1. ~~Apakah "Nomor Dokumen" tetap jadi acuan utama tabel~~ — **tidak relevan**, Nama sudah ada sebagai kolom terpisah sejak awal (lihat 11.2), Nomor Dokumen tetap kolom pertama seperti sebelumnya.
+2. **Pencarian mencakup Nomor Dokumen** — **Ya**, disertakan (lihat 11.2).
+3. **Diterapkan ke Dashboard juga?** — **Tidak**, scope tetap 3 halaman Cek Pengajuan saja.
+
+---
+
+# BAGIAN C — Perbaikan Bug Kritis: Duplikasi Nomor BS & Kode Unit Bisnis Hilang di RBS
+
+**Status: SUDAH DIPERBAIKI** (fix sudah diterapkan ke `FormBs.jsx`, `FormRbsUmum.jsx`, `FormRbsOperasional.jsx`). Bagian ini didokumentasikan supaya masuk riwayat project dan jadi acuan kalau bug serupa muncul lagi di modul lain (mis. `FormRbsBbm.jsx`, `FormLpj.jsx`, dll — lihat catatan preventif di 13.5).
+
+## 13.1 Temuan Awal
+
+Dilaporkan oleh user (screenshot tabel Cek Pengajuan Super Admin):
+- Dua pengajuan BS berbeda pengaju (Nuzul Wijaya & Reza Rahmat, Unit Bisnis sama: PT Samudera Kendari Logistik) memiliki **nomor dokumen identik**: `BS2608SKEL0000501`.
+- Beberapa nomor dokumen RBS GA/Umum menampilkan **nama lengkap unit bisnis**, bukan kode singkatnya — mis. `RBS.GAU.PT Masaji Kargosentra Tama.260827.3201`, seharusnya `RBS.GAU.MKT.260827.xxxx`.
+
+## 13.2 Root Cause #1 — Duplikasi Nomor BS (`FormBs.jsx`)
+
+Nomor BS di-generate di **dua tempat terpisah** dengan logika yang tidak sinkron:
+
+1. **Saat memilih Unit Bisnis** (`handleUnitChange` / `generateNomorBS`) → memanggil `getCurrentCounter()`, yang **hanya membaca** `lastNumber` dari `businessUnitCounters/{unitCode}` dan menampilkan `lastNumber + 1` sebagai *preview*. Fungsi ini **tidak pernah menulis/increment** nilai counter.
+2. **Saat submit** (`handleSubmit`) → dokumen `bonSementara` disimpan lebih dulu (`setDoc`) memakai nomor preview di atas, **baru kemudian** counter di-increment lewat `runTransaction` — terpisah dan setelah dokumen tersimpan.
+
+**Akibatnya:** kalau dua user memilih Unit Bisnis yang sama sebelum salah satu dari mereka submit, keduanya membaca `lastNumber` yang sama dan mendapat preview nomor yang identik. Siapa pun yang submit lebih dulu menaikkan counter, tapi nomor yang **sudah tersimpan di dokumen tidak pernah diperbarui ulang** — sehingga submit kedua tetap memakai nomor duplikat tadi, meski counter sebenarnya sudah maju.
+
+## 13.3 Root Cause #2 — Kode Unit Bisnis Hilang di RBS Umum & Operasional
+
+`FormRbsUmum.jsx` dan `FormRbsOperasional.jsx` masing-masing punya map `UNIT_CODES` sendiri (terpisah dari `FormBs.jsx` dan `FormRbsBbm.jsx`), dan **keduanya tidak memiliki entri untuk `'PT Masaji Kargosentra Tama'`**. Fungsi `getUnitCode()` di kedua file punya fallback `UNIT_CODES[unitName] || unitName` — begitu key tidak ditemukan di map, fallback-nya jatuh ke **nama lengkap unit bisnis**, bukan kode singkat. Itu sebabnya nomor dokumen menampilkan nama penuh perusahaan.
+
+Catatan: `FormRbsBbm.jsx` dan `FormBs.jsx` sebenarnya sudah punya entri `MKT` di map masing-masing — jadi bug ini spesifik hanya ada di dua file RBS Umum & Operasional, karena setiap form menyimpan salinan `UNIT_CODES`-nya sendiri-sendiri (tidak ada sumber tunggal/shared constant).
+
+## 13.4 Perbaikan yang Diterapkan
+
+| File | Perbaikan |
+|---|---|
+| `FormBs.jsx` | Nomor BS final sekarang di-generate **di dalam** `runTransaction` yang sama dengan increment counter dan penulisan dokumen `bonSementara` (bukan dibaca terpisah sebelumnya lalu dipakai apa adanya). Firestore otomatis retry transaksi kalau ada konflik baca-tulis pada counter, sehingga dua submit bersamaan **tidak mungkin lagi mendapat nomor akhir yang sama**. |
+| `FormRbsUmum.jsx` | Ditambahkan entri `'PT Masaji Kargosentra Tama': 'MKT'` ke `UNIT_CODES`. |
+| `FormRbsOperasional.jsx` | Ditambahkan entri `'PT Masaji Kargosentra Tama': 'MKT'` ke `UNIT_CODES` (bug & fix identik dengan RBS Umum). |
+
+**Catatan teknis (usang — lihat 13.7 untuk update):** Saat temuan ini pertama didokumentasikan, `FormRbsUmum.jsx` dan `FormRbsOperasional.jsx` masih memakai sequence acak 4-digit (`Math.random()`) untuk nomor dokumennya, bukan counter Firestore bersama seperti BS — risiko tabrakannya dinilai kecil (~1/10.000) tapi tetap nyata dan bukan nol. Per 2026-09-01, seluruh form RBS/LPJ (termasuk `FormRbsBbm.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx` yang sebelumnya tidak disebut di temuan ini) sudah dipindahkan ke counter atomik yang sama seperti BS — lihat 13.7.
+
+## 13.5 Dampak ke Data Lama & Rekomendasi Lanjutan
+
+- **28 baris BS yang sudah kadung duplikat** (termasuk kasus Nuzul Wijaya vs Reza Rahmat) **tidak otomatis diperbaiki** oleh fix ini — perlu koreksi manual di Firestore (`bonSementara` collection) kalau nomor dokumennya perlu dibedakan untuk keperluan pelaporan/arsip. **Masih belum dikerjakan** — butuh akses admin Firestore langsung, di luar cakupan perbaikan kode.
+- **Rekomendasi struktural (belum dikerjakan, untuk dipertimbangkan):** pindahkan `BUSINESS_UNIT_CODES`/`UNIT_CODES` yang saat ini terduplikasi di 6 file form (`FormBs.jsx`, `FormRbsBbm.jsx`, `FormRbsUmum.jsx`, `FormRbsOperasional.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx`) ke **satu shared constant file** (mis. `src/constants/businessUnits.js`), supaya kalau ada penambahan/perubahan Unit Bisnis di masa depan, cukup diedit di satu tempat dan tidak berisiko lupa update salah satu form seperti yang terjadi di sini.
+- ~~Perlu dicek juga: modul lain yang kemungkinan punya pola numbering serupa (LPJ, atau modul lain yang memakai `businessUnitCounters`)~~ — **sudah diaudit & diperbaiki, lihat 13.7**.
+
+## 13.6 Task Development — Bagian C
+
+- [x] Fix race condition nomor BS di `FormBs.jsx` (generate nomor final di dalam transaksi)
+- [x] Tambah kode `MKT` yang hilang di `FormRbsUmum.jsx`
+- [x] Tambah kode `MKT` yang hilang di `FormRbsOperasional.jsx`
+- [ ] Koreksi manual data BS duplikat lama di Firestore (jika diperlukan untuk pelaporan)
+- [x] Audit modul LPJ / modul lain yang memakai `businessUnitCounters` untuk bug serupa — lihat 13.7
+- [ ] (Opsional, perbaikan struktural) Pindahkan semua `UNIT_CODES`/`BUSINESS_UNIT_CODES` ke satu shared constant file
+
+## 13.7 Update Lanjutan — Migrasi Semua Nomor Dokumen ke Counter Atomik (2026-09-01)
+
+Audit kode menyeluruh (lihat Bagian D) mengonfirmasi kekhawatiran di 13.5: pola random-sequence yang tadinya dianggap "risiko kecil" di `FormRbsUmum.jsx`/`FormRbsOperasional.jsx` ternyata dipakai juga di **3 form lain yang belum disebut di temuan awal** — `FormRbsBbm.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx`. Kelima form ini sekarang sudah dipindahkan ke pola counter atomik `runTransaction` yang sama seperti `FormBs.jsx`, dengan counter terpisah per unit+tipe dokumen (mis. `businessUnitCounters/SMDR_RBS_BBM`) supaya tidak saling mengganggu nomor urut satu sama lain maupun dengan BS.
+
+Sebagai bagian dari perbaikan ini, mode edit di kelima form juga diperbaiki: sebelumnya saat Super Admin mengedit pengajuan lama dan mengunggah lampiran baru, lampiran itu tersimpan di path Storage bernama nomor **acak baru** yang tidak pernah tersimpan sebagai `displayId` dokumen (lampiran jadi "nyasar", tidak konsisten dengan nomor dokumen aslinya). Sekarang mode edit memakai `displayId` asli dari dokumen yang diedit.
+
+Detail teknis & file yang diubah ada di Bagian D (14.2).
+
+---
+
+# BAGIAN D — Audit Kode Menyeluruh & Perbaikan Tambahan (2026-09-01)
+
+Audit menyeluruh atas seluruh codebase (build/lint, Firestore/Storage rules, alur auth, form pengajuan, Cloud Functions) di luar konteks Bagian A/B/C, untuk mencari potensi error yang belum terdokumentasi. Semua temuan di bawah **sudah diperbaiki** dan diverifikasi lewat `CI=true npm run build` (sukses, 0 warning/error) serta `node --check functions/index.js`.
+
+## 14.1 Build Gagal di CI (`CI=true`)
+
+**Temuan:** `react-scripts build` men-treat ESLint warning sebagai error saat `process.env.CI=true` (perilaku default banyak platform CI/CD). Ada 3 unused-var yang bikin build gagal (exit code 1) meski build manual (tanpa `CI=true`) tetap sukses.
+
+**Perbaikan:**
+- `FormBs.jsx` — hapus state `currentCounter`/`setCurrentCounter` yang di-set tapi tidak pernah dibaca/dirender.
+- `FormRbsOperasional.jsx`, `FormRbsUmum.jsx` — hapus import `addDoc` yang tidak terpakai.
+
+## 14.2 Nomor Dokumen RBS/LPJ Rentan Duplikat
+
+**Temuan:** `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx` men-generate `displayId` pakai `Math.floor(Math.random() * 10000)`, bukan counter atomik seperti `FormBs.jsx` — lihat 13.7 untuk detail lengkap & alasan ini digabung dengan Bagian C.
+
+## 14.3 Validasi "PDF Only" pada Upload Lampiran Bisa Dilewati
+
+**Temuan:** `uploadPdfFile.js` selalu memaksa metadata `contentType: 'application/pdf'` saat upload ke Storage, apa pun isi file sebenarnya — sehingga Storage Rules (`validPdfUpload()` yang mengecek `contentType`) jadi tidak berarti, karena client sendiri yang menyetel metadata tsb. Satu-satunya penjagaan nyata (`isPdfFile()`) hanya mengecek nama/ekstensi file, gampang dilewati dengan mengganti ekstensi file jadi `.pdf`.
+
+**Perbaikan:** `uploadPdfFile.js` sekarang punya `isValidPdfFile()` (async) yang membaca 5 byte pertama file dan memastikan cocok signature asli PDF (`%PDF-`) sebelum file dianggap valid. Dipakai di kelima form upload lampiran (`FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx`), menggantikan `isPdfFile()` yang cuma cek nama file.
+
+## 14.4 Bug `nextApproverUid` di Cloud Functions — Approval Bisa "Hilang" Diam-diam
+
+**Temuan:** Di `functions/index.js`, `notifyReviewersAndUserRBS` dan `notifyReviewersAndUserLPJ` menginisialisasi `let nextApproverUid = null` lalu mengecek `if (nextApproverUid !== undefined)` di akhir untuk memutuskan apakah `currentApproverUid` perlu di-update. Karena `null !== undefined` selalu `true`, pengecekan ini **selalu lolos** — jadi status apa pun yang tidak cocok persis dengan salah satu string status yang di-hardcode di situ akan diam-diam menge-null-kan `currentApproverUid`, walau approval belum selesai. Efeknya: dokumen jadi tidak muncul lagi di dashboard approver mana pun, perlu intervensi manual. Saat ini belum aktif jadi bug (semua string status di frontend masih cocok), tapi rapuh terhadap perubahan/typo di masa depan pada salah satu sisi (functions vs `ReimbursementCheck.jsx`/`LpjBsCheck.jsx`).
+
+**Perbaikan:** Sentinel diubah jadi `let nextApproverUid;` (tanpa nilai awal) di kedua fungsi, supaya `currentApproverUid` hanya diperbarui kalau ada cabang status yang benar-benar cocok.
+
+## 14.5 Auto-logout Idle Tidak Sign-out dari Firebase Auth
+
+**Temuan:** `SessionTimeoutHandler.js` (auto-logout setelah 60 menit tidak aktif) hanya menghapus `localStorage`, tidak memanggil `signOut(auth)` seperti logout manual di `Navbar.jsx`/`Layout.jsx`. Akibatnya sesi Firebase Auth tetap hidup di browser walau tampilan sudah "logout".
+
+**Perbaikan:** `checkForInactivity` sekarang memanggil `await signOut(auth)` sebelum membersihkan `localStorage` dan redirect, konsisten dengan logout manual.
+
+## 14.6 `reviewer1[0]` Tanpa Optional Chaining di Cloud Functions
+
+**Temuan:** `notifyReviewersAndUserCreateBS` di `functions/index.js` mengakses `newData.user.reviewer1[0]` tanpa `?.` — Firestore Rules tidak mewajibkan field `reviewer1` ada saat create BS, jadi kalau ada dokumen BS tanpa `reviewer1` (mis. data lama/edit manual), trigger notifikasi status akan crash dan email approval untuk dokumen itu tidak pernah terkirim.
+
+**Perbaikan:** Diubah jadi `newData.user.reviewer1?.[0]`.
+
+## 14.7 Task Development — Bagian D
+
+- [x] Fix 3 unused-var yang bikin build gagal di `CI=true`
+- [x] Migrasi 5 form RBS/LPJ ke counter atomik untuk `displayId` (detail di 13.7)
+- [x] Perkuat validasi PDF dengan pengecekan magic bytes (`isValidPdfFile`)
+- [x] Fix bug sentinel `nextApproverUid` di `notifyReviewersAndUserRBS` & `notifyReviewersAndUserLPJ`
+- [x] Fix auto-logout idle supaya ikut `signOut` dari Firebase Auth
+- [x] Fix akses `reviewer1[0]` tanpa optional chaining di `notifyReviewersAndUserCreateBS`
+
+---
+
+# BAGIAN E — Plat No Kendaraan, Kategori BBM di RBS/LPJ, & Perluasan Rekapan BBM (2026-09-01)
+
+**Status: SELESAI DIIMPLEMENTASIKAN**, kecuali item yang ditandai belum diverifikasi (butuh login sungguhan, lihat 15.8).
+
+## 15.1 Latar Belakang
+
+Permintaan awal: tambahkan field **Plat No Kendaraan** di Manage User (Tambah/Edit Pengguna) supaya Admin bisa mendaftarkan kendaraan milik karyawan — lalu field `plat` di form pengajuan BBM otomatis terisi/bisa dipilih dari daftar plat terdaftar, bukan diketik manual dari nol. Berkembang jadi beberapa tahap lanjutan dalam sesi yang sama: penyesuaian kategori `jenis`/`namaItem` di seluruh form RBS & LPJ (termasuk menambahkan kemampuan input BBM — Liter & Plat — ke `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx`, yang sebelumnya cuma dimiliki `FormRbsBbm.jsx`), dan akhirnya memperluas rekap BBM (`aggregateBbm`) supaya menarik data dari SEMUA sumber tersebut, bukan cuma dari form BBM khusus.
+
+## 15.2 Field Plat No Kendaraan di Manage User
+
+- `FormAddUser.jsx` & `FormEditUser.jsx`: field baru **"Plat No Kendaraan"** (opsional, multi-value pakai `CreatableSelect` dari `react-select/creatable` — bisa isi lebih dari satu plat per karyawan, atau kosong kalau tidak punya kendaraan). Nilai di-uppercase & difilter ke karakter plat yang valid (`A-Z0-9` + spasi) sebelum disimpan.
+- `functions/index.js` (`normalizeManagedUser`, dipakai `createManagedUser`): tambah `platKendaraan` ke daftar field yang di-normalize (list string, maks 20 item, opsional).
+- `firestore.rules` (`validUserDocument`): tambah `validStringList(data.platKendaraan, 20)` supaya field ini divalidasi konsisten dengan field array lain (`unit`, `lokasi`, dst) di jalur update Super Admin.
+- Data disimpan di `users/{uid}.platKendaraan` (array of string).
+
+## 15.3 Plat Nomor di Form Pengajuan — dari "milik sendiri" jadi "semua plat terdaftar"
+
+Awalnya field `plat` di `FormRbsBbm.jsx` diubah dari input teks bebas jadi dropdown (`CreatableSelect`) berisi plat milik user yang login saja. Setelah diskusi lanjut, cakupannya diperluas: dropdown plat sekarang menarik **semua plat terdaftar lintas seluruh user** (query `users` collection, dedup, label `PLAT - Nama Pemilik`), supaya karyawan bisa memilih kendaraan siapa pun yang terdaftar (mis. kendaraan operasional/dinas bersama), bukan cuma miliknya sendiri. Tetap bisa mengetik plat baru yang belum terdaftar (fallback `CreatableSelect`, contoh kasus: `DD 1273 XCS`).
+
+Kalau user yang login (atau, saat mode edit, user pemilik pengajuan asli — diambil fresh dari Firestore, bukan snapshot lama) cuma punya **1 plat terdaftar di profilnya sendiri**, plat itu otomatis terisi default (tetap bisa diganti manual).
+
+## 15.4 Kategori Jenis BBM & Kalkulasi Liter Otomatis
+
+**`FormRbsBbm.jsx`** — opsi `jenisOptions` dirapikan jadi murni jenis bahan bakar: BBM Pertalite, BBM Pertamax, BBM Pertamax Turbo, BBM Solar, BBM Dexlite, Lainnya (opsi lama "Top Up E-Toll" & "Parkir" dihapus — bukan jenis BBM).
+
+Field **Liter** sekarang dihitung otomatis: `liter = biaya ÷ harga per liter`, recalculate tiap kali `biaya` atau `jenis` berubah (tetap bisa diedit manual kalau harga di struk beda dari patokan). Patokan harga per liter (wilayah Sulawesi Selatan, Pertamina Patra Niaga, berlaku 1 September 2026):
+
+| Jenis | Rp/Liter |
+|---|---|
+| BBM Pertalite | 10.000 |
+| BBM Pertamax | 16.300 |
+| BBM Pertamax Turbo | 19.600 |
+| BBM Solar (Biosolar) | 6.800 |
+| BBM Dexlite | 23.700 |
+
+**Catatan penting:** harga di atas **hardcoded** di masing-masing file (`BBM_PRICE_PER_LITER`, di-copy identik ke `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx`) — kalau Pertamina merevisi harga, kelima file itu harus diupdate manual satu-satu (tidak ada shared constant, sama seperti pola `UNIT_CODES` yang sudah ada sebelumnya, lihat 13.5).
+
+## 15.5 Kategori BBM Ditambahkan ke RBS Operasional & RBS Umum (GA/Umum)
+
+Sebelumnya cuma `FormRbsBbm.jsx` yang punya field Liter/Plat. Sekarang `FormRbsOperasional.jsx` & `FormRbsUmum.jsx` juga bisa punya item berjenis BBM dalam satu pengajuan campur dengan item non-BBM lain:
+
+- **`FormRbsOperasional.jsx`** — `jenisOptions` baru: BBM Pertalite, BBM Pertamax, Meeting, Entertaint, Parkir, Biaya Buruh, Meal Buruh, Meal Lembur, Lainnya (opsi lama "Toll" dihapus, "Meals Lembur" diganti "Meal Lembur").
+- **`FormRbsUmum.jsx`** — ditambah **E-Toll**, BBM Pertalite, BBM Pertamax, BBM Pertamax Turbo, BBM Solar ke opsi yang sudah ada (ATK, RTG, RTK, Entertaint, Parkir, Meals Lembur, Meals Meeting, Lainnya — nama-nama lama TIDAK diubah di form ini).
+- **Perilaku kondisional per baris item**: kalau `jenis` yang dipilih adalah salah satu jenis BBM, field **Kebutuhan** (Operasional) / **Item** (Umum) disembunyikan, diganti **Plat Nomor** (dropdown sama seperti 15.3) + **Liter** (auto-kalkulasi sama seperti 15.4). Validasi submit menyesuaikan: item BBM wajib isi Plat & Liter (bukan Kebutuhan/Item), item non-BBM tetap seperti semula.
+- `DetailRbs.jsx`: kolom Kebutuhan/Item di tabel Detail Pengajuan sekarang menampilkan info Plat & Liter di bawah nama kategori kalau item tersebut BBM (sebelumnya kolom Plat/Liter cuma ada untuk dokumen `kategori === 'BBM'`, jadi data BBM dari Operasional/Umum tidak akan pernah kelihatan tanpa perbaikan ini).
+
+## 15.6 Kategori BBM di LPJ Umum & LPJ Marketing
+
+`FormLpjUmum.jsx` & `FormLpjMarketing.jsx` sudah lebih dulu punya field `namaItem` dropdown yang mengikuti `jenisOptions` RBS Umum/Operasional masing-masing (lihat bagian 10) — jadi diselaraskan ulang mengikuti daftar baru di 15.5 (LPJ Umum → sama seperti RBS Umum baru; LPJ Marketing → sama seperti RBS Operasional baru).
+
+Struktur data LPJ per item itu `biaya` (harga satuan) × `jumlah` (kuantitas) = `jumlahBiaya` — kebetulan pas untuk BBM (harga per liter × liter), jadi **tidak perlu field Liter terpisah**: cukup relabel `Biaya` → "Harga/Liter" dan `Jumlah` → "Liter" saat item-nya BBM, plus auto-isi `Biaya` dari patokan harga (15.4) begitu jenis BBM dipilih. Field **Plat Nomor** baru ditambahkan (dropdown sama seperti 15.3), wajib diisi untuk item BBM.
+
+`DetailLpj.jsx`: kolom Item menampilkan Plat di bawah nama item kalau item tersebut BBM.
+
+## 15.7 Perluasan Rekapan BBM (Bagian A, lanjutan)
+
+Sebelumnya `aggregateBbm` (di `rekapanAggregation.js`) cuma menarik data dari dokumen `reimbursement` dengan `kategori === 'BBM'` (submission lewat `FormRbsBbm.jsx` saja). Setelah 15.5 & 15.6, item BBM bisa muncul di dokumen `reimbursement` kategori Operasional/GA-Umum maupun dokumen `lpj` — jadi `aggregateBbm` diperluas:
+
+- Dikenali dari **prefix `"BBM "`** pada `item.jenis` (reimbursement) / `item.namaItem` (lpj), bukan dari `kategori` di level dokumen — supaya satu dokumen campuran (ada item BBM & non-BBM) tetap kepisah dengan benar per item.
+- Menarik dari kedua koleksi: `reimbursementDocs` DAN `lpjDocs` (parameter baru `aggregateBbm(reimbursementDocs, lpjDocs, options)`).
+- Konversi liter/Rupiah disesuaikan per sumber: di `reimbursement`, `item.biaya` sudah total Rupiah & `item.liter` sudah liter langsung; di `lpj`, total Rupiah aktualnya `item.jumlahBiaya` (bukan `item.biaya` yang cuma harga satuan) & liternya `item.jumlah`.
+- `aggregateByCategory` (rekap kategori umum) di-update supaya **mengecualikan** item BBM (prefix `"BBM "`) di level item juga (sebelumnya cuma exclude dokumen `kategori === 'BBM'`) — mencegah item BBM dari Operasional/Umum/LPJ terhitung dua kali (muncul di tabel kategori umum DAN tabel BBM sekaligus).
+- `RekapanUnitBisnis.jsx`: pemanggilan `aggregateBbm` diupdate untuk ikut mengirim `lpjDocs`.
+
+## 15.8 Filter "Tampilkan Rekapan"
+
+Ditambahkan dropdown multi-select **"Tampilkan Rekapan"** di halaman Rekapan (`RekapanUnitBisnis.jsx`), sejajar dengan filter Unit Bisnis & Tahun yang sudah ada. Berisi semua tabel yang tersedia: "BBM -- Total Biaya", "BBM -- Liter per Plat Nomor", plus setiap kategori dinamis dari data (`ATK`, `RTK`, `Meeting`, `E-Toll`, `Biaya Buruh`, dst). Kosong (default) = tampilkan semua tabel, sama seperti perilaku sebelumnya — pilih satu/lebih untuk mempersempit tampilan ke rekap yang diminati saja. `CATEGORY_ORDER` juga diperluas supaya kategori-kategori baru dari 15.5 (Meeting, E-Toll, Biaya Buruh, Meal Buruh, Meal Lembur) ikut terurut rapi, tidak jatuh ke grup "tidak dikenal" di akhir.
+
+## 15.9 Verifikasi & Keterbatasan
+
+- `CI=true npm run build` sukses (0 warning/error) di setiap tahap perubahan.
+- Login page & route guard (`ProtectedRoute`) dicek jalan normal tanpa error console saat dev server dijalankan lokal (port 3000 dipakai sesi lain, dipindah otomatis via `autoPort: true` di `.claude/launch.json`).
+- **Belum diverifikasi dengan data asli**: verifikasi visual data BBM Operasional/Umum/LPJ yang benar-benar terisi di tabel Rekapan (termasuk hasil filter "Tampilkan Rekapan") **butuh login sungguhan sebagai Validator/Admin/Super Admin**, yang tidak bisa dilakukan otomatis dalam sesi ini (tidak ada mekanisme untuk memasukkan password akun asli). Perlu dicek manual oleh user langsung di browser.
+
+## 15.10 Task Development — Bagian E
+
+- [x] Field `platKendaraan` di `FormAddUser.jsx`, `FormEditUser.jsx`, `functions/index.js` (`normalizeManagedUser`), `firestore.rules` (`validUserDocument`)
+- [x] Plat Nomor di `FormRbsBbm.jsx` jadi dropdown lintas semua user (bukan cuma milik sendiri) + auto-default kalau submitter cuma punya 1 plat
+- [x] Rapikan `jenisOptions` `FormRbsBbm.jsx` jadi murni BBM (Pertalite/Pertamax/Pertamax Turbo/Solar/Dexlite) + hapus Top Up E-Toll/Parkir
+- [x] Liter auto-kalkulasi dari Biaya ÷ harga/liter (patokan Sulawesi Selatan, 1 Sept 2026) di `FormRbsBbm.jsx`
+- [x] Tambah kategori BBM (Pertalite/Pertamax) + field Liter/Plat kondisional ke `FormRbsOperasional.jsx`
+- [x] Tambah E-Toll + kategori BBM (Pertalite/Pertamax/Pertamax Turbo/Solar) + field Liter/Plat kondisional ke `FormRbsUmum.jsx`
+- [x] `DetailRbs.jsx`: surface Plat/Liter untuk item BBM di kategori Operasional/GA-Umum
+- [x] Sinkronkan `jenisOptions`/`namaItem` `FormLpjUmum.jsx` & `FormLpjMarketing.jsx` dengan RBS terbaru + relabel Biaya/Jumlah jadi Harga per Liter/Liter + field Plat untuk item BBM
+- [x] `DetailLpj.jsx`: surface Plat untuk item BBM
+- [x] Perluas `aggregateBbm` (`rekapanAggregation.js`) menarik dari RBS Operasional/Umum + LPJ Umum/Marketing, dikenali dari prefix `"BBM "`, bukan cuma dokumen `kategori === 'BBM'`
+- [x] `aggregateByCategory` exclude item BBM di level item supaya tidak double-count dengan `aggregateBbm`
+- [x] Filter multi-select "Tampilkan Rekapan" di `RekapanUnitBisnis.jsx`
+- [ ] Verifikasi visual data asli di browser (Validator/Admin/Super Admin sungguhan) — **butuh user login manual**, tidak bisa dilakukan otomatis
+- [ ] (Belum dikerjakan, opsional) Pindahkan `BBM_PRICE_PER_LITER` yang terduplikasi di 5 file ke satu shared constant, sama seperti rekomendasi `UNIT_CODES` di 13.5

@@ -11,6 +11,154 @@ import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
+import { getStatusBadgeClass } from '../utils/statusBadge'
+
+const SUPER_ADMIN_STATUS_OPTIONS = [
+    { value: 'ALL', label: 'Semua Status' },
+    { value: 'Diajukan', label: 'Diajukan' },
+    { value: 'Diproses', label: 'Diproses' },
+    { value: 'Disetujui', label: 'Disetujui' },
+    { value: 'Ditolak', label: 'Ditolak' },
+    { value: 'Dibatalkan', label: 'Dibatalkan' }
+]
+
+// Bagian B: tampilan "semua status sekaligus" khusus Super Admin -- menggantikan
+// tab pending/approved/canceled dengan 1 tabel + filter status + search (Nama,
+// Unit Bisnis, Nomor Dokumen). Peran Reviewer/Validator/Admin TIDAK memakai
+// komponen ini, tetap pakai tab lama di BsCheck di bawah.
+const SuperAdminAllStatusTable = ({
+    allData, statusFilter, setStatusFilter, search, setSearch, loading,
+    selectStyles, handleApprove, handleReject, handleEditClick, formatDate
+}) => {
+    const ACTIONABLE_STATUSES = ['Diajukan', 'Diproses']
+
+    const filteredData = allData.filter((item) => {
+        if (statusFilter?.value !== 'ALL' && item.status !== statusFilter?.value) return false
+
+        const query = search.trim().toLowerCase()
+        if (!query) return true
+
+        const haystack = `${item.displayId || ''} ${item.user?.nama || ''} ${item.user?.unit || ''}`.toLowerCase()
+        return haystack.includes(query)
+    })
+
+    return (
+        <div>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 mb-4">
+                <h3 className="text-xl font-medium dark:text-gray-100">Semua Pengajuan Bon Sementara</h3>
+                <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <input
+                        type="text"
+                        placeholder="Cari nama, unit bisnis, atau nomor dokumen..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="h-10 px-4 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm w-full sm:w-72"
+                    />
+                    <Select
+                        value={statusFilter}
+                        onChange={setStatusFilter}
+                        options={SUPER_ADMIN_STATUS_OPTIONS}
+                        styles={selectStyles}
+                        isSearchable={false}
+                        className="w-full sm:w-44"
+                        menuPortalTarget={document.body}
+                        menuPosition="absolute"
+                    />
+                </div>
+            </div>
+
+            {loading ? (
+                <Skeleton count={5} height={40} />
+            ) : filteredData.length === 0 ? (
+                <div className="flex justify-center">
+                    <figure className="w-44 h-44">
+                        <img src={EmptyState} alt="Bon Sementara icon" className="w-full h-full object-contain" />
+                    </figure>
+                </div>
+            ) : (
+                <div className="w-full overflow-x-auto">
+                    <div className="inline-block min-w-[1050px] w-full">
+                        <table className="w-full bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg text-sm dark:text-gray-200">
+                            <thead>
+                                <tr className="bg-gray-100 dark:bg-gray-700 text-left dark:text-gray-100">
+                                    <th className="p-2 border dark:border-gray-600 text-center w-auto">No.</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Nomor BS</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Nama</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Unit Bisnis</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Kategori BS</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
+                                    <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
+                                    <th className="p-2 border dark:border-gray-600 text-center">Status</th>
+                                    <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredData.map((item, index) => (
+                                    <tr key={item.id}>
+                                        <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">
+                                            <Link
+                                                to={`/bon-sementara/${item.id}`}
+                                                className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
+                                            >
+                                                {item.displayId}
+                                            </Link>
+                                        </td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">{item.user?.nama}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">{item.user?.unit}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">{item.bonSementara?.[0]?.kategori}</td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">
+                                            Rp{(item.bonSementara?.[0]?.jumlahBS || 0).toLocaleString('id-ID')}
+                                        </td>
+                                        <td className="px-4 py-2 border dark:border-gray-600">{formatDate(item.tanggalPengajuan)}</td>
+                                        <td className="p-2 border dark:border-gray-600 text-center">
+                                            <span className={`px-4 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(item.status)}`}>
+                                                {item.status || 'Tidak Diketahui'}
+                                            </span>
+                                        </td>
+                                        <td className="p-2 border dark:border-gray-600 text-center">
+                                            <div className="flex justify-center space-x-2">
+                                                <button
+                                                    className="rounded-full p-1 bg-blue-200 hover:bg-blue-300 text-blue-600 border-[1px] border-blue-600 flex items-center justify-center w-8 h-8"
+                                                    onClick={() => handleEditClick(item)}
+                                                    title="Edit"
+                                                >
+                                                    <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+                                                </button>
+                                                {ACTIONABLE_STATUSES.includes(item.status) && (
+                                                    <>
+                                                        <button
+                                                            className="rounded-full p-1 bg-green-200 hover:bg-green-300 text-green-600 border-[1px] border-green-600 flex items-center justify-center w-8 h-8"
+                                                            onClick={() => handleApprove(item)}
+                                                            title="Approve"
+                                                        >
+                                                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        </button>
+                                                        <button
+                                                            className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-600 border-[1px] border-red-600 flex items-center justify-center w-8 h-8"
+                                                            onClick={() => handleReject(item)}
+                                                            title="Reject"
+                                                        >
+                                                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
 
 const BsCheck = () => {
     const { theme } = useTheme()
@@ -22,6 +170,11 @@ const BsCheck = () => {
     const [filteredApprovedData, setFilteredApprovedData] = useState({ bonSementara: [] })
     const [filteredCanceledData, setFilteredCanceledData] = useState({ bonSementara: [] })
     const [isValidatorForAny, setIsValidatorForAny] = useState(false);
+
+    // --- State khusus tampilan "Semua Status" Super Admin (Bagian B) ---
+    const [allSuperAdminData, setAllSuperAdminData] = useState([])
+    const [superAdminStatusFilter, setSuperAdminStatusFilter] = useState(SUPER_ADMIN_STATUS_OPTIONS[0])
+    const [superAdminSearch, setSuperAdminSearch] = useState('')
     const [showModal, setShowModal] = useState(false)
     const [modalProps, setModalProps] = useState({})
     const [loading, setLoading] = useState(true);
@@ -71,43 +224,20 @@ const BsCheck = () => {
                 let canceledBonSementara = []
 
                 if (userRole === 'Super Admin') {
-                    // Pending BonSementara for Super Admin
-                    const pendingQ = query(
-                        collection(db, 'bonSementara'),
-                        where('status', 'in', ['Diajukan', 'Diproses'])
-                    )
-                    const pendingSnapshot = await getDocs(pendingQ)
-                    pendingBonSementara = pendingSnapshot.docs.map((doc) => ({
+                    // Bagian B: Super Admin melihat SEMUA status sekaligus (1 tabel, bukan
+                    // tab pending/approved/canceled -- lihat render "Semua Status" di bawah)
+                    // jadi cukup 1 query tanpa filter status sama sekali, menggantikan 3 query
+                    // pending/approved/canceled yang dipakai sebelumnya. Ini juga menutup celah
+                    // lama: 3 query lama itu TIDAK PERNAH mengambil status 'Ditolak', jadi
+                    // dokumen yang ditolak sama sekali tidak terlihat Super Admin di mana pun.
+                    // Rules isElevatedRole() di firestore.rules sudah mendukung list broad ini.
+                    const allSnapshot = await getDocs(collection(db, 'bonSementara'))
+                    const allDocs = allSnapshot.docs.map((doc) => ({
                         id: doc.id,
                         displayId: doc.data().displayId,
                         ...doc.data(),
                     }))
-
-                    // Approved BonSementara for Super Admin
-                    const approvedQ = query(
-                        collection(db, 'bonSementara'),
-                        where('status', 'in', ['Diproses', 'Disetujui'])
-                    )
-                    const approvedSnapshot = await getDocs(approvedQ)
-                    approvedBonSementara = approvedSnapshot.docs.map((doc) => ({
-                        id: doc.id,
-                        displayId: doc.data().displayId,
-                        ...doc.data(),
-                    }))
-                    // ✨ TAMBAHAN: Super Admin juga bisa melihat semua canceled data
-                    const canceledQ = query(
-                        collection(db, 'bonSementara'),
-                        where('status', '==', 'Dibatalkan')
-                    )
-                    const canceledSnapshot = await getDocs(canceledQ)
-                    canceledBonSementara = canceledSnapshot.docs.map((doc) => ({
-                        id: doc.id,
-                        displayId: doc.data().displayId,
-                        ...doc.data()
-                    }))
-
-                    // Set bahwa Super Admin bisa melihat tab canceled
-                    setIsValidatorForAny(true)
+                    setAllSuperAdminData(allDocs)
                 } else {
                     // Get all documents where user is assigned in any role
                     const [reviewer1Docs, reviewer2Docs] = await Promise.all([
@@ -671,6 +801,22 @@ const BsCheck = () => {
             </h2>
 
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-sm transition-colors">
+                {userRole === 'Super Admin' ? (
+                    <SuperAdminAllStatusTable
+                        allData={allSuperAdminData}
+                        statusFilter={superAdminStatusFilter}
+                        setStatusFilter={setSuperAdminStatusFilter}
+                        search={superAdminSearch}
+                        setSearch={setSuperAdminSearch}
+                        loading={loading}
+                        selectStyles={selectStyles}
+                        handleApprove={handleApprove}
+                        handleReject={handleReject}
+                        handleEditClick={handleEditClick}
+                        formatDate={formatDate}
+                    />
+                ) : (
+                <>
                 <div className="mb-4">
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 xl:gap-24">
                         {/* Dropdown Title Section */}
@@ -1054,6 +1200,8 @@ const BsCheck = () => {
                             </div>
                         )}
                     </div>
+                )}
+                </>
                 )}
             </div>
 

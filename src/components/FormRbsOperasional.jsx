@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react'
-import { collection, addDoc, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs } from 'firebase/firestore'
+import { collection, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs, runTransaction } from 'firebase/firestore'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
+import CreatableSelect from 'react-select/creatable'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons' // Tambah faTimes
 import { useLocation, useNavigate } from 'react-router-dom';
-import { isPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
+import { isValidPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
 import { useTheme } from '../context/ThemeContext'
 
 
@@ -27,7 +28,8 @@ const RbsOperasionalForm = () => {
         unit: [], // Sekarang array
         validator: [],
         reviewer1: [],
-        reviewer2: []
+        reviewer2: [],
+        platKendaraan: []
     })
 
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -37,6 +39,8 @@ const RbsOperasionalForm = () => {
         biaya: '',
         kebutuhan: '',
         keterangan: '',
+        plat: '',
+        liter: '',
         tanggal: '',
         isLainnya: false,
         jenisLain: '',
@@ -121,6 +125,37 @@ const RbsOperasionalForm = () => {
         fetchReviewer()
     }, [])
 
+    // Fetch semua plat kendaraan terdaftar (lintas user) untuk pilihan dropdown Plat Nomor (khusus item BBM)
+    const [allPlatOptions, setAllPlatOptions] = useState([])
+    useEffect(() => {
+        const fetchAllPlat = async () => {
+            try {
+                const querySnapshot = await getDocs(collection(db, 'users'))
+                const platMap = new Map()
+
+                querySnapshot.docs.forEach((docSnap) => {
+                    const data = docSnap.data()
+                    const plates = Array.isArray(data.platKendaraan) ? data.platKendaraan : []
+                    plates.forEach((plat) => {
+                        if (plat && !platMap.has(plat)) {
+                            platMap.set(plat, data.nama ? `${plat} - ${data.nama}` : plat)
+                        }
+                    })
+                })
+
+                const options = Array.from(platMap.entries())
+                    .map(([value, label]) => ({ value, label }))
+                    .sort((a, b) => a.value.localeCompare(b.value))
+
+                setAllPlatOptions(options)
+            } catch (error) {
+                console.error('Error fetching daftar plat kendaraan:', error)
+            }
+        }
+
+        fetchAllPlat()
+    }, [])
+
     // Logika Auto-Fill Validator & Reviewer untuk user dengan 1 Unit Bisnis
    useEffect(() => {
         if (userData.uid) { 
@@ -158,12 +193,38 @@ const RbsOperasionalForm = () => {
     ]
 
     const jenisOptions = [
+        { value: 'BBM Pertalite', label: 'BBM Pertalite' },
+        { value: 'BBM Pertamax', label: 'BBM Pertamax' },
+        { value: 'Meeting', label: 'Meeting' },
         { value: 'Entertaint', label: 'Entertaint' },
-        { value: 'Meals Lembur', label: 'Meals Lembur' },
         { value: 'Parkir', label: 'Parkir' },
-        { value: 'Toll', label: 'Toll' },
+        { value: 'Biaya Buruh', label: 'Biaya Buruh' },
+        { value: 'Meal Buruh', label: 'Meal Buruh' },
+        { value: 'Meal Lembur', label: 'Meal Lembur' },
         { value: 'Lainnya', label: 'Lainnya' }
     ]
+
+    // Patokan harga BBM per liter wilayah Sulawesi Selatan (berlaku 1 September 2026, Pertamina Patra Niaga)
+    const BBM_PRICE_PER_LITER = {
+        'BBM Pertalite': 10000,
+        'BBM Pertamax': 16300
+    }
+
+    const isBbmJenis = (item) => !item.isLainnya && !!BBM_PRICE_PER_LITER[item.jenis?.value]
+
+    const parseRupiahValue = (value) => {
+        if (!value) return 0
+        return Number(String(value).replace(/[^0-9,]/g, '').replace(',', '.')) || 0
+    }
+
+    // Liter dihitung otomatis dari biaya yang diinput dibagi harga/liter jenis BBM terpilih.
+    // Tetap bisa diedit manual (mis. kalau harga di struk beda dari patokan).
+    const calculateLiter = (biayaValue, jenisValue) => {
+        const price = BBM_PRICE_PER_LITER[jenisValue]
+        const biayaNumber = parseRupiahValue(biayaValue)
+        if (!price || !biayaNumber) return ''
+        return (biayaNumber / price).toFixed(2)
+    }
 
     useEffect(() => {
         const today = new Date()
@@ -194,7 +255,8 @@ const RbsOperasionalForm = () => {
                         department: data.department || [],
                         validator: data.validator || [],
                         reviewer1: data.reviewer1 || [],
-                        reviewer2: data.reviewer2 || []
+                        reviewer2: data.reviewer2 || [],
+                        platKendaraan: Array.isArray(data.platKendaraan) ? data.platKendaraan : []
                     })
 
                     const unitOptionsForUser = userUnitsArray.map(u => ({ value: u, label: u }))
@@ -284,9 +346,14 @@ const RbsOperasionalForm = () => {
             formattedValue = formatRupiah(value)
         }
 
-        const updatedReimbursements = reimbursements.map((item, i) =>
-            i === index ? { ...item, [field]: formattedValue } : item
-        )
+        const updatedReimbursements = reimbursements.map((item, i) => {
+            if (i !== index) return item
+            const updatedItem = { ...item, [field]: formattedValue }
+            if (field === 'biaya' && isBbmJenis(item)) {
+                updatedItem.liter = calculateLiter(formattedValue, item.jenis.value)
+            }
+            return updatedItem
+        })
         setReimbursements(updatedReimbursements)
     }
 
@@ -301,11 +368,19 @@ const RbsOperasionalForm = () => {
                 jenisLain: ''
             }
         } else {
+            const isBbm = !!BBM_PRICE_PER_LITER[selectedOption?.value]
+            const currentPlat = updatedReimbursements[index].plat
+            const defaultPlat = isBbm && !currentPlat && userData.platKendaraan?.length === 1
+                ? userData.platKendaraan[0]
+                : currentPlat
+
             updatedReimbursements[index] = {
                 ...updatedReimbursements[index],
                 jenis: selectedOption,
                 isLainnya: false,
-                jenisLain: ''
+                jenisLain: '',
+                liter: isBbm ? calculateLiter(updatedReimbursements[index].biaya, selectedOption?.value) : updatedReimbursements[index].liter,
+                plat: isBbm ? defaultPlat : updatedReimbursements[index].plat
             }
         }
 
@@ -335,19 +410,34 @@ const RbsOperasionalForm = () => {
         return UNIT_CODES[unitName] || unitName
     }
 
-    const generateDisplayId = () => {
+    // PENTING: nomor dokumen HARUS didapat dari counter atomik (runTransaction), bukan
+    // Math.random() - dengan random, dua pengajuan di unit & hari yang sama punya peluang
+    // nyata mendapat nomor (dan path lampiran) yang identik. Firestore akan otomatis retry
+    // transaksi ini kalau ada konflik baca-tulis, jadi dua submit tidak mungkin dapat nomor
+    // akhir yang sama. Pola ini meniru counter atomik yang sudah dipakai di FormBs.jsx.
+    const generateDisplayId = async () => {
+        const unitCode = selectedUnit ? getUnitCode(selectedUnit.value) : 'UNKNOWN'
         const today = new Date()
-        const year = today.getFullYear().toString().slice(-2)
+        const year = today.getFullYear().toString()
         const month = (today.getMonth() + 1).toString().padStart(2, '0')
         const day = today.getDate().toString().padStart(2, '0')
-        const sequence = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-        const unitCode = selectedUnit ? getUnitCode(selectedUnit.value) : 'UNKNOWN'
+        const counterRef = doc(db, 'businessUnitCounters', `${unitCode}_RBS_OPR`)
 
-        return `RBS.OPR.${unitCode}.${year}${month}${day}.${sequence}`
+        const sequence = await runTransaction(db, async (transaction) => {
+            const counterDoc = await transaction.get(counterRef)
+            const newLastNumber = (!counterDoc.exists() || counterDoc.data().lastResetYear !== year)
+                ? 1
+                : counterDoc.data().lastNumber + 1
+
+            transaction.set(counterRef, { lastNumber: newLastNumber, lastResetYear: year })
+            return newLastNumber
+        })
+
+        return `RBS.OPR.${unitCode}.${year.slice(-2)}${month}${day}.${sequence.toString().padStart(4, '0')}`
     }
 
     // --- Fungsi handler upload untuk multi file ---
-    const handleFileUpload = (event) => {
+    const handleFileUpload = async (event) => {
         const files = Array.from(event.target.files)
         if (!files.length) return
 
@@ -358,8 +448,8 @@ const RbsOperasionalForm = () => {
                 toast.error(`Ukuran file ${file.name} maksimal 250MB`)
                 continue
             }
-            // Validate file type (PDF only)
-            if (!isPdfFile(file)) {
+            // Validate file type (PDF only, dicek dari isi file bukan cuma nama/ekstensi)
+            if (!(await isValidPdfFile(file))) {
                 toast.error(`File ${file.name} bukan PDF, hanya PDF yang diperbolehkan`)
                 continue
             }
@@ -399,8 +489,10 @@ const RbsOperasionalForm = () => {
             const formattedReimbursements = editData.reimbursements.map(item => ({
                 ...item,
                 biaya: item.biaya?.toString() || '',
-                jenis: typeof item.jenis === 'string' 
-                        ? { value: item.jenis, label: item.jenis } 
+                liter: item.liter?.toString() || '',
+                plat: item.plat || '',
+                jenis: typeof item.jenis === 'string'
+                        ? { value: item.jenis, label: item.jenis }
                         : item.jenis,
             }));
             setReimbursements(formattedReimbursements);
@@ -413,8 +505,22 @@ const RbsOperasionalForm = () => {
                         nama: editData.user.nama,
                         bankName: editData.user.bankName || '',
                         accountNumber: editData.user.accountNumber || '',
-                        department: editData.user.department || ''
+                        department: editData.user.department || '',
+                        platKendaraan: []
                     });
+
+                    // 2b. Ambil plat kendaraan terdaftar terbaru milik pengaju (bukan dari snapshot lama)
+                    if (editData.user.uid) {
+                        getDoc(doc(db, 'users', editData.user.uid)).then((submitterDoc) => {
+                            if (submitterDoc.exists()) {
+                                const submitterPlat = submitterDoc.data().platKendaraan
+                                setUserData((prev) => ({
+                                    ...prev,
+                                    platKendaraan: Array.isArray(submitterPlat) ? submitterPlat : []
+                                }))
+                            }
+                        }).catch((error) => console.error('Error fetching plat kendaraan pengaju:', error))
+                    }
 
                     // 3. Set Dropdown Unit
                     if (editData.user.unit) {
@@ -469,6 +575,12 @@ const RbsOperasionalForm = () => {
                     if (!r.biaya) missingFields.push(getFieldLabel('Biaya'))
                     if (!r.kebutuhan) missingFields.push(getFieldLabel('Kebutuhan'))
                     if (!r.tanggal) missingFields.push(getFieldLabel('Tanggal Aktivitas'))
+                } else if (isBbmJenis(r)) {
+                    if (!r.jenis) missingFields.push(getFieldLabel('Jenis Reimbursement'))
+                    if (!r.biaya) missingFields.push(getFieldLabel('Biaya'))
+                    if (!r.plat) missingFields.push(getFieldLabel('Plat Kendaraan'))
+                    if (!r.liter) missingFields.push(getFieldLabel('Liter'))
+                    if (!r.tanggal) missingFields.push(getFieldLabel('Tanggal Aktivitas'))
                 } else {
                     if (!r.jenis) missingFields.push(getFieldLabel('Jenis Reimbursement'))
                     if (!r.biaya) missingFields.push(getFieldLabel('Biaya'))
@@ -494,8 +606,8 @@ const RbsOperasionalForm = () => {
                 return
             }
 
-            const displayId = generateDisplayId()
-            
+            const displayId = isEditMode ? editData.displayId : await generateDisplayId()
+
             const lampiranUrls = await uploadAttachments(attachmentFiles, displayId)
 
             const totalBiaya = reimbursements.reduce((total, item) => {
@@ -524,6 +636,8 @@ const RbsOperasionalForm = () => {
                     biaya: parseRupiah(item.biaya),
                     kebutuhan: item.kebutuhan,
                     keterangan: item.keterangan,
+                    plat: item.plat || '',
+                    liter: Number(item.liter) || 0,
                     tanggal: item.tanggal,
                     isLainnya: item.isLainnya,
                     jenis: item.isLainnya ? item.jenisLain : item.jenis.value
@@ -881,24 +995,77 @@ const RbsOperasionalForm = () => {
                                 />
                             </div>
 
-                            <div className="flex-1 w-full xl:min-w-36">
-                                {(index === 0 || window.innerWidth < 1280) && (
-                                    <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
-                                        Kebutuhan <span className="text-red-500">*</span>
-                                    </label>
-                                )}
-                                {index === 0 && (
-                                    <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                                        Kebutuhan <span className="text-red-500">*</span>
-                                    </label>
-                                )}
-                                <input
-                                    className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                                    type="text"
-                                    value={reimbursement.kebutuhan}
-                                    onChange={(e) => handleInputChange(index, 'kebutuhan', e.target.value)}
-                                />
-                            </div>
+                            {isBbmJenis(reimbursement) ? (
+                                <>
+                                    <div className="flex-1 w-full xl:max-w-36">
+                                        {(index === 0 || window.innerWidth < 1280) && (
+                                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
+                                                Plat Nomor <span className="text-red-500">*</span>
+                                            </label>
+                                        )}
+                                        {index === 0 && (
+                                            <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                                                Plat Nomor <span className="text-red-500">*</span>
+                                            </label>
+                                        )}
+                                        <CreatableSelect
+                                            isClearable
+                                            options={allPlatOptions}
+                                            value={reimbursement.plat ? { value: reimbursement.plat, label: reimbursement.plat } : null}
+                                            onChange={(selectedOption) => {
+                                                const raw = selectedOption ? selectedOption.value : ''
+                                                const filteredValue = raw.toUpperCase().replace(/[^A-Z0-9\s]/g, '')
+                                                handleInputChange(index, 'plat', filteredValue)
+                                            }}
+                                            placeholder="Pilih/ketik plat..."
+                                            formatCreateLabel={(input) => `Gunakan "${input.toUpperCase()}"`}
+                                            styles={customStyles}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
+                                        />
+                                    </div>
+
+                                    <div className="flex-1 w-full xl:max-w-28">
+                                        {(index === 0 || window.innerWidth < 1280) && (
+                                            <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
+                                                Liter <span className="text-red-500">*</span>
+                                            </label>
+                                        )}
+                                        {index === 0 && (
+                                            <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                                                Liter <span className="text-red-500">*</span>
+                                            </label>
+                                        )}
+                                        <input
+                                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={reimbursement.liter}
+                                            onChange={(e) => handleInputChange(index, 'liter', e.target.value)}
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex-1 w-full xl:min-w-36">
+                                    {(index === 0 || window.innerWidth < 1280) && (
+                                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
+                                            Kebutuhan <span className="text-red-500">*</span>
+                                        </label>
+                                    )}
+                                    {index === 0 && (
+                                        <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                                            Kebutuhan <span className="text-red-500">*</span>
+                                        </label>
+                                    )}
+                                    <input
+                                        className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                                        type="text"
+                                        value={reimbursement.kebutuhan}
+                                        onChange={(e) => handleInputChange(index, 'kebutuhan', e.target.value)}
+                                    />
+                                </div>
+                            )}
 
                             <div className="flex-1 w-full xl:min-w-36">
                                 {(index === 0 || window.innerWidth < 1280) && (

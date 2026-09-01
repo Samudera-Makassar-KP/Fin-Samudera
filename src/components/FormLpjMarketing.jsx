@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
+import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore'
 import { db, storage } from '../firebaseConfig'
 import Select from 'react-select'
+import CreatableSelect from 'react-select/creatable'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
 import useFormDraft from '../hooks/useFormDraft'
-import { getUploadablePdfFiles, isPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
+import { getUploadablePdfFiles, isValidPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
 import { useTheme } from '../context/ThemeContext'
 
 const FormLpjMarketing = () => {
@@ -20,7 +21,8 @@ const FormLpjMarketing = () => {
         unit: [], // Sekarang array
         validator: [],
         reviewer1: [],
-        reviewer2: []
+        reviewer2: [],
+        platKendaraan: []
     })
 
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -35,10 +37,13 @@ const FormLpjMarketing = () => {
         tanggal: '',
         lampiran: null,
         lampiranFile: null,
-        namaItem: '',
+        namaItem: null,
+        isLainnya: false,
+        jenisLain: '',
         biaya: '',
         jumlah: '',
         keterangan: '',
+        plat: '',
         jumlahBiaya: 0,
         totalBiaya: '',
         sisaLebih: '',
@@ -156,6 +161,37 @@ const FormLpjMarketing = () => {
         fetchReviewer()
     }, [])
 
+    // Fetch semua plat kendaraan terdaftar (lintas user) untuk pilihan dropdown Plat Nomor (khusus item BBM)
+    const [allPlatOptions, setAllPlatOptions] = useState([])
+    useEffect(() => {
+        const fetchAllPlat = async () => {
+            try {
+                const querySnapshot = await getDocs(collection(db, 'users'))
+                const platMap = new Map()
+
+                querySnapshot.docs.forEach((docSnap) => {
+                    const data = docSnap.data()
+                    const plates = Array.isArray(data.platKendaraan) ? data.platKendaraan : []
+                    plates.forEach((plat) => {
+                        if (plat && !platMap.has(plat)) {
+                            platMap.set(plat, data.nama ? `${plat} - ${data.nama}` : plat)
+                        }
+                    })
+                })
+
+                const options = Array.from(platMap.entries())
+                    .map(([value, label]) => ({ value, label }))
+                    .sort((a, b) => a.value.localeCompare(b.value))
+
+                setAllPlatOptions(options)
+            } catch (error) {
+                console.error('Error fetching daftar plat kendaraan:', error)
+            }
+        }
+
+        fetchAllPlat()
+    }, [])
+
     // --- SIHIR AUTO-FILL: Mengisi Validator & Reviewer Otomatis (Berlaku untuk Semua) ---
     useEffect(() => {
         if (userData.uid) { 
@@ -222,7 +258,8 @@ const FormLpjMarketing = () => {
                         department: data.department || [],
                         validator: data.validator || [],
                         reviewer1: data.reviewer1 || [],
-                        reviewer2: data.reviewer2 || []
+                        reviewer2: data.reviewer2 || [],
+                        platKendaraan: Array.isArray(data.platKendaraan) ? data.platKendaraan : []
                     })
 
                     const unitOptionsForUser = userUnitsArray.map(u => ({ value: u, label: u }))
@@ -334,23 +371,103 @@ const FormLpjMarketing = () => {
         return UNIT_CODES[unitName] || unitName
     }
 
-    const generateDisplayId = () => {
+    // Sama seperti jenisOptions di FormRbsOperasional.jsx -- disamakan supaya item LPJ
+    // Marketing bisa direkap per kategori (menu Rekapan), bukan lagi teks bebas.
+    const jenisOptions = useMemo(() => [
+        { value: 'BBM Pertalite', label: 'BBM Pertalite' },
+        { value: 'BBM Pertamax', label: 'BBM Pertamax' },
+        { value: 'Meeting', label: 'Meeting' },
+        { value: 'Entertaint', label: 'Entertaint' },
+        { value: 'Parkir', label: 'Parkir' },
+        { value: 'Biaya Buruh', label: 'Biaya Buruh' },
+        { value: 'Meal Buruh', label: 'Meal Buruh' },
+        { value: 'Meal Lembur', label: 'Meal Lembur' },
+        { value: 'Lainnya', label: 'Lainnya' }
+    ], [])
+
+    // Patokan harga BBM per liter wilayah Sulawesi Selatan (berlaku 1 September 2026, Pertamina Patra Niaga)
+    const BBM_PRICE_PER_LITER = {
+        'BBM Pertalite': 10000,
+        'BBM Pertamax': 16300
+    }
+
+    // Di LPJ, "Biaya" itu harga satuan & "Jumlah" itu kuantitas -- untuk item BBM,
+    // itu persis sama dengan harga/liter x liter, jadi tidak perlu field Liter terpisah,
+    // cukup relabel Jumlah jadi Liter dan auto-isi Biaya dari patokan harga.
+    const isBbmJenis = (item) => !item.isLainnya && !!BBM_PRICE_PER_LITER[item.namaItem?.value]
+
+    const handleNamaItemChange = (index, selectedOption) => {
+        const updatedLpj = [...lpj]
+
+        if (selectedOption && selectedOption.value === 'Lainnya') {
+            updatedLpj[index] = {
+                ...updatedLpj[index],
+                namaItem: null,
+                isLainnya: true,
+                jenisLain: ''
+            }
+        } else {
+            const bbmPrice = BBM_PRICE_PER_LITER[selectedOption?.value]
+            const isBbm = !!bbmPrice
+            const currentPlat = updatedLpj[index].plat
+            const defaultPlat = isBbm && !currentPlat && userData.platKendaraan?.length === 1
+                ? userData.platKendaraan[0]
+                : currentPlat
+            const nextBiaya = isBbm ? bbmPrice : updatedLpj[index].biaya
+            const currentJumlah = Number(updatedLpj[index].jumlah || 0)
+
+            updatedLpj[index] = {
+                ...updatedLpj[index],
+                namaItem: selectedOption,
+                isLainnya: false,
+                jenisLain: '',
+                biaya: nextBiaya,
+                plat: isBbm ? defaultPlat : updatedLpj[index].plat,
+                jumlahBiaya: isBbm ? Number(nextBiaya) * currentJumlah : updatedLpj[index].jumlahBiaya
+            }
+        }
+
+        setLpj(updatedLpj)
+    }
+
+    const handleNamaItemLainChange = (index, value) => {
+        const updatedLpj = [...lpj]
+        updatedLpj[index].jenisLain = value
+        setLpj(updatedLpj)
+    }
+
+    // PENTING: nomor dokumen HARUS didapat dari counter atomik (runTransaction), bukan
+    // Math.random() - dengan random, dua pengajuan di unit & hari yang sama punya peluang
+    // nyata mendapat nomor (dan path lampiran) yang identik. Firestore akan otomatis retry
+    // transaksi ini kalau ada konflik baca-tulis, jadi dua submit tidak mungkin dapat nomor
+    // akhir yang sama. Pola ini meniru counter atomik yang sudah dipakai di FormBs.jsx.
+    const generateDisplayId = async () => {
+        const unitCode = selectedUnit ? getUnitCode(selectedUnit.value) : 'UNKNOWN'
         const today = new Date()
-        const year = today.getFullYear().toString().slice(-2)
+        const year = today.getFullYear().toString()
         const month = (today.getMonth() + 1).toString().padStart(2, '0')
         const day = today.getDate().toString().padStart(2, '0')
-        const sequence = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
-        const unitCode = selectedUnit ? getUnitCode(selectedUnit.value) : 'UNKNOWN'
+        const counterRef = doc(db, 'businessUnitCounters', `${unitCode}_LPJ_MRO`)
 
-        return `LPJ.MRO.${unitCode}.${year}${month}${day}.${sequence}`
+        const sequence = await runTransaction(db, async (transaction) => {
+            const counterDoc = await transaction.get(counterRef)
+            const newLastNumber = (!counterDoc.exists() || counterDoc.data().lastResetYear !== year)
+                ? 1
+                : counterDoc.data().lastNumber + 1
+
+            transaction.set(counterRef, { lastNumber: newLastNumber, lastResetYear: year })
+            return newLastNumber
+        })
+
+        return `LPJ.MRO.${unitCode}.${year.slice(-2)}${month}${day}.${sequence.toString().padStart(4, '0')}`
     }
 
     const getUploadableAttachments = (files = []) => {
         return getUploadablePdfFiles(files);
     }
 
-    const handleFileUpload = (event) => {
-        const selectedFile = event.target.files[0]; 
+    const handleFileUpload = async (event) => {
+        const selectedFile = event.target.files[0];
 
         if (selectedFile) {
             if (selectedFile.size === 0) {
@@ -364,12 +481,12 @@ const FormLpjMarketing = () => {
                 event.target.value = '';
                 return;
             }
-            if (!isPdfFile(selectedFile)) {
+            if (!(await isValidPdfFile(selectedFile))) {
                 toast.error(`File bukan PDF, hanya PDF yang diperbolehkan`);
                 event.target.value = '';
                 return;
             }
-            
+
             setAttachmentFiles([selectedFile]); 
         }
         event.target.value = '';
@@ -399,11 +516,21 @@ const FormLpjMarketing = () => {
     useEffect(() => {
         if (isEditMode && editData && editData.lpj) {
             
-            const formattedLPJ = editData.lpj.map(item => ({
-                ...item,
-                biaya: item.biaya?.toString() || '',
-                jumlah: item.jumlah?.toString() || '',
-            }));
+            // namaItem dulu teks bebas, sekarang dropdown -- data lama (atau pilihan
+            // "Lainnya") yang tidak cocok dengan salah satu jenisOptions ditampilkan
+            // sebagai mode "Lainnya" dengan teks aslinya tetap utuh, bukan hilang.
+            const formattedLPJ = editData.lpj.map(item => {
+                const matchedOption = jenisOptions.find(opt => opt.value === item.namaItem)
+                return {
+                    ...item,
+                    biaya: item.biaya?.toString() || '',
+                    jumlah: item.jumlah?.toString() || '',
+                    plat: item.plat || '',
+                    namaItem: matchedOption || null,
+                    isLainnya: !matchedOption,
+                    jenisLain: matchedOption ? '' : (item.namaItem || '')
+                }
+            });
             setLpj(formattedLPJ);
 
             setNomorBS(editData.nomorBS || '');
@@ -422,12 +549,27 @@ const FormLpjMarketing = () => {
 
             setTimeout(() => {
                 if (editData.user) {
-                    setUserData(prev => ({ ...prev, 
-                        uid: editData.user.uid, 
+                    setUserData(prev => ({ ...prev,
+                        uid: editData.user.uid,
                         nama: editData.user.nama,
                         bankName: editData.user.bankName || '',
-                        accountNumber: editData.user.accountNumber || ''
+                        accountNumber: editData.user.accountNumber || '',
+                        platKendaraan: []
                     }));
+
+                    // Ambil plat kendaraan terdaftar terbaru milik pengaju (bukan dari snapshot lama)
+                    if (editData.user.uid) {
+                        getDoc(doc(db, 'users', editData.user.uid)).then((submitterDoc) => {
+                            if (submitterDoc.exists()) {
+                                const submitterPlat = submitterDoc.data().platKendaraan
+                                setUserData((prev) => ({
+                                    ...prev,
+                                    platKendaraan: Array.isArray(submitterPlat) ? submitterPlat : []
+                                }))
+                            }
+                        }).catch((error) => console.error('Error fetching plat kendaraan pengaju:', error))
+                    }
+
                     if (editData.user.unit) setSelectedUnit({ value: editData.user.unit, label: editData.user.unit });
 
                     const findOption = (options, val) => options.find(o => o.value === val) || { value: val, label: val };
@@ -437,7 +579,7 @@ const FormLpjMarketing = () => {
                 }
             }, 100);
         }
-    }, [isEditMode, editData, validatorOptions, reviewerOptions]);
+    }, [isEditMode, editData, validatorOptions, reviewerOptions, jenisOptions]);
 
     const handleSubmit = async () => {
         try {
@@ -472,9 +614,14 @@ const FormLpjMarketing = () => {
                     return multipleItems ? `${baseLabel} (Item ${index + 1})` : baseLabel
                 }
 
-                if (!r.namaItem) missingFields.push(getFieldLabel('Item'))
+                if (r.isLainnya) {
+                    if (!r.jenisLain) missingFields.push(getFieldLabel('Item'))
+                } else {
+                    if (!r.namaItem) missingFields.push(getFieldLabel('Item'))
+                }
                 if (!r.biaya) missingFields.push(getFieldLabel('Biaya'))
                 if (!r.jumlah) missingFields.push(getFieldLabel('Jumlah'))
+                if (isBbmJenis(r) && !r.plat) missingFields.push(getFieldLabel('Plat Kendaraan'))
             })
 
             if (attachmentFiles.length === 0) {
@@ -494,8 +641,8 @@ const FormLpjMarketing = () => {
                 return
             }
 
-            const displayId = generateDisplayId()
-            
+            const displayId = isEditMode ? editData.displayId : await generateDisplayId()
+
             const lampiranUrls = await uploadAttachments(attachmentFiles, displayId)
 
             const totalBiaya = lpj.reduce((total, item) => {
@@ -522,11 +669,12 @@ const FormLpjMarketing = () => {
                     reviewer2: [selectedReviewer2.value]
                 },
                 lpj: lpj.map((item) => ({
-                    namaItem: item.namaItem,
+                    namaItem: item.isLainnya ? item.jenisLain : (item.namaItem?.value || item.namaItem),
                     biaya: parseRupiah(item.biaya.toString()),
                     jumlah: item.jumlah,
                     jumlahBiaya: Number(item.biaya) * Number(item.jumlah),
-                    keterangan: item.keterangan
+                    keterangan: item.keterangan,
+                    plat: item.plat || ''
                 })),
                 displayId: displayId,
                 aktivitas: aktivitas,
@@ -795,7 +943,8 @@ const FormLpjMarketing = () => {
                 biaya: item.biaya,
                 jumlah: item.jumlah,
                 jumlahBiaya: Number(item.biaya) * Number(item.jumlah),
-                keterangan: item.keterangan
+                keterangan: item.keterangan,
+                plat: item.plat || ''
             })),
             tanggalPengajuan,
             aktivitas,
@@ -1109,23 +1258,38 @@ const FormLpjMarketing = () => {
                                         Item <span className="text-red-500">*</span>
                                     </label>
                                 )}
-                                <input
-                                    type="text"
-                                    value={item.namaItem}
-                                    onChange={(e) => handleInputChange(index, 'namaItem', e.target.value)}
-                                    className="w-full border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
-                                />
+                                {item.isLainnya ? (
+                                    <input
+                                        type="text"
+                                        placeholder="Item lain"
+                                        value={item.jenisLain}
+                                        onChange={(e) => handleNamaItemLainChange(index, e.target.value)}
+                                        className="w-full border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-10 px-4 py-2"
+                                    />
+                                ) : (
+                                    <Select
+                                        options={jenisOptions}
+                                        value={item.namaItem}
+                                        onChange={(selectedOption) => handleNamaItemChange(index, selectedOption)}
+                                        placeholder="Pilih item..."
+                                        className="w-full"
+                                        styles={customStyles}
+                                        isSearchable={false}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
+                                    />
+                                )}
                             </div>
                             <div className="flex flex-row gap-2">
                                 <div className="flex-1">
                                     {(index === 0 || window.innerWidth < 1280) && (
                                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
-                                            Biaya <span className="text-red-500">*</span>
+                                            {isBbmJenis(item) ? 'Harga/Liter' : 'Biaya'} <span className="text-red-500">*</span>
                                         </label>
                                     )}
                                     {index === 0 && (
                                         <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                                            Biaya <span className="text-red-500">*</span>
+                                            {isBbmJenis(item) ? 'Harga/Liter' : 'Biaya'} <span className="text-red-500">*</span>
                                         </label>
                                     )}
                                     <input
@@ -1139,12 +1303,12 @@ const FormLpjMarketing = () => {
                                 <div className="max-w-24">
                                     {(index === 0 || window.innerWidth < 1280) && (
                                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
-                                            Jumlah <span className="text-red-500">*</span>
+                                            {isBbmJenis(item) ? 'Liter' : 'Jumlah'} <span className="text-red-500">*</span>
                                         </label>
                                     )}
                                     {index === 0 && (
                                         <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                                            Jumlah <span className="text-red-500">*</span>
+                                            {isBbmJenis(item) ? 'Liter' : 'Jumlah'} <span className="text-red-500">*</span>
                                         </label>
                                     )}
                                     <input
@@ -1162,6 +1326,36 @@ const FormLpjMarketing = () => {
                                     />
                                 </div>
                             </div>
+
+                            {isBbmJenis(item) && (
+                                <div className="max-w-40">
+                                    {(index === 0 || window.innerWidth < 1280) && (
+                                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2 xl:hidden">
+                                            Plat Nomor <span className="text-red-500">*</span>
+                                        </label>
+                                    )}
+                                    {index === 0 && (
+                                        <label className="hidden xl:block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                                            Plat Nomor <span className="text-red-500">*</span>
+                                        </label>
+                                    )}
+                                    <CreatableSelect
+                                        isClearable
+                                        options={allPlatOptions}
+                                        value={item.plat ? { value: item.plat, label: item.plat } : null}
+                                        onChange={(selectedOption) => {
+                                            const raw = selectedOption ? selectedOption.value : ''
+                                            const filteredValue = raw.toUpperCase().replace(/[^A-Z0-9\s]/g, '')
+                                            handleInputChange(index, 'plat', filteredValue)
+                                        }}
+                                        placeholder="Pilih/ketik plat..."
+                                        formatCreateLabel={(input) => `Gunakan "${input.toUpperCase()}"`}
+                                        styles={customStyles}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
+                                    />
+                                </div>
+                            )}
 
                             <div>
                                 {(index === 0 || window.innerWidth < 1280) && (
