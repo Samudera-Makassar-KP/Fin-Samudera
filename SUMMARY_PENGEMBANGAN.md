@@ -6,12 +6,13 @@ Saat ini laporan pencapaian KPI Biaya Ops GA (contoh: "Detil Data & Informasi Pe
 
 Dibutuhkan versi **live** dari laporan ini di dalam aplikasi: menu baru "Rekapan" yang otomatis terisi dari setiap pengajuan (BS, Reimbursement BBM/Operasional/Umum) yang sudah melalui sistem — tanpa rekap manual lagi. Selain itu, halaman Cek Pengajuan Super Admin (BS/RBS/LPJ) juga perlu ditingkatkan agar bisa menampilkan semua status sekaligus dan mendukung pencarian by nama/unit bisnis.
 
-Dokumen ini berisi lima bagian:
+Dokumen ini berisi enam bagian:
 - **Bagian A** — Menu Rekapan Unit Bisnis (bagian 2–10)
 - **Bagian B** — Peningkatan Laporan/Cek Pengajuan Super Admin (bagian 11–12)
 - **Bagian C** — Perbaikan Bug Kritis: Duplikasi Nomor BS & Kode Unit Bisnis Hilang di RBS (bagian 13)
 - **Bagian D** — Audit Kode Menyeluruh & Perbaikan Tambahan, 2026-09-01 (bagian 14)
 - **Bagian E** — Plat No Kendaraan, Kategori BBM di RBS/LPJ, & Perluasan Rekapan BBM, 2026-09-01 (bagian 15)
+- **Bagian F** — Filter Checkbox Rekapan, Aksi Cetak/Transferred Reimbursement, Reported BS, & Deploy Produksi, 2026-09-01 (bagian 16)
 
 ## 1.1 Struktur Folder Project
 
@@ -459,3 +460,53 @@ Ditambahkan dropdown multi-select **"Tampilkan Rekapan"** di halaman Rekapan (`R
 - [x] Filter multi-select "Tampilkan Rekapan" di `RekapanUnitBisnis.jsx`
 - [ ] Verifikasi visual data asli di browser (Validator/Admin/Super Admin sungguhan) — **butuh user login manual**, tidak bisa dilakukan otomatis
 - [ ] (Belum dikerjakan, opsional) Pindahkan `BBM_PRICE_PER_LITER` yang terduplikasi di 5 file ke satu shared constant, sama seperti rekomendasi `UNIT_CODES` di 13.5
+
+---
+
+# BAGIAN F — Filter Checkbox Rekapan, Aksi Cetak/Transferred Reimbursement, Reported BS, & Deploy Produksi (2026-09-01)
+
+**Status: SELESAI DIIMPLEMENTASIKAN & DI-DEPLOY ke produksi.**
+
+## 16.1 Filter "Tampilkan Rekapan" jadi Checkbox Dropdown
+
+`RekapanUnitBisnis.jsx`: filter "Tampilkan Rekapan" (lihat 15.8) yang tadinya pakai `react-select` multi-select (chip/tag), diganti jadi dropdown custom berisi daftar checkbox per tabel/kategori, dengan tombol cepat "Pilih Semua" / "Kosongkan". Perilaku filter (`tableFilter`, `isTableVisible`) tidak berubah — cuma UI-nya, supaya lebih mudah dipakai untuk memilih banyak item sekaligus dibanding chip yang menyempit.
+
+## 16.2 Reimbursement Diajukan — Aksi "Cetak" & "Transferred"
+
+`ReimbursementTable.jsx` (tabel "Reimbursement Diajukan" di Dashboard): saat status pengajuan `Disetujui`, kolom Aksi yang tadinya cuma tombol "Batalkan" (disabled) berubah jadi dropdown **Cetak ▾** dengan 4 pilihan:
+- **Print RBS Form** — generate ulang PDF form RBS (`generateReimbursementPDF`, sudah ada dari `DetailRbs.jsx`) lalu buka di tab baru.
+- **Print Lampiran** — buka `lampiranUrl` (bukti/nota) di tab baru.
+- **Print Both** — buka keduanya sekaligus.
+- **Transferred** — menandai dokumen sudah di-TF finance (`updateDoc` field `transferred: true`, `transferredAt`). Setelah ditandai, opsi ini nonaktif (bertanda centang) supaya tidak bisa ditandai dua kali.
+
+**Firestore Rules baru** (`firestore.rules`): ditambahkan fungsi `canMarkTransferred()` — mengizinkan pemilik dokumen (`isWorkflowOwner`) menandai `transferred` hanya kalau `status == 'Disetujui'`, dan cuma field `transferred`/`transferredAt` yang boleh berubah (`affectedKeys().hasOnly([...])`), satu arah (tidak ada rule untuk un-set balik ke `false`). Dipanggil dari `canUpdateWorkflow()` bersama rule-rule lain yang sudah ada. Keputusan akses (dikonfirmasi ke user): **siapa pun yang bisa melihat tabel ini (pemilik pengajuan) boleh menandai Transferred sendiri** — bukan dibatasi role Admin/Finance, karena tabel ini toh cuma menampilkan pengajuan milik user yang login sendiri (query difilter `user.uid == uid`).
+
+## 16.3 Bon Sementara — Label "Reported" & Disable "Buat Laporan"
+
+- `BsTable.jsx` (tabel "Bon Sementara Diajukan"): sudah ada logika `lpjStatus[item.id].status` (`'Belum LPJ'` / `'Sedang LPJ'` / `'Sudah LPJ'`, dihitung dari query koleksi `lpj` yang dicocokkan lewat `nomorBS`). Ditambahkan label **"Reported"** di sebelah Nomor BS ketika `lpjStatus[item.id].status === 'Sudah LPJ'` (LPJ untuk BS itu sudah Disetujui).
+- `DetailBs.jsx`: sebelumnya tombol "Buat Laporan" cuma dicek dari status BS itu sendiri (`bonSementaraDetail.status === 'Disetujui'`) — tidak pernah cek apakah LPJ untuk BS itu sudah pernah dibuat & disetujui. Celahnya: user bisa saja buka lagi Detail BS yang sudah Disetujui dan submit LPJ kedua untuk BS yang sama. Ditambahkan `useEffect` baru yang query koleksi `lpj` milik user (di-filter `user.uid`, cocok dengan rules `list`), dicocokkan ke `nomorBS` BS ini — kalau ketemu dan `status === 'Disetujui'`, tombol "Buat Laporan" di-disable + muncul catatan kecil "Reported -- LPJ sudah Disetujui" di bawahnya.
+
+## 16.4 Styling Label "Reported"/"Transferred"
+
+Berdasarkan feedback user: label dipindah dari baris baru di bawah nomor dokumen jadi **sebaris di depan nomor dokumen** (Nomor BS / Nomor Dokumen Reimbursement), dan warna diubah dari hitam ke **abu-abu** (`text-gray-500` light / `text-gray-400` dark) supaya tetap jelas terbaca tapi tidak terlalu menonjol dibanding nomor dokumennya sendiri. Berlaku di `ReimbursementTable.jsx`, `BsTable.jsx`, dan catatan "Reported" di `DetailBs.jsx`.
+
+## 16.5 Deploy ke Produksi & Alur Kerja Git
+
+Seluruh pekerjaan yang tadinya menumpuk **belum ter-commit** di branch `dev` (Bagian A–E di atas + Bagian F ini) di-commit, di-push, di-merge ke `main`, dan **di-deploy ke produksi** (`samudera-web-cbf2f`, Hosting URL: `https://samudera-web-cbf2f.web.app`) — mencakup Firestore Rules, Storage Rules, 10 Cloud Functions, dan Hosting.
+
+**Catatan penting soal akses deploy:** akun Firebase CLI yang login sebelumnya (`samudera.makassar@gmail.com`) **tidak** terdaftar sebagai member project `samudera-web-cbf2f` (cuma punya akses ke project lain, `sibm-app`) — deploy Firestore Rules sempat gagal 403 karenanya. User login ulang lewat `firebase login` di terminalnya sendiri pakai akun `cctv.samudera@gmail.com` yang punya akses, baru deploy berhasil.
+
+**Catatan soal build flaky:** `CI=true npm run build` sempat gagal 2× dengan error unused-var (`currentCounter` di `FormBs.jsx`, `addDoc` di `FormRbsOperasional.jsx`/`FormRbsUmum.jsx`) padahal isi file di disk (dicek lewat `grep`) **tidak** mengandung kode yang dituduh error tersebut, dan `git status` bersih. Kemungkinan penyebab: cache build (`node_modules/.cache`) yang stale, kemungkinan terganggu oleh sesi lain yang juga menjalankan dev server di folder yang sama secara bersamaan. Solusi yang berhasil: `rm -rf node_modules/.cache` lalu build ulang — selalu sukses setelah itu. **Kalau build gagal dengan error yang terasa tidak sesuai isi file terbaru, cek dulu `git status`/`grep` sebelum menyimpulkan ada bug — kemungkinan besar cache stale, bukan regresi kode.**
+
+**Alur kerja yang disepakati user untuk sesi mendatang:** setiap kali melakukan push sampai tahap deploy produksi, WAJIB (1) update dokumen `SUMMARY_PENGEMBANGAN.md` ini dengan ringkasan perubahan sebelum/sesudah deploy, dan (2) checkout kembali ke branch `dev` setelah selesai deploy dari `main` — supaya kerja lanjutan/perbaikan berikutnya tidak dilakukan langsung di `main` (branch yang di-deploy live), mengurangi risiko tidak sengaja mengganggu link utama yang sedang dipakai user selagi masih dalam proses perbaikan.
+
+## 16.6 Task Development — Bagian F
+
+- [x] Filter "Tampilkan Rekapan" di `RekapanUnitBisnis.jsx` diganti jadi checkbox dropdown custom (dari `react-select` multi-select)
+- [x] Menu Cetak (RBS Form/Lampiran/Both) + Transferred di `ReimbursementTable.jsx` untuk status Disetujui
+- [x] Rule Firestore `canMarkTransferred()` untuk mengizinkan pemilik menandai `transferred`
+- [x] Label "Reported" di `BsTable.jsx` + disable tombol "Buat Laporan" di `DetailBs.jsx` kalau LPJ terkait sudah Disetujui
+- [x] Reposisi label Reported/Transferred jadi sebaris di depan nomor dokumen, warna abu-abu
+- [x] Commit seluruh pekerjaan Bagian A–F, merge `dev` → `main`, deploy penuh (`firebase deploy`) ke `samudera-web-cbf2f`
+- [x] Verifikasi manual oleh user langsung di produksi: fitur Transferred & Reported dikonfirmasi jalan normal
+- [ ] (Belum dikerjakan) Pindahkan `UNIT_CODES`/`BBM_PRICE_PER_LITER` yang terduplikasi ke shared constant (masih pending dari 13.5 & 15.10)
