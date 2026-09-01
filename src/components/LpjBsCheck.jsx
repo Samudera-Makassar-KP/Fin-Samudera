@@ -643,9 +643,20 @@ const LpjBsCheck = () => {
 
             let updateData = {}
 
+            // PENTING: cabang ditentukan dari selectedReport.status (tahap approval
+            // saat ini), BUKAN dari field approvedByValidatorStatus/
+            // approvedByReviewer1Status -- field itu HANYA pernah diisi lewat alur
+            // reject ini sendiri, TIDAK PERNAH diisi saat approve normal
+            // (handleApprove cuma set approvedByValidator: true / boolean, bukan
+            // approvedByValidatorStatus). Kalau reject dicabangkan dari field itu,
+            // Reviewer1/Reviewer2 murni (bukan Validator) yang menolak dokumen yang
+            // sudah lolos tahap sebelumnya secara normal akan selalu jatuh ke
+            // updateData kosong {} -- updateDoc(ref, {}) sukses tanpa efek apa pun,
+            // sementara UI optimis menghapus item + toast sukses, padahal status di
+            // Firestore tidak berubah (baru ketahuan setelah reload).
             if (isSuperAdmin) {
                 // Super Admin rejection logic
-                if (!selectedReport.approvedByValidatorStatus) {
+                if (selectedReport.status === 'Diajukan') {
                     updateData = {
                         status: 'Ditolak',
                         approvedByValidatorStatus: 'superadmin',
@@ -658,7 +669,7 @@ const LpjBsCheck = () => {
                             reason: rejectReason || 'Alasan tidak diberikan'
                         })
                     }
-                } else if (!selectedReport.approvedByReviewer1Status) {
+                } else if (selectedReport.status === 'Divalidasi') {
                     updateData = {
                         status: 'Ditolak',
                         approvedByReviewer1Status: 'superadmin',
@@ -671,10 +682,7 @@ const LpjBsCheck = () => {
                             reason: rejectReason || 'Alasan tidak diberikan'
                         })
                     }
-                } else if (
-                    selectedReport.approvedByReviewer1Status === 'superadmin' ||
-                    selectedReport.approvedByReviewer1Status === 'reviewer'
-                ) {
+                } else if (selectedReport.status === 'Diproses') {
                     updateData = {
                         status: 'Ditolak',
                         approvedByReviewer2Status: 'superadmin',
@@ -687,8 +695,10 @@ const LpjBsCheck = () => {
                             reason: rejectReason || 'Alasan tidak diberikan'
                         })
                     }
+                } else {
+                    throw new Error('LPJ Bon Sementara ini tidak bisa ditolak pada status saat ini.')
                 }
-            } else if (!selectedReport.approvedByValidatorStatus) {
+            } else if (selectedReport.status === 'Diajukan') {
                 if (isValidatorAndReviewer1) {
                     // User is both validator and reviewer1, reject with both roles
                     updateData = {
@@ -718,9 +728,10 @@ const LpjBsCheck = () => {
                             reason: rejectReason || 'Alasan tidak diberikan'
                         })
                     }
+                } else {
+                    throw new Error('Anda tidak memiliki akses untuk menolak lpj ini.')
                 }
-            } else {
-                // Existing reviewer rejection logic
+            } else if (selectedReport.status === 'Divalidasi') {
                 if (isReviewer1) {
                     updateData = {
                         status: 'Ditolak',
@@ -733,11 +744,11 @@ const LpjBsCheck = () => {
                             reason: rejectReason || 'Alasan tidak diberikan'
                         })
                     }
-                } else if (
-                    isReviewer2 &&
-                    (selectedReport.approvedByReviewer1Status === 'reviewer' ||
-                        selectedReport.approvedByReviewer1Status === 'superadmin')
-                ) {
+                } else {
+                    throw new Error('Anda tidak memiliki akses untuk menolak lpj ini.')
+                }
+            } else if (selectedReport.status === 'Diproses') {
+                if (isReviewer2) {
                     updateData = {
                         status: 'Ditolak',
                         rejectReason: rejectReason || 'Alasan tidak diberikan',
@@ -751,6 +762,8 @@ const LpjBsCheck = () => {
                 } else {
                     throw new Error('Anda tidak memiliki akses untuk menolak lpj ini.')
                 }
+            } else {
+                throw new Error('LPJ Bon Sementara ini tidak bisa ditolak pada status saat ini.')
             }
 
             // Update the document

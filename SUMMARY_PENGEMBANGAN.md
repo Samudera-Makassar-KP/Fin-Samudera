@@ -6,13 +6,14 @@ Saat ini laporan pencapaian KPI Biaya Ops GA (contoh: "Detil Data & Informasi Pe
 
 Dibutuhkan versi **live** dari laporan ini di dalam aplikasi: menu baru "Rekapan" yang otomatis terisi dari setiap pengajuan (BS, Reimbursement BBM/Operasional/Umum) yang sudah melalui sistem — tanpa rekap manual lagi. Selain itu, halaman Cek Pengajuan Super Admin (BS/RBS/LPJ) juga perlu ditingkatkan agar bisa menampilkan semua status sekaligus dan mendukung pencarian by nama/unit bisnis.
 
-Dokumen ini berisi enam bagian:
+Dokumen ini berisi tujuh bagian:
 - **Bagian A** — Menu Rekapan Unit Bisnis (bagian 2–10)
 - **Bagian B** — Peningkatan Laporan/Cek Pengajuan Super Admin (bagian 11–12)
 - **Bagian C** — Perbaikan Bug Kritis: Duplikasi Nomor BS & Kode Unit Bisnis Hilang di RBS (bagian 13)
 - **Bagian D** — Audit Kode Menyeluruh & Perbaikan Tambahan, 2026-09-01 (bagian 14)
 - **Bagian E** — Plat No Kendaraan, Kategori BBM di RBS/LPJ, & Perluasan Rekapan BBM, 2026-09-01 (bagian 15)
 - **Bagian F** — Filter Checkbox Rekapan, Aksi Cetak/Transferred Reimbursement, Reported BS, & Deploy Produksi, 2026-09-01 (bagian 16)
+- **Bagian G** — Perbaikan Bug Kritis: Reject RBS/LPJ Silent Fail untuk Reviewer1/Reviewer2, 2026-09-01 (bagian 17)
 
 ## 1.1 Struktur Folder Project
 
@@ -510,3 +511,52 @@ Seluruh pekerjaan yang tadinya menumpuk **belum ter-commit** di branch `dev` (Ba
 - [x] Commit seluruh pekerjaan Bagian A–F, merge `dev` → `main`, deploy penuh (`firebase deploy`) ke `samudera-web-cbf2f`
 - [x] Verifikasi manual oleh user langsung di produksi: fitur Transferred & Reported dikonfirmasi jalan normal
 - [ ] (Belum dikerjakan) Pindahkan `UNIT_CODES`/`BBM_PRICE_PER_LITER` yang terduplikasi ke shared constant (masih pending dari 13.5 & 15.10)
+
+---
+
+# BAGIAN G — Perbaikan Bug Kritis: Reject RBS/LPJ Silent Fail untuk Reviewer1/Reviewer2 (2026-09-01)
+
+**Status: SUDAH DIPERBAIKI & DI-DEPLOY.**
+
+## 17.1 Laporan User
+
+User menolak (reject) satu pengajuan LPJ Bon Sementara berstatus `Diproses` (di halaman "Cek Pengajuan LPJ Bon Sementara") — muncul toast sukses dan baris hilang dari tabel "Perlu Ditanggapi" seperti biasa. Tapi setelah reload halaman, dokumen yang sama muncul lagi di tabel "Perlu Ditanggapi", seolah-olah reject tadi tidak pernah terjadi.
+
+## 17.2 Root Cause
+
+Ditemukan di `ReimbursementCheck.jsx` dan `LpjBsCheck.jsx` (dua-duanya punya alur approval 3 tahap: Validator → Reviewer 1 → Reviewer 2). `handleSubmitReject` di kedua file menentukan tahap mana yang sedang ditolak dengan **mengecek keberadaan field** `approvedByValidatorStatus`/`approvedByReviewer1Status` pada dokumen (`if (!selectedReport.approvedByValidatorStatus) {...} else {...}`).
+
+Masalahnya: field `approvedByValidatorStatus` **HANYA PERNAH diisi lewat alur reject itu sendiri** (`approvedByValidatorStatus: 'validator'`/`'superadmin'`) — `handleApprove` di kedua file **TIDAK PERNAH** mengisi field ini saat approval normal, cuma mengisi `approvedByValidator: true` (field boolean yang berbeda nama). Akibatnya, untuk **dokumen mana pun yang lolos approval Validator secara normal** (kasus paling umum), field `approvedByValidatorStatus` tetap `undefined` selamanya — bukan karena belum divalidasi, tapi karena approve normal memang tidak pernah mengisinya.
+
+Efeknya saat Reviewer1/Reviewer2 (yang BUKAN Validator) menekan Reject pada dokumen status `Divalidasi`/`Diproses`:
+1. `!selectedReport.approvedByValidatorStatus` selalu `true` (field memang tidak pernah ada) → kode masuk ke cabang "Validator belum approve", padahal validator sudah approve dari dulu.
+2. Di cabang itu, hanya `isValidatorAndReviewer1` atau `isValidator` yang ditangani — Reviewer1/Reviewer2 murni tidak cocok kondisi manapun.
+3. `updateData` tetap `{}` (objek kosong) sampai akhir fungsi.
+4. `await updateDoc(ref, {})` — Firestore menerima update kosong sebagai **no-op yang sukses** (tidak ada field yang berubah, tidak ada error dilempar, lolos rules `workflowStatusUpdateKeysOnly()` karena diff-nya kosong).
+5. Kode setelahnya tetap jalan seolah reject berhasil: item dihapus dari state lokal + toast sukses ditampilkan — padahal dokumen di Firestore **sama sekali tidak berubah**.
+6. Reload halaman → query ulang ke Firestore → dokumen (status masih `Divalidasi`/`Diproses`, tidak pernah jadi `Ditolak`) otomatis muncul lagi di tabel "Perlu Ditanggapi".
+
+**Catatan cakupan:** `BsCheck.jsx` (alur BS, cuma 2 tahap: Reviewer1 → Reviewer2) **tidak kena bug ini** — reject-nya sudah benar mengecek `isReviewer1`/`isReviewer2` langsung tanpa bergantung pada field yang tidak reliable ini.
+
+## 17.3 Perbaikan
+
+`handleSubmitReject` di `ReimbursementCheck.jsx` dan `LpjBsCheck.jsx` diubah supaya cabang ditentukan dari **`selectedReport.status`** (tahap approval yang sebenarnya, field yang SELALU akurat dan konsisten dipakai `handleApprove`) — bukan dari keberadaan field `approvedByValidatorStatus`/`approvedByReviewer1Status`. Polanya sekarang persis meniru percabangan `handleApprove`:
+- `status === 'Diajukan'` → reject sebagai Validator (atau Validator+Reviewer1 sekaligus)
+- `status === 'Divalidasi'` → reject sebagai Reviewer 1
+- `status === 'Diproses'` → reject sebagai Reviewer 2
+- Status lain / role tidak cocok → `throw new Error(...)` eksplisit (ditangkap `catch`, muncul toast **gagal**, bukan lagi diam-diam sukses padahal tidak ada perubahan)
+
+Dengan ini, setiap kombinasi status+role menghasilkan salah satu dari dua hasil yang jelas: **update valid** (status jadi `Ditolak`) atau **error eksplisit** — tidak ada lagi jalur `updateData = {}` yang lolos tanpa efek.
+
+## 17.4 Dampak ke Data Lama
+
+Dua dokumen LPJ yang sempat "di-reject" tapi gagal diam-diam (`LPJ.MRO.SKEL.260901.3311` milik Nuzul Wijaya dan `LPJ.MRO.SKEL.260901.8679` milik Rahmat Hidayat, sama-sama status `Diproses` per laporan user) **tidak otomatis berubah** oleh fix ini — statusnya di Firestore tetap `Diproses` seperti semula. **User perlu klik Reject ulang** pada kedua dokumen itu setelah fix ini live; dengan kode yang sudah diperbaiki, reject kali ini akan benar-benar tersimpan ke Firestore.
+
+## 17.5 Task Development — Bagian G
+
+- [x] Root cause: reject RBS/LPJ bercabang dari keberadaan field `approvedByValidatorStatus` yang tidak pernah diisi saat approve normal
+- [x] Fix `handleSubmitReject` di `ReimbursementCheck.jsx` — cabang berdasarkan `selectedReport.status`, tambah `throw` eksplisit untuk kombinasi status/role yang tidak valid
+- [x] Fix `handleSubmitReject` di `LpjBsCheck.jsx` — perbaikan identik
+- [x] Konfirmasi `BsCheck.jsx` tidak terdampak (alur 2 tahap, tidak bergantung pada field bermasalah)
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [ ] User perlu reject ulang 2 dokumen LPJ yang datanya "tersangkut" akibat bug ini (lihat 17.4)
