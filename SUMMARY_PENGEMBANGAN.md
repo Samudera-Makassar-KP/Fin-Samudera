@@ -635,3 +635,32 @@ Detail ditampilkan di baris kedua, font lebih kecil (7pt, abu-abu), di bawah bar
 - [x] Render detail item sebagai baris kedua di kolom ACTIVITIES NAME
 - [x] `CI=true npm run build` sukses (0 warning/error)
 - [ ] Verifikasi visual PDF asli di browser — butuh cetak ulang dokumen sungguhan oleh user (tidak ada kredensial untuk generate PDF asli di sesi ini)
+
+---
+
+# BAGIAN J — Detail Item (khusus BBM) di PDF/Print LPJ, Tanpa Ubah Format (2026-09-01)
+
+**Status: SUDAH DIPERBAIKI & DI-DEPLOY.**
+
+## 20.1 Masalah
+
+Sama seperti RBS (Bagian I), PDF LPJ (`generateLpjPDF` di `src/utils/LpjPdf.jsx`) cuma menampilkan `item.namaItem` di kolom URAIAN tanpa detail tambahan. Untuk item BBM masalahnya lebih besar dari RBS: LPJ BBM **bervariasi** -- ada LPJ yang seluruh isinya BBM ("khusus BBM"), dan ada yang isinya campuran BBM + item non-BBM dalam satu dokumen ("campur", lihat Bagian 15.6). Tidak ada info **Plat Nomor** sama sekali di PDF LPJ, padahal field ini wajib diisi untuk tiap item BBM.
+
+**Kendala tambahan:** user secara eksplisit minta TIDAK mengubah/merusak format PDF yang sudah ada (kolom, lebar, header tabel LPJ ini custom dan sudah dipakai sebagai dokumen resmi).
+
+## 20.2 Solusi (tanpa mengubah format)
+
+Karena item BBM bisa muncul di LPJ mana pun (khusus BBM ATAU campur), perbaikan dilakukan **per-baris** (bukan per-dokumen) -- setiap item dicek sendiri-sendiri lewat prefix `"BBM "` pada `namaItem` (pola yang sama dengan `aggregateBbm`/`getItemDetailText` di Bagian I), sehingga otomatis benar untuk kedua kasus tanpa perlu tahu "jenis LPJ" di level dokumen:
+
+- **Kolom URAIAN** (lebar tidak berubah): baris kedua ditambahkan di bawah `namaItem`, menampilkan `Plat {item.plat}` -- HANYA muncul kalau item itu BBM. Item non-BBM di LPJ campur sama sekali tidak berubah tampilannya.
+- **Kolom "SATUAN BOX/SHIFT/JAM"**: kolom ini SUDAH ADA di format asli tapi selalu kosong (tidak pernah diisi apa pun sebelumnya) -- dimanfaatkan untuk menampilkan teks "Liter" khusus baris BBM, sesuai maksud aslinya (kolom ini memang untuk satuan per-baris). Baris non-BBM tetap kosong seperti semula.
+- Header tabel, jumlah kolom, lebar kolom, dan seluruh baris kosong/total di bawahnya **tidak disentuh sama sekali**.
+
+## 20.3 Task Development — Bagian J
+
+- [x] Tambah deteksi item BBM per-baris (`namaItem.startsWith('BBM ')`) di `LpjPdf.jsx`
+- [x] Tampilkan Plat Nomor sebagai baris kedua di kolom URAIAN untuk item BBM
+- [x] Isi kolom "SATUAN" (sebelumnya selalu kosong) dengan "Liter" untuk item BBM
+- [x] Pastikan item non-BBM (termasuk di LPJ campur) tidak berubah tampilannya
+- [x] `CI=true npm run build` sukses (0 warning/error), format tabel/kolom tidak diubah
+- [ ] Verifikasi visual PDF asli di browser — butuh cetak ulang LPJ BBM sungguhan (khusus BBM & campur) oleh user
