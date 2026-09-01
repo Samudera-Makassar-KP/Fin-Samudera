@@ -433,17 +433,19 @@ const ReimbursementTable = () => {
                                                     {index + 1 + (currentPage - 1) * itemsPerPage}
                                                 </td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">
-                                                    <Link
-                                                        to={`/reimbursement/${item.id}`}
-                                                        className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
-                                                    >
-                                                        {item.displayId}
-                                                    </Link>
-                                                    {item.transferred && (
-                                                        <div className="text-[10px] font-semibold text-black dark:text-gray-300 leading-tight mt-0.5">
-                                                            Transferred
-                                                        </div>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        {item.transferred && (
+                                                            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                                Transferred
+                                                            </span>
+                                                        )}
+                                                        <Link
+                                                            to={`/reimbursement/${item.id}`}
+                                                            className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
+                                                        >
+                                                            {item.displayId}
+                                                        </Link>
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">{item.kategori}</td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">

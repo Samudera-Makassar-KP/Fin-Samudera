@@ -460,6 +460,11 @@ const BsTable = () => {
                                                 </td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">
                                                     <div className="flex items-center gap-2">
+                                                        {lpjStatus[item.id]?.status === 'Sudah LPJ' && (
+                                                            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                                Reported
+                                                            </span>
+                                                        )}
                                                         <Link
                                                             to={`/bon-sementara/${item.id}`}
                                                             className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
@@ -474,11 +479,6 @@ const BsTable = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {lpjStatus[item.id]?.status === 'Sudah LPJ' && (
-                                                        <div className="text-[10px] font-semibold text-black dark:text-gray-300 leading-tight mt-0.5">
-                                                            Reported
-                                                        </div>
-                                                    )}
                                                 </td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">{item.bonSementara[0].kategori}</td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">
