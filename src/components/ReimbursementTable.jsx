@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import ReactDOM from 'react-dom'
 import { Link } from 'react-router-dom'
 import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
@@ -9,6 +10,9 @@ import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { useTheme } from '../context/ThemeContext'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { generateReimbursementPDF } from '../utils/ReimbursementPdf'
 
 const ReimbursementTable = () => {
     const { theme } = useTheme()
@@ -35,6 +39,9 @@ const ReimbursementTable = () => {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [selectedReport, setSelectedReport] = useState(null)
     const [cancelReason, setCancelReason] = useState('')
+
+    const [actionMenu, setActionMenu] = useState(null) // { id, item, top, left }
+    const [printLoadingId, setPrintLoadingId] = useState(null)
 
     const filterOptions = {
         status: [
@@ -215,6 +222,85 @@ const ReimbursementTable = () => {
         }
     }
 
+    const openActionMenu = (item, event) => {
+        const rect = event.currentTarget.getBoundingClientRect()
+        setActionMenu({
+            id: item.id,
+            item,
+            top: rect.bottom + window.scrollY + 4,
+            left: rect.right + window.scrollX
+        })
+    }
+
+    const closeActionMenu = () => setActionMenu(null)
+
+    const handlePrintRbsForm = async (item) => {
+        closeActionMenu()
+        setPrintLoadingId(item.id)
+        try {
+            const url = await generateReimbursementPDF(item)
+            if (!url) return
+            const win = window.open(url, '_blank', 'noopener,noreferrer')
+            if (!win) toast.warning('Pop-up diblokir browser. Izinkan pop-up untuk mencetak RBS Form.')
+        } catch (error) {
+            console.error('Error printing RBS Form:', error)
+            toast.error('Gagal mencetak RBS Form')
+        } finally {
+            setPrintLoadingId(null)
+        }
+    }
+
+    const handlePrintLampiran = (item) => {
+        closeActionMenu()
+        if (!item.lampiranUrl) {
+            toast.error('Lampiran tidak tersedia')
+            return
+        }
+        const win = window.open(item.lampiranUrl, '_blank', 'noopener,noreferrer')
+        if (!win) toast.warning('Pop-up diblokir browser. Izinkan pop-up untuk mencetak Lampiran.')
+    }
+
+    const handlePrintBoth = async (item) => {
+        closeActionMenu()
+        setPrintLoadingId(item.id)
+        try {
+            const url = await generateReimbursementPDF(item)
+            if (url) {
+                const win = window.open(url, '_blank', 'noopener,noreferrer')
+                if (!win) toast.warning('Pop-up diblokir browser. Izinkan pop-up untuk mencetak.')
+            }
+            if (item.lampiranUrl) {
+                window.open(item.lampiranUrl, '_blank', 'noopener,noreferrer')
+            } else {
+                toast.error('Lampiran tidak tersedia, hanya RBS Form yang dicetak')
+            }
+        } catch (error) {
+            console.error('Error printing documents:', error)
+            toast.error('Gagal mencetak dokumen')
+        } finally {
+            setPrintLoadingId(null)
+        }
+    }
+
+    const handleMarkTransferred = async (item) => {
+        closeActionMenu()
+        try {
+            const reimbursementDocRef = doc(db, 'reimbursement', item.id)
+            const transferredAt = new Date().toISOString()
+            await updateDoc(reimbursementDocRef, { transferred: true, transferredAt })
+
+            setData((prev) => ({
+                reimbursements: prev.reimbursements.map((r) =>
+                    r.id === item.id ? { ...r, transferred: true, transferredAt } : r
+                )
+            }))
+            toast.success('Ditandai sebagai sudah ditransfer')
+        } catch (error) {
+            console.error('Error marking transferred:', error)
+            toast.error('Gagal menandai sebagai Transferred')
+        }
+    }
+
     const isDark = theme === 'dark'
     const selectStyles = {
         control: (base) => ({
@@ -353,6 +439,11 @@ const ReimbursementTable = () => {
                                                     >
                                                         {item.displayId}
                                                     </Link>
+                                                    {item.transferred && (
+                                                        <div className="text-[10px] font-semibold text-black dark:text-gray-300 leading-tight mt-0.5">
+                                                            Transferred
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">{item.kategori}</td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">
@@ -382,13 +473,38 @@ const ReimbursementTable = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
-                                                    <button
-                                                        className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed hover"
-                                                        onClick={() => handleCancel(item)}
-                                                        disabled={item.status !== 'Diajukan'}
-                                                    >
-                                                        Batalkan
-                                                    </button>
+                                                    {item.status === 'Disetujui' ? (
+                                                        <button
+                                                            className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            onClick={(e) => openActionMenu(item, e)}
+                                                            disabled={printLoadingId === item.id}
+                                                        >
+                                                            {printLoadingId === item.id ? (
+                                                                <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                                                            ) : (
+                                                                <>
+                                                                    Cetak
+                                                                    <svg
+                                                                        className="w-3 h-3"
+                                                                        viewBox="0 0 24 24"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        strokeWidth="2"
+                                                                    >
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                                                    </svg>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed hover"
+                                                            onClick={() => handleCancel(item)}
+                                                            disabled={item.status !== 'Diajukan'}
+                                                        >
+                                                            Batalkan
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -662,6 +778,49 @@ const ReimbursementTable = () => {
                 reasonLabel='Alasan Pembatalan'
                 reasonPlaceholder='Masukkan alasan pembatalan...'
             />
+
+            {actionMenu && ReactDOM.createPortal(
+                <>
+                    <div className="fixed inset-0 z-40" onClick={closeActionMenu} />
+                    <div
+                        className="fixed z-50 w-52 bg-white dark:bg-gray-700 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 py-1 text-sm text-left"
+                        style={{ top: actionMenu.top, left: actionMenu.left, transform: 'translateX(-100%)' }}
+                    >
+                        <button
+                            className="w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                            onClick={() => handlePrintRbsForm(actionMenu.item)}
+                        >
+                            Print RBS Form
+                        </button>
+                        <button
+                            className="w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                            onClick={() => handlePrintLampiran(actionMenu.item)}
+                        >
+                            Print Lampiran
+                        </button>
+                        <button
+                            className="w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                            onClick={() => handlePrintBoth(actionMenu.item)}
+                        >
+                            Print Both
+                        </button>
+                        <div className="my-1 border-t border-gray-100 dark:border-gray-600" />
+                        {actionMenu.item.transferred ? (
+                            <div className="px-4 py-2 text-gray-400 dark:text-gray-500 cursor-not-allowed">
+                                &#10003; Transferred
+                            </div>
+                        ) : (
+                            <button
+                                className="w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                                onClick={() => handleMarkTransferred(actionMenu.item)}
+                            >
+                                Transferred
+                            </button>
+                        )}
+                    </div>
+                </>,
+                document.body
+            )}
         </div>
     )
 }

@@ -20,6 +20,7 @@ import BsCheckPage from './pages/BsCheckPage';
 import DetailBsPage from './pages/DetailBsPage';
 import ReportExportPage from './pages/ReportExportPage';
 import Dashboard from './pages/Dashboard';
+import RekapanPage from './pages/RekapanPage';
 import AnnouncementManagerPage from './pages/AnnouncementManagerPage';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import AnnouncementPopup from './components/AnnouncementPopup';
@@ -141,6 +142,12 @@ const AppContent = () => {
                     <Route path="/ekspor-laporan-pengajuan" element={
                         <ProtectedRoute allowedRoles={['Super Admin']}>
                             <ReportExportPage />
+                        </ProtectedRoute>
+                    } />
+
+                    <Route path="/rekapan" element={
+                        <ProtectedRoute allowedRoles={['Validator', 'Admin', 'Super Admin']}>
+                            <RekapanPage />
                         </ProtectedRoute>
                     } />
 

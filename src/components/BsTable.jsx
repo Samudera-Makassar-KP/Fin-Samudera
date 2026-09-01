@@ -474,6 +474,11 @@ const BsTable = () => {
                                                             </span>
                                                         )}
                                                     </div>
+                                                    {lpjStatus[item.id]?.status === 'Sudah LPJ' && (
+                                                        <div className="text-[10px] font-semibold text-black dark:text-gray-300 leading-tight mt-0.5">
+                                                            Reported
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">{item.bonSementara[0].kategori}</td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">

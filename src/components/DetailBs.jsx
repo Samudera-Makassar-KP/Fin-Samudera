@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import { useParams, useNavigate } from 'react-router-dom'
 import { generateBsPDF } from '../utils/BsPdf'
@@ -16,6 +16,7 @@ const DetailBs = () => {
     const [reviewers, setReviewers] = useState([])
     const [, setError] = useState(null)
     const [isLoading, setIsLoading] = useState(false)
+    const [isLpjApproved, setIsLpjApproved] = useState(false)
 
     const { id } = useParams()
     const navigate = useNavigate()
@@ -87,6 +88,35 @@ const DetailBs = () => {
             fetchData()
         }
     }, [uid, id])
+
+    // Cek apakah BS ini sudah punya LPJ yang Disetujui -- kalau sudah, tombol
+    // "Buat Laporan" wajib disabled supaya tidak bisa dibuat LPJ dobel untuk
+    // BS yang sama (nomorBS dipakai sebagai kunci pencocokan, sama seperti
+    // pola fetchLpjStatus di BsTable.jsx).
+    useEffect(() => {
+        const checkLpjStatus = async () => {
+            if (!bonSementaraDetail || !userData) return
+            if (userData.uid !== bonSementaraDetail.user?.uid) return
+
+            const nomorBS = bonSementaraDetail?.bonSementara?.[0]?.nomorBS
+            if (!nomorBS) return
+
+            try {
+                const lpjSnapshot = await getDocs(
+                    query(collection(db, 'lpj'), where('user.uid', '==', userData.uid))
+                )
+                const existingLpj = lpjSnapshot.docs
+                    .map((docSnap) => docSnap.data())
+                    .find((d) => d.nomorBS === nomorBS)
+
+                setIsLpjApproved(existingLpj?.status === 'Disetujui')
+            } catch (error) {
+                console.error('Error checking status LPJ:', error)
+            }
+        }
+
+        checkLpjStatus()
+    }, [bonSementaraDetail, userData])
 
     // Fungsi untuk mendapatkan status dengan informasi reviewer berikutnya
     const getStatusWithNextReviewer = (bonSementara, reviewerNames) => {
@@ -569,16 +599,23 @@ const DetailBs = () => {
                 {/* Responsive action buttons */}
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">
                     {userData?.uid === bonSementaraDetail?.user.uid && (
-                        <button
-                            onClick={handleBuatLaporan}
-                            className={`px-12 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui'
-                                ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
-                                : 'text-gray-400 dark:text-gray-600 bg-transparent border border-gray-200 dark:border-gray-600 cursor-not-allowed'
-                                }`}
-                            disabled={bonSementaraDetail?.status !== 'Disetujui'}
-                        >
-                            Buat Laporan
-                        </button>
+                        <div className="flex flex-col items-end">
+                            <button
+                                onClick={handleBuatLaporan}
+                                className={`w-full md:w-auto px-12 py-3 rounded ${bonSementaraDetail?.status === 'Disetujui' && !isLpjApproved
+                                    ? 'text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800'
+                                    : 'text-gray-400 dark:text-gray-600 bg-transparent border border-gray-200 dark:border-gray-600 cursor-not-allowed'
+                                    }`}
+                                disabled={bonSementaraDetail?.status !== 'Disetujui' || isLpjApproved}
+                            >
+                                Buat Laporan
+                            </button>
+                            {isLpjApproved && (
+                                <span className="text-[10px] font-semibold text-black dark:text-gray-300 mt-1">
+                                    Reported -- LPJ sudah Disetujui
+                                </span>
+                            )}
+                        </div>
                     )}
 
                     {(userData?.uid === bonSementaraDetail?.user.uid || 

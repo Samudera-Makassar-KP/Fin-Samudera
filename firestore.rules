@@ -64,7 +64,8 @@ service cloud.firestore {
         && validStringList(data.validator, 20)
         && validStringList(data.reviewer1, 20)
         && validStringList(data.reviewer2, 20)
-        && validStringList(data.lokasi, 20);
+        && validStringList(data.lokasi, 20)
+        && validStringList(data.platKendaraan, 20);
     }
 
     function isWorkflowOwner(data) {
@@ -163,6 +164,16 @@ service cloud.firestore {
         && workflowStatusUpdateKeysOnly();
     }
 
+    // Menandai pengajuan yang sudah Disetujui sebagai sudah di-TF finance
+    // (tombol "Transferred" di ReimbursementTable.jsx). Hanya menambahkan
+    // `transferred`/`transferredAt`, satu arah (tidak bisa di-un-set balik).
+    function canMarkTransferred() {
+      return isWorkflowOwner(resource.data)
+        && resource.data.status == 'Disetujui'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['transferred', 'transferredAt'])
+        && request.resource.data.transferred == true;
+    }
+
     function canUpdateWorkflow() {
       return signedIn()
         && keepsWorkflowIdentity()
@@ -170,6 +181,7 @@ service cloud.firestore {
           isSuperAdmin()
           || canCancelOwnWorkflow()
           || canApproverUpdateWorkflow()
+          || canMarkTransferred()
         );
     }
 
@@ -208,11 +220,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Nomor urut BS & RBS. FormBs.jsx / FormRbsBbm.jsx / FormRbsOperasional.jsx /
-    // FormRbsUmum.jsx menulis ke koleksi 'businessUnitCounters' -- BEDA dari
-    // /counters di atas. Tanpa rule ini, pembuatan nomor BS/RBS baru akan gagal
+    // Nomor urut BS/RBS/LPJ. FormBs.jsx menulis ID dokumen counter '{unitCode}',
+    // sedangkan FormRbsBbm.jsx / FormRbsOperasional.jsx / FormRbsUmum.jsx /
+    // FormLpjUmum.jsx / FormLpjMarketing.jsx menulis ID '{unitCode}_<TIPE>' (mis.
+    // 'SMDR_RBS_BBM') supaya counter tiap tipe dokumen independen -- BEDA dari
+    // /counters di atas. Tanpa rule ini, pembuatan nomor baru akan gagal
     // permission-denied walau tidak terlihat di error LPJ ini.
-    match /businessUnitCounters/{unitCode} {
+    match /businessUnitCounters/{counterId} {
       allow read, create, update: if signedIn();
       allow delete: if false;
     }

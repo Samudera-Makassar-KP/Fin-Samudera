@@ -408,6 +408,7 @@ const normalizeManagedUser = (input) => {
         reviewer2: isSuperAdminRole ? [] : normalizeStringArray(input?.reviewer2, "Reviewer 2"),
         validator: isSuperAdminRole ? [] : normalizeStringArray(input?.validator, "Validator"),
         lokasi: isSuperAdminRole ? [] : normalizeStringArray(input?.lokasi, "Lokasi"),
+        platKendaraan: isSuperAdminRole ? [] : normalizeStringArray(input?.platKendaraan, "Plat Kendaraan"),
     };
 };
 
@@ -538,7 +539,7 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
     });
 
     const [reviewer1Data, reviewer2Data, submitterData] = await Promise.all([
-        getUserData(newData.user.reviewer1[0]),
+        getUserData(newData.user.reviewer1?.[0]),
         getUserData(newData.user.reviewer2?.[0]),
         getUserData(newData.user.uid)
     ]);
@@ -718,7 +719,13 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
     }
     const latestStatusType = latestStatus?.status;
     const statusHistory = newData.statusHistory || [];
-    let nextApproverUid = null;
+    // PENTING: sentinel harus `undefined`, BUKAN `null`. Di bawah, currentApproverUid
+    // cuma di-update kalau nextApproverUid !== undefined -- kalau diinisialisasi `null`,
+    // pengecekan itu selalu true, jadi status yang TIDAK cocok dengan salah satu string
+    // di bawah (mis. typo baru di frontend, atau status yang belum ditangani di sini)
+    // akan diam-diam menge-null-kan currentApproverUid walau approval belum selesai,
+    // membuat dokumen itu tidak muncul lagi di dashboard approver mana pun.
+    let nextApproverUid;
 
     if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Validator)" && reviewer1Data?.email) {
         nextApproverUid = newData.user.reviewer1[0];
@@ -933,7 +940,10 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
     ]);
     const latestStatus = newData.statusHistory?.[newData.statusHistory.length - 1];
     const actorData = latestStatus?.actor ? await getUserData(latestStatus.actor) : null;
-    let nextApproverUid = null;
+    // PENTING: sentinel harus `undefined`, BUKAN `null` -- lihat penjelasan di
+    // notifyReviewersAndUserRBS. Kalau diinisialisasi `null`, status yang tidak cocok
+    // dengan string manapun di bawah akan diam-diam menge-null-kan currentApproverUid.
+    let nextApproverUid;
 
     if (newData.status === "Ditolak") {
         await docRef.update({ currentApproverUid: null });

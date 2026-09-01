@@ -4,6 +4,7 @@ import { db, functions } from '../firebaseConfig'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import Select from 'react-select'
+import CreatableSelect from 'react-select/creatable'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { useTheme } from '../context/ThemeContext'
@@ -25,7 +26,8 @@ const AddUserForm = () => {
         department: [],
         bankName: '',
         accountNumber: '',
-        lokasi: []
+        lokasi: [],
+        platKendaraan: []
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [reviewerOptions, setReviewerOptions] = useState([])
@@ -108,6 +110,7 @@ const AddUserForm = () => {
                 reviewer2: [],
                 validator: [],
                 lokasi: [],
+                platKendaraan: [],
                 [field]: selectedOption.value
             })
         } else if (field === 'department' || field === 'unit' || field === 'lokasi') {
@@ -125,6 +128,15 @@ const AddUserForm = () => {
                     : selectedOption?.value || ''
             })
         }
+    }
+
+    const handlePlatChange = (selectedOptions) => {
+        const values = Array.isArray(selectedOptions)
+            ? selectedOptions
+                .map((option) => (option.value || '').toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim())
+                .filter(Boolean)
+            : []
+        setFormData({ ...formData, platKendaraan: values })
     }
 
     const handleSubmit = async (e) => {
@@ -214,6 +226,7 @@ const AddUserForm = () => {
                     reviewer2: formData.role === 'Super Admin' ? [] : formData.reviewer2,
                     validator: formData.role === 'Super Admin' ? [] : formData.validator,
                     lokasi: formData.role === 'Super Admin' ? [] : formData.lokasi,
+                    platKendaraan: formData.role === 'Super Admin' ? [] : formData.platKendaraan,
                 });
 
                 toast.success('Pengguna berhasil ditambahkan. Email pengaturan kata sandi akan dikirim jika email notifikasi aktif.');
@@ -231,7 +244,8 @@ const AddUserForm = () => {
                     reviewer1: [],
                     reviewer2: [],
                     validator: [],
-                    lokasi: []
+                    lokasi: [],
+                    platKendaraan: []
                 });
 
                 setTimeout(() => {
@@ -488,6 +502,25 @@ const AddUserForm = () => {
                                             menuPosition="absolute"
                                         />
                                     </div>
+                                    <div className="mb-2">
+                                        <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                            Plat No Kendaraan
+                                        </label>
+                                        <CreatableSelect
+                                            isMulti
+                                            name="platKendaraan"
+                                            options={[]}
+                                            value={formData.platKendaraan.map(p => ({ value: p, label: p }))}
+                                            onChange={handlePlatChange}
+                                            placeholder="Isi jika karyawan memiliki kendaraan (mis. DD 1234 AB)"
+                                            formatCreateLabel={(input) => `Tambah plat "${input.toUpperCase()}"`}
+                                            className="basic-multi-select mt-1"
+                                            classNamePrefix="select"
+                                            styles={selectStyles}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <div className="mb-2">
@@ -701,6 +734,25 @@ const AddUserForm = () => {
                                         options={lokasiOptions}
                                         value={formData.lokasi.length > 0 ? lokasiOptions.filter(option => formData.lokasi.includes(option.value)) : []}
                                         onChange={(selectedOptions) => handleSelectChange(selectedOptions, 'lokasi')}
+                                        className="basic-multi-select mt-1"
+                                        classNamePrefix="select"
+                                        styles={selectStyles}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
+                                    />
+                                </div>
+                                <div className="mb-2">
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Plat No Kendaraan
+                                    </label>
+                                    <CreatableSelect
+                                        isMulti
+                                        name="platKendaraan"
+                                        options={[]}
+                                        value={formData.platKendaraan.map(p => ({ value: p, label: p }))}
+                                        onChange={handlePlatChange}
+                                        placeholder="Isi jika karyawan memiliki kendaraan (mis. DD 1234 AB)"
+                                        formatCreateLabel={(input) => `Tambah plat "${input.toUpperCase()}"`}
                                         className="basic-multi-select mt-1"
                                         classNamePrefix="select"
                                         styles={selectStyles}

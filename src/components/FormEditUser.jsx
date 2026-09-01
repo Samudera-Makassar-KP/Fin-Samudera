@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { db } from '../firebaseConfig'
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
 import Select from 'react-select'
+import CreatableSelect from 'react-select/creatable'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { useTheme } from '../context/ThemeContext'
@@ -25,7 +26,8 @@ const EditUserForm = () => {
         department: [],
         bankName: '',
         accountNumber: '',
-        lokasi: []
+        lokasi: [],
+        platKendaraan: []
     })
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [reviewer1Options, setReviewer1Options] = useState([])
@@ -117,7 +119,8 @@ const EditUserForm = () => {
                         validator: userData.validator || [],
                         // Handling konversi data lama (string) ke format baru (array)
                         unit: Array.isArray(userData.unit) ? userData.unit : (userData.unit ? [userData.unit] : []),
-                        lokasi: Array.isArray(userData.lokasi) ? userData.lokasi : (userData.lokasi ? [userData.lokasi] : [])
+                        lokasi: Array.isArray(userData.lokasi) ? userData.lokasi : (userData.lokasi ? [userData.lokasi] : []),
+                        platKendaraan: Array.isArray(userData.platKendaraan) ? userData.platKendaraan : []
                     })
                 } else {
                     console.error('User not found')
@@ -229,7 +232,8 @@ const EditUserForm = () => {
                     validator: [],
                     reviewer1: [],
                     reviewer2: [],
-                    lokasi: []
+                    lokasi: [],
+                    platKendaraan: []
                 })
                 return
             }
@@ -277,6 +281,15 @@ const EditUserForm = () => {
                     : selectedOption?.value || ''
             })
         }
+    }
+
+    const handlePlatChange = (selectedOptions) => {
+        const values = Array.isArray(selectedOptions)
+            ? selectedOptions
+                .map((option) => (option.value || '').toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim())
+                .filter(Boolean)
+            : []
+        setFormData({ ...formData, platKendaraan: values })
     }
 
     const handleSubmit = async (e) => {
@@ -563,6 +576,25 @@ const EditUserForm = () => {
                                         menuPosition="absolute"
                                     />
                                 </div>
+                                <div className="mb-2">
+                                    <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                        Plat No Kendaraan
+                                    </label>
+                                    <CreatableSelect
+                                        isMulti
+                                        name="platKendaraan"
+                                        value={formData.platKendaraan.map(p => ({ value: p, label: p }))}
+                                        onChange={handlePlatChange}
+                                        options={[]}
+                                        placeholder="Isi jika karyawan memiliki kendaraan (mis. DD 1234 AB)"
+                                        formatCreateLabel={(input) => `Tambah plat "${input.toUpperCase()}"`}
+                                        className="basic-multi-select mt-1"
+                                        classNamePrefix="select"
+                                        styles={selectStyles}
+                                        menuPortalTarget={document.body}
+                                        menuPosition="absolute"
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <div className="mb-2">
@@ -776,6 +808,25 @@ const EditUserForm = () => {
                                     options={lokasiOptions}
                                     value={lokasiOptions.filter(option => formData.lokasi?.includes(option.value))}
                                     onChange={(selectedOption) => handleSelectChange(selectedOption, 'lokasi')}
+                                    className="basic-multi-select mt-1"
+                                    classNamePrefix="select"
+                                    styles={selectStyles}
+                                    menuPortalTarget={document.body}
+                                    menuPosition="absolute"
+                                />
+                            </div>
+                            <div className="mb-2">
+                                <label className="block font-medium text-gray-700 dark:text-gray-300">
+                                    Plat No Kendaraan
+                                </label>
+                                <CreatableSelect
+                                    isMulti
+                                    name="platKendaraan"
+                                    value={formData.platKendaraan.map(p => ({ value: p, label: p }))}
+                                    onChange={handlePlatChange}
+                                    options={[]}
+                                    placeholder="Isi jika karyawan memiliki kendaraan (mis. DD 1234 AB)"
+                                    formatCreateLabel={(input) => `Tambah plat "${input.toUpperCase()}"`}
                                     className="basic-multi-select mt-1"
                                     classNamePrefix="select"
                                     styles={selectStyles}

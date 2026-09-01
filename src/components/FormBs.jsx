@@ -331,8 +331,6 @@ const FormBs = () => {
         setBonSementara(updatedBonSementara)
     }
 
-    const [currentCounter, setCurrentCounter] = useState(null);
-
     const getCurrentCounter = async (unitCode) => {
         try {
             const counterRef = doc(db, 'businessUnitCounters', unitCode);
@@ -401,7 +399,6 @@ const FormBs = () => {
             }
 
             const sequence = await getCurrentCounter(kodeUnitBisnis);
-            setCurrentCounter(sequence);
 
             const newNomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`;
 
@@ -443,7 +440,6 @@ const FormBs = () => {
             }
 
             const sequence = await getCurrentCounter(kodeUnitBisnis);
-            setCurrentCounter(sequence);
 
             const nomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`;
             return nomorBS;

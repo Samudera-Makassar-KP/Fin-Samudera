@@ -285,7 +285,8 @@ const DetailRbs = () => {
         const categoryColumns = {
             bbm: [
                 { header: 'Lokasi Pertamina', key: 'lokasi' },
-                { header: 'Plat Nomor', key: 'plat' }
+                { header: 'Plat Nomor', key: 'plat' },
+                { header: 'Liter', key: 'liter' }
             ],
             operasional: [
                 { header: 'Kebutuhan', key: 'kebutuhan' },
@@ -311,6 +312,19 @@ const DetailRbs = () => {
             case 'biaya':
                 return `Rp${item[column.key]?.toLocaleString('id-ID') || 'N/A'}`
             case 'item':
+            case 'kebutuhan':
+                // Item RBS Operasional/GA-Umum berjenis BBM tidak punya kebutuhan/item (field disembunyikan
+                // di form, diganti Plat & Liter) -- tampilkan info itu di sini biar tetap kelihatan di Detail.
+                if (item.plat) {
+                    return (
+                        <div>
+                            <div>{item[column.key] || '-'}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                Plat: {item.plat} &middot; Liter: {item.liter || '-'}
+                            </div>
+                        </div>
+                    )
+                }
                 return item[column.key] || 'N/A'
             case 'keterangan':
                 if (!item.keterangan) return ''
