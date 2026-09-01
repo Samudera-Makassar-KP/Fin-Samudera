@@ -576,37 +576,53 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator }) => {
                         </View>
                     </View>
 
-                    {/* Data Row */}
-                    {lpjDetail.lpj?.map((item, index) => (
-                        <View key={index} style={styles.tableRow}>
-                            <View style={[styles.tableCell, { width: '5%', textAlign: 'center' }]}>
-                                <Text>{index + 1}</Text>
+                    {/* Data Row -- item BBM (dikenali dari prefix "BBM " pada namaItem, sama
+                    seperti logika aggregateBbm) bisa muncul di LPJ yang seluruh isinya BBM
+                    ("khusus BBM") maupun bercampur dengan item non-BBM dalam satu dokumen
+                    ("campur") -- pengecekan per-baris di bawah ini otomatis menangani
+                    keduanya tanpa perlu tahu jenis LPJ-nya di level dokumen. Kolom & lebar
+                    tabel TIDAK diubah -- Plat ditambahkan sebagai baris kedua di kolom
+                    URAIAN (sama seperti pola di DetailLpj.jsx/DetailRbs.jsx), dan kolom
+                    "SATUAN BOX/SHIFT/JAM" yang sebelumnya selalu kosong sekarang diisi
+                    "Liter" khusus untuk baris BBM. */}
+                    {lpjDetail.lpj?.map((item, index) => {
+                        const isBbmItem = typeof item.namaItem === 'string' && item.namaItem.startsWith('BBM ')
+                        return (
+                            <View key={index} style={styles.tableRow}>
+                                <View style={[styles.tableCell, { width: '5%', textAlign: 'center' }]}>
+                                    <Text>{index + 1}</Text>
+                                </View>
+                                <View style={[styles.tableCell, { width: '32%' }]}>
+                                    <Text>{item.namaItem}</Text>
+                                    {isBbmItem && item.plat ? (
+                                        <Text style={{ fontSize: 7, color: '#555', marginTop: 1 }}>
+                                            Plat {item.plat}
+                                        </Text>
+                                    ) : null}
+                                </View>
+                                <View style={[styles.tableCell, { width: '12%' }]}>
+                                    <Text> </Text>
+                                </View>
+                                <View style={[styles.tableCell, { width: '7%', textAlign: 'center' }]}>
+                                    <Text>{item.jumlah}</Text>
+                                </View>
+                                <View style={[styles.tableCell, { width: '10%', textAlign: 'center' }]}>
+                                    <Text>{isBbmItem ? 'Liter' : ' '}</Text>
+                                </View>
+                                <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
+                                    <Text>{item?.biaya.toLocaleString('id-ID') || '-'}</Text>
+                                </View>
+                                <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
+                                    <Text>{item?.jumlahBiaya.toLocaleString('id-ID') || '-'}</Text>
+                                </View>
+                                <View style={[styles.tableCell, { width: '10%', borderRight: 0 }]}>
+                                    <Text style={{ flexWrap: 'wrap', textAlign: 'left', overflow: 'hidden' }}>
+                                        {(item?.keterangan || '').replace(/(\d)/g, '$1\u200B')}
+                                    </Text>
+                                </View>
                             </View>
-                            <View style={[styles.tableCell, { width: '32%' }]}>
-                                <Text>{item.namaItem}</Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '12%' }]}>
-                                <Text> </Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '7%', textAlign: 'center' }]}>
-                                <Text>{item.jumlah}</Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '10%' }]}>
-                                <Text> </Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
-                                <Text>{item?.biaya.toLocaleString('id-ID') || '-'}</Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
-                                <Text>{item?.jumlahBiaya.toLocaleString('id-ID') || '-'}</Text>
-                            </View>
-                            <View style={[styles.tableCell, { width: '10%', borderRight: 0 }]}>
-                                <Text style={{ flexWrap: 'wrap', textAlign: 'left', overflow: 'hidden' }}>
-                                    {(item?.keterangan || '').replace(/(\d)/g, '$1\u200B')}
-                                </Text>
-                            </View>
-                        </View>
-                    ))}
+                        )
+                    })}
 
                     {/* Empty Row */}
                     <View style={styles.tableRow}>
