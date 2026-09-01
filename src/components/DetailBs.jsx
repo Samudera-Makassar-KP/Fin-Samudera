@@ -611,7 +611,7 @@ const DetailBs = () => {
                                 Buat Laporan
                             </button>
                             {isLpjApproved && (
-                                <span className="text-[10px] font-semibold text-black dark:text-gray-300 mt-1">
+                                <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-1">
                                     Reported -- LPJ sudah Disetujui
                                 </span>
                             )}
