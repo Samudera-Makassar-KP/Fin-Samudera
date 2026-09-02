@@ -1,4 +1,4 @@
-const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
@@ -223,6 +223,9 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
         case 'reminder':
             headerText = 'Pengingat Approval';
             break;
+        case 'financeReminder':
+            headerText = 'Reminder untuk Finance';
+            break;
         default:
             headerText = 'Permintaan Approval';
     }
@@ -312,7 +315,7 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
 };
 
 // Helper Function: Mengirim email
-const sendEmail = async (to, subject, htmlContent = null) => {
+const sendEmail = async (to, subject, htmlContent = null, attachments = []) => {
     if (!to) return false;
 
     try {
@@ -321,7 +324,8 @@ const sendEmail = async (to, subject, htmlContent = null) => {
             from: '"No Reply - Notifikasi Samudera" <' + fromEmail + '>',
             to,
             subject,
-            html: htmlContent
+            html: htmlContent,
+            ...(attachments.length > 0 ? { attachments } : {})
         };
 
         await transporter.sendMail(mailOptions);
@@ -493,6 +497,97 @@ exports.deleteManagedUser = onCall(async (request) => {
     }
 });
 
+// /userDirectory adalah mirror read-only dari /users yang HANYA berisi field
+// aman (bukan bankName/accountNumber dkk) -- dibaca client manapun yang login
+// (lihat firestore.rules) untuk kebutuhan lintas-user yang legit tapi tidak
+// butuh data finansial: dropdown Reviewer/Validator, dropdown plat BBM lintas
+// user, dan nama approver di PDF/Detail. Sebelumnya semua kebutuhan itu
+// query langsung ke /users collection, yang berarti SIAPA PUN yang login bisa
+// baca profil lengkap user lain termasuk nomor rekening bank (lihat Bagian
+// H/18.4). Mirror ini disinkron otomatis oleh trigger di bawah setiap kali
+// /users/{uid} ditulis (baik lewat Cloud Function createManagedUser, maupun
+// lewat update langsung client Super Admin di FormEditUser.jsx).
+const buildUserDirectoryEntry = (data) => ({
+    nama: typeof data?.nama === "string" ? data.nama : "",
+    role: typeof data?.role === "string" ? data.role : "",
+    unit: Array.isArray(data?.unit) ? data.unit : [],
+    platKendaraan: Array.isArray(data?.platKendaraan) ? data.platKendaraan : [],
+});
+
+exports.syncUserDirectoryOnWrite = onDocumentWritten("users/{uid}", async (event) => {
+    const uid = event.params.uid;
+    const directoryRef = db.collection("userDirectory").doc(uid);
+
+    if (!event.data?.after?.exists) {
+        await directoryRef.delete().catch(() => undefined);
+        return;
+    }
+
+    await directoryRef.set(buildUserDirectoryEntry(event.data.after.data()));
+});
+
+// Migrasi satu-kali untuk user LAMA yang sudah ada sebelum trigger di atas
+// live (trigger hanya jalan untuk write BARU, bukan retroaktif). Aman dipanggil
+// berkali-kali (idempotent) -- dipakai lewat tombol "Sinkronkan Direktori
+// Pengguna" di halaman Manage User.
+exports.backfillUserDirectory = onCall(async (request) => {
+    await requireSuperAdmin(request.auth);
+
+    const usersSnapshot = await db.collection("users").get();
+    const chunks = [];
+    for (let i = 0; i < usersSnapshot.docs.length; i += 400) {
+        chunks.push(usersSnapshot.docs.slice(i, i + 400));
+    }
+
+    let synced = 0;
+    for (const chunk of chunks) {
+        const batch = db.batch();
+        chunk.forEach((userDoc) => {
+            batch.set(db.collection("userDirectory").doc(userDoc.id), buildUserDirectoryEntry(userDoc.data()));
+        });
+        await batch.commit();
+        synced += chunk.length;
+    }
+
+    return { synced };
+});
+
+// Migrasi satu-kali untuk dokumen bonSementara/reimbursement/lpj LAMA yang sudah
+// ada sebelum /displayIdOwners (lihat Bagian K/21.2) diperkenalkan -- tanpa ini,
+// storage.rules akan menolak pemilik dokumen lama sendiri saat mencetak ulang
+// PDF-nya (mis. tombol "Print" di Detail BS/RBS/LPJ, atau "Cetak" di
+// ReimbursementTable.jsx), karena isOwnerOfDisplayId() tidak menemukan entri
+// kepemilikan untuk displayId yang dibuat sebelum fitur ini live. Aman dipanggil
+// berkali-kali (idempotent, pakai merge). Dipakai lewat tombol "Sinkronkan
+// Kepemilikan Dokumen" di halaman Manage User.
+exports.backfillDisplayIdOwners = onCall(async (request) => {
+    await requireSuperAdmin(request.auth);
+
+    const collectionsToBackfill = ["bonSementara", "reimbursement", "lpj"];
+    let synced = 0;
+
+    for (const collectionName of collectionsToBackfill) {
+        const snapshot = await db.collection(collectionName).get();
+        const eligibleDocs = snapshot.docs.filter((docSnap) => {
+            const data = docSnap.data();
+            return typeof data?.displayId === "string" && data.displayId && typeof data?.user?.uid === "string" && data.user.uid;
+        });
+
+        for (let i = 0; i < eligibleDocs.length; i += 400) {
+            const chunk = eligibleDocs.slice(i, i + 400);
+            const batch = db.batch();
+            chunk.forEach((docSnap) => {
+                const data = docSnap.data();
+                batch.set(db.collection("displayIdOwners").doc(data.displayId), { uid: data.user.uid }, { merge: true });
+            });
+            await batch.commit();
+            synced += chunk.length;
+        }
+    }
+
+    return { synced };
+});
+
 // Trigger saat BS pertama kali dibuat
 exports.notifyReviewer1OnCreateBS = onDocumentCreated("bonSementara/{docId}", async (event) => {
     const newData = event.data.data();
@@ -643,6 +738,97 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
             createEmailTemplate(emailContent, submitterData, newData, false, 'approved')
         );
     }
+});
+
+// Dipanggil dari tombol "Kirim Reminder ke Finance" di BsTable.jsx (kolom Aksi,
+// khusus BS berstatus Disetujui). Finance = user role Validator. Mengirim satu
+// email berisi narasi permintaan bantuan pencairan + detail BS (format sama
+// seperti email notifikasi lain, lihat createEmailTemplate) + lampiran PDF BS
+// (format sama seperti PDF hasil "Print", digenerate & di-upload client lewat
+// generateBsPDF sebelum memanggil ini, lalu diambil ulang di sini lewat
+// pdfUrl -- downloadURL Firebase Storage sudah membawa token akses sendiri,
+// jadi bisa di-fetch tanpa Admin SDK Storage).
+exports.sendBsFinanceReminder = onCall(async (request) => {
+    if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
+    }
+
+    const bsId = normalizeText(request.data?.bsId, "ID BS", 200);
+    const validatorUid = normalizeText(request.data?.validatorUid, "UID Validator", 128);
+    const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
+
+    const bsDoc = await db.collection("bonSementara").doc(bsId).get();
+    if (!bsDoc.exists) {
+        throw new HttpsError("not-found", "Data Bon Sementara tidak ditemukan.");
+    }
+    const bsData = bsDoc.data();
+
+    if (bsData.user?.uid !== request.auth.uid) {
+        throw new HttpsError("permission-denied", "Anda hanya bisa mengirim reminder untuk BS milik sendiri.");
+    }
+    if (bsData.status !== "Disetujui") {
+        throw new HttpsError("failed-precondition", "BS belum berstatus Disetujui.");
+    }
+
+    const [validatorData, submitterData] = await Promise.all([
+        getUserData(validatorUid),
+        getUserData(request.auth.uid)
+    ]);
+
+    if (!validatorData || validatorData.role !== "Validator") {
+        throw new HttpsError("invalid-argument", "Finance (Validator) yang dipilih tidak ditemukan atau bukan role Validator.");
+    }
+    if (!validatorData.email) {
+        throw new HttpsError("failed-precondition", "Finance yang dipilih tidak memiliki alamat email terdaftar.");
+    }
+
+    // Defense-in-depth: jangan percaya begitu saja validatorUid dari client --
+    // pastikan Validator ini memang ditugaskan di salah satu Unit Bisnis yang
+    // sama dengan submitter (mencegah kirim reminder ke Validator unit lain).
+    const submitterUnits = Array.isArray(submitterData?.unit) ? submitterData.unit : [];
+    const validatorUnits = Array.isArray(validatorData?.unit) ? validatorData.unit : [];
+    const sharesUnit = submitterUnits.some((unit) => validatorUnits.includes(unit));
+    if (!sharesUnit) {
+        throw new HttpsError("permission-denied", "Finance yang dipilih tidak terdaftar di Unit Bisnis Anda.");
+    }
+
+    let attachments = [];
+    if (pdfUrl) {
+        try {
+            const response = await fetch(pdfUrl);
+            if (response.ok) {
+                const arrayBuffer = await response.arrayBuffer();
+                attachments = [{
+                    filename: `${bsData.displayId}.pdf`,
+                    content: Buffer.from(arrayBuffer),
+                    contentType: "application/pdf"
+                }];
+            } else {
+                console.error("Gagal mengambil PDF BS untuk lampiran reminder, status:", response.status);
+            }
+        } catch (error) {
+            console.error("Gagal mengambil PDF BS untuk lampiran reminder:", error);
+        }
+    }
+
+    const subject = `Reminder Pencairan BS - ${bsData.displayId}`;
+    const emailContent = `
+        Dear <strong>${validatorData.nama}</strong>,
+        <br><br>Mohon dibantu maker atas BS berikut:
+    `;
+
+    const sent = await sendEmail(
+        validatorData.email,
+        subject,
+        createEmailTemplate(emailContent, submitterData, bsData, true, "financeReminder"),
+        attachments
+    );
+
+    if (!sent) {
+        throw new HttpsError("internal", "Gagal mengirim email reminder ke Finance.");
+    }
+
+    return { sent: true, to: validatorData.email };
 });
 
 // Trigger saat Reimbursement pertama kali dibuat

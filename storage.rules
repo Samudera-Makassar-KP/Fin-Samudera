@@ -13,24 +13,59 @@ service firebase.storage {
         && request.resource.contentType == 'application/pdf';
     }
 
-    match /Reimbursement/{allPaths=**} {
-      allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+    // Cross-service rules: firestore.get()/exists() di sini SELALU boleh baca
+    // Firestore (bypass firestore.rules), jadi aman dipakai untuk keputusan akses
+    // walau client sendiri tidak diizinkan baca /users atau /displayIdOwners langsung.
+    function userRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    match /BonSementara/{allPaths=**} {
-      allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+    function isElevatedRole() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && userRole() in ['Reviewer', 'Validator', 'Admin', 'Super Admin'];
     }
 
-    match /LPJ/{allPaths=**} {
-      allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+    // Pemilik dokumen (dicatat atomik saat displayId digenerate, lihat
+    // /displayIdOwners di firestore.rules) -- satu-satunya pihak selain role
+    // elevated yang boleh menulis/menimpa file di path bertanda displayId ini.
+    function isOwnerOfDisplayId(displayId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/displayIdOwners/$(displayId))
+        && firestore.get(/databases/(default)/documents/displayIdOwners/$(displayId)).data.uid == request.auth.uid;
     }
 
+    // Sebelumnya `allow write: if signedIn()` -- siapa pun yang login bisa
+    // menimpa lampiran/PDF di path MANAPUN kalau tahu/menebak displayId-nya
+    // (lihat Bagian H/18.4). Sekarang wajib pemilik dokumen tsb, atau role
+    // elevated (dipakai saat Super Admin mengedit pengajuan lama & saat
+    // approver/Detail page men-generate ulang PDF pengajuan orang lain).
+    function canWriteToDisplayId(displayId) {
+      return validPdfUpload() && (isOwnerOfDisplayId(displayId) || isElevatedRole());
+    }
+
+    match /Reimbursement/{category}/{displayId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && canWriteToDisplayId(displayId);
+    }
+
+    match /BonSementara/{category}/{displayId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && canWriteToDisplayId(displayId);
+    }
+
+    match /LPJ/{category}/{displayId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && canWriteToDisplayId(displayId);
+    }
+
+    // Path flat 'lampiran_lpj/{displayId}_{namaFile}' (bukan sub-folder per
+    // displayId seperti 3 di atas) -- displayId diambil dari prefix sebelum '_'
+    // pertama pada nama file (displayId LPJ, mis. 'LPJ.MRO.SKEL.260901.3311',
+    // tidak pernah mengandung '_').
     match /lampiran_lpj/{fileName} {
       allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+      allow write: if signedIn() && canWriteToDisplayId(fileName.split('_')[0]);
     }
 
     match /{allPaths=**} {

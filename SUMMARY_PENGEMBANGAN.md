@@ -15,6 +15,10 @@ Dokumen ini berisi delapan bagian:
 - **Bagian F** — Filter Checkbox Rekapan, Aksi Cetak/Transferred Reimbursement, Reported BS, & Deploy Produksi, 2026-09-01 (bagian 16)
 - **Bagian G** — Perbaikan Bug Kritis: Reject RBS/LPJ Silent Fail untuk Reviewer1/Reviewer2, 2026-09-01 (bagian 17)
 - **Bagian H** — Audit & Pengetatan Firestore Rules, Verifikasi Edit/Hapus Super Admin, 2026-09-01 (bagian 18)
+- **Bagian I** — Detail Item di PDF/Print RBS, 2026-09-01 (bagian 19)
+- **Bagian J** — Detail Item (khusus BBM) di PDF/Print LPJ, Tanpa Ubah Format, 2026-09-01 (bagian 20)
+- **Bagian K** — Eksekusi 2 Temuan Keamanan Tertunda dari Bagian H: Storage Ownership & Proteksi Data Bank User, 2026-09-02 (bagian 21) — **SUDAH DIKERJAKAN DI `dev`, BELUM DI-DEPLOY, wajib tes manual dulu (lihat 21.5)**
+- **Bagian L** — Aksi "Send Reminder to Finance" di Tabel BS, 2026-09-02 (bagian 22) — **SUDAH DIKERJAKAN DI `dev`, BELUM DI-DEPLOY, wajib tes manual dulu (lihat 22.5)**
 
 ## 1.1 Struktur Folder Project
 
@@ -664,3 +668,139 @@ Karena item BBM bisa muncul di LPJ mana pun (khusus BBM ATAU campur), perbaikan 
 - [x] Pastikan item non-BBM (termasuk di LPJ campur) tidak berubah tampilannya
 - [x] `CI=true npm run build` sukses (0 warning/error), format tabel/kolom tidak diubah
 - [ ] Verifikasi visual PDF asli di browser — butuh cetak ulang LPJ BBM sungguhan (khusus BBM & campur) oleh user
+
+---
+
+# BAGIAN K — Eksekusi 2 Temuan Keamanan Tertunda dari Bagian H (2026-09-02)
+
+**Status: SUDAH DIKERJAKAN DI BRANCH `dev`. BELUM DI-DEPLOY.** User diminta tes manual dulu (lihat 21.5) sebelum ini di-push/deploy ke produksi — beda dari bagian-bagian sebelumnya, sesi ini TIDAK ada kredensial login asli untuk verifikasi end-to-end, dan perubahan menyentuh alur inti (submit form, cetak PDF, halaman Detail) yang aktif dipakai untuk approval finansial.
+
+## 21.1 Konteks
+
+Dua temuan di Bagian H/18.4 ("Belum Diperbaiki, Perlu Keputusan User") diminta dieksekusi: (a) `storage.rules` yang mengizinkan siapa pun login menimpa lampiran di path manapun asal tahu/menebak path-nya, dan (b) rule `/users/{uid}` yang mengizinkan siapa pun login membaca profil LENGKAP user lain termasuk `bankName`/`accountNumber`. Riset kode saat eksekusi menemukan cakupan (b) jauh lebih besar dari dugaan awal di 18.4 — bukan cuma dipakai dropdown plat BBM, tapi juga PDF generator (`BsPdf.jsx`/`ReimbursementPdf.jsx`/`LpjPdf.jsx`) dan halaman Detail (`DetailBs/Rbs/Lpj.jsx`) yang membaca profil approver lain untuk menampilkan nama — dipakai Employee biasa saat lihat/cetak pengajuan miliknya sendiri, bukan cuma Admin.
+
+## 21.2 Perbaikan (a): Storage Ownership
+
+**Sebelumnya:** `storage.rules` mengizinkan `allow write: if signedIn()` tanpa syarat kepemilikan — siapa pun yang login bisa upload/menimpa file di path `Reimbursement/`, `BonSementara/`, `LPJ/`, `lampiran_lpj/` MANAPUN, asal tahu/menebak `displayId`-nya (nomor dokumen, formatnya cukup predictable: `RBS.BBM.{unitCode}.{YYMMDD}.{sequence}`).
+
+**Perbaikan:**
+- Koleksi Firestore baru `/displayIdOwners/{displayId}` — indeks kepemilikan `{uid}`, ditulis ATOMIK di transaksi yang sama saat `displayId` digenerate (`generateDisplayId()` di `FormRbsBbm.jsx`/`FormRbsOperasional.jsx`/`FormRbsUmum.jsx`/`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`, dan transaksi nomor BS di `FormBs.jsx`) — tidak ada celah antara nomor dibuat & kepemilikannya tercatat. Rule-nya di `firestore.rules`: hanya bisa `create` oleh pemilik sendiri, tidak pernah bisa dibaca langsung oleh client (`allow get, list: if false`), tidak pernah bisa diubah/dihapus.
+- `storage.rules` ditulis ulang: fungsi `isOwnerOfDisplayId(displayId)` & `isElevatedRole()` memakai `firestore.get()`/`firestore.exists()` (cross-service rules, otomatis bypass firestore.rules) untuk mengecek Firestore dari dalam Storage Rules. `displayId` diambil dari path (`Reimbursement/{category}/{displayId}/{fileName}` dst.) via Storage Rules wildcard, kecuali `lampiran_lpj/{fileName}` yang flat (`{displayId}_{namaFile}`) — diambil dari `fileName.split('_')[0]`.
+- Write sekarang butuh: pemilik dokumen (`isOwnerOfDisplayId`) ATAU role elevated (Reviewer/Validator/Admin/Super Admin — dipakai saat Super Admin mengedit pengajuan lama & saat approver men-generate ulang PDF pengajuan orang lain).
+- **Koreksi (ditemukan saat mengerjakan Bagian L di bawah):** klaim awal "aman tanpa backfill" HANYA benar untuk alur edit (Super-Admin-only, selalu lolos lewat `isElevatedRole()`). Ternyata ada alur LAIN yang menimpa/menulis ke path bertanda displayId dan bisa dipicu pemilik dokumen biasa (non-elevated) untuk dokumen LAMA: tombol **Print** di `DetailBs.jsx`/`DetailRbs.jsx`/`DetailLpj.jsx` dan **Cetak** di `ReimbursementTable.jsx` (keduanya meng-generate ulang PDF & upload ke Storage tiap kali diklik, bukan cuma sekali saat submit) — untuk dokumen yang dibuat SEBELUM Bagian K deploy, `displayIdOwners` belum punya entrinya, jadi pemilik sendiri akan gagal `permission-denied` saat mencetak dokumen approved miliknya sendiri. **Diperbaiki:** ditambahkan Cloud Function `backfillDisplayIdOwners` (Super Admin-only, idempotent, sama pola dengan `backfillUserDirectory`) + tombol **"Sinkronkan Kepemilikan Dokumen"** di halaman Manage Users — **WAJIB diklik sekali setelah deploy**, sebelum ada user yang mencoba mencetak dokumen lama (lihat 21.5 & 21.6 yang sudah diupdate).
+- Dry-run compile berhasil (`firebase deploy --only firestore:rules,storage,functions --dry-run`).
+
+## 21.3 Perbaikan (b): Proteksi Data Bank User — Koleksi `/userDirectory`
+
+**Sebelumnya:** `allow read: if signedIn()` di `/users/{uid}` — siapa pun yang login bisa baca profil lengkap user LAIN, termasuk `bankName`/`accountNumber` (nomor rekening bank asli), lewat query langsung ke Firestore (bypass UI resmi).
+
+**Perbaikan:**
+- Koleksi mirror baru `/userDirectory/{uid}` — HANYA berisi field aman (`nama`, `role`, `unit`, `platKendaraan`), tidak pernah `bankName`/`accountNumber`. Disinkron otomatis oleh Cloud Function trigger `syncUserDirectoryOnWrite` (`onDocumentWritten('users/{uid}', ...)`) setiap kali dokumen `/users/{uid}` ditulis (baik lewat `createManagedUser`, update langsung client Super Admin di `FormEditUser.jsx`, maupun `deleteManagedUser`). Dibaca bebas oleh siapa pun yang login (`allow get, list: if signedIn()`), tidak pernah bisa ditulis client (`allow write: if false` — hanya Admin SDK).
+- `/users/{uid}` diperketat: `get` hanya pemilik profil sendiri atau Super Admin; `list` hanya Super Admin, ATAU query yang provably discope ke email milik requester sendiri (`resource.data.email == request.auth.token.email` — dipakai fallback migrasi akun lama di `Login.jsx`).
+- **Field-level protection makanya butuh koleksi terpisah** (bukan cukup ubah rule saja): Firestore Security Rules tidak bisa meredaksi field tertentu saat `read` — hanya bisa mengizinkan/menolak SELURUH dokumen. Karena banyak role (termasuk Employee biasa) butuh baca profil orang LAIN untuk kebutuhan legit (dropdown Reviewer/Validator, dropdown plat BBM lintas user, nama approver di PDF/Detail), me-restrict `/users/{uid}` langsung ke "pemilik atau Super Admin" akan MERUSAK semua fitur itu untuk Employee — makanya field aman dipisah ke koleksi baru yang boleh dibaca semua orang.
+- **File client yang diubah** supaya baca dari `/userDirectory`, bukan `/users`, untuk kebutuhan lintas-user (self-lookup profil sendiri TETAP di `/users`, tidak diubah): `FormBs.jsx`, `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx` (dropdown Reviewer/Validator/plat), `BsPdf.jsx`, `ReimbursementPdf.jsx`, `LpjPdf.jsx` (nama approver di PDF), `DetailBs.jsx`, `DetailRbs.jsx`, `DetailLpj.jsx` (nama approver di halaman Detail).
+- **File yang SENGAJA TIDAK diubah** (tetap baca `/users` langsung) karena sudah Super-Admin-only lewat `ProtectedRoute` (`allowedRoles={['Super Admin']}` di `App.jsx`) dan karena itu tetap lolos rule `isSuperAdmin()`: `ManageUser.jsx`, `ManageUserPage.jsx`, `FormAddUser.jsx`, `FormEditUser.jsx`, `ReportExport.jsx`. Mode edit Super Admin di 5 form RBS/LPJ (`getDoc(doc(db,'users', editData.user.uid))`) juga sengaja tidak diubah dengan alasan sama.
+
+## 21.4 Migrasi Data Lama — Wajib Dijalankan Sekali Setelah Deploy
+
+Trigger `syncUserDirectoryOnWrite` HANYA jalan untuk write BARU ke `/users` — tidak retroaktif ke user yang sudah ada sebelum fitur ini live. Ditambahkan Cloud Function `backfillUserDirectory` (`onCall`, Super Admin-only, idempotent/aman diklik berkali-kali) yang mengisi `/userDirectory` untuk SEMUA user existing sekaligus.
+
+**Cara pakai:** dua tombol baru di halaman Manage Users (`ManageUser.jsx`, pojok kanan judul halaman) — **WAJIB diklik SEKALI oleh Super Admin setelah `firestore.rules`, `storage.rules`, dan `functions` di-deploy**:
+1. **"Sinkronkan Direktori Pengguna"** (`backfillUserDirectory`) — isi `/userDirectory` untuk semua user existing. Tanpa ini, dropdown Reviewer/Validator/plat BBM & nama approver di PDF/Detail kosong/gagal untuk user yang belum pernah di-edit ulang sejak deploy.
+2. **"Sinkronkan Kepemilikan Dokumen"** (`backfillDisplayIdOwners`) — isi `/displayIdOwners` untuk semua dokumen `bonSementara`/`reimbursement`/`lpj` existing. Tanpa ini, pemilik dokumen LAMA akan gagal `permission-denied` saat mencetak ulang PDF miliknya sendiri (lihat koreksi di 21.2).
+
+## 21.5 Yang WAJIB Ditest Manual Sebelum Deploy ke Produksi
+
+Sesi ini tidak punya kredensial login asli (sama seperti keterbatasan di semua bagian sebelumnya) — jadi TIDAK ADA satupun perubahan di bagian ini yang sudah dites end-to-end di browser. Sebelum deploy, tes minimal:
+- [ ] Submit pengajuan baru (RBS BBM/Operasional/Umum, LPJ Umum/Marketing, BS) sebagai Employee biasa — pastikan dropdown Reviewer/Validator & plat BBM tetap terisi (setelah klik "Sinkronkan Direktori Pengguna" di Manage Users pasca-deploy), dan upload lampiran tetap berhasil.
+- [ ] Lihat halaman Detail (DetailBs/Rbs/Lpj) untuk pengajuan yang sudah ada approval — pastikan nama Reviewer/Validator tetap tampil (bukan kosong/error).
+- [ ] Cetak PDF (RBS Form, LPJ, & BS) untuk pengajuan LAMA yang sudah Disetujui (dibuat SEBELUM deploy Bagian K) — pastikan nama approver tetap muncul di PDF, dan proses cetak (yang re-upload PDF ke Storage) TIDAK gagal permission-denied setelah klik "Sinkronkan Kepemilikan Dokumen".
+- [ ] Super Admin: edit pengajuan RBS/LPJ lama (re-upload lampiran) — pastikan tetap berhasil (jalur elevated-role di storage.rules).
+- [ ] Super Admin: buka Manage Users → Tambah/Edit Pengguna — pastikan masih berfungsi normal (tidak disentuh, tapi baca `/users` langsung jadi perlu dipastikan rule `isSuperAdmin()` tidak ikut kena dampak).
+- [ ] Klik kedua tombol sinkronisasi setelah deploy, konfirmasi toast sukses & jumlah tersinkron sesuai jumlah user/dokumen aktif.
+- [ ] (Lihat juga 22.5 di Bagian L untuk tes fitur "Send Reminder to Finance".)
+
+## 21.6 Task Development — Bagian K
+
+- [x] `firestore.rules`: koleksi baru `/displayIdOwners/{displayId}` (indeks kepemilikan, create-only oleh pemilik)
+- [x] `storage.rules`: ditulis ulang, write butuh `isOwnerOfDisplayId()` atau `isElevatedRole()` (cross-service `firestore.get()`), bukan `signedIn()` polos
+- [x] 6 form (`FormBs.jsx` + 5 form RBS/LPJ): tulis `displayIdOwners/{displayId}` atomik di transaksi yang sama dengan generate nomor dokumen
+- [x] `firestore.rules`: `/users/{uid}` diperketat (`get`: pemilik/Super Admin; `list`: Super Admin atau self-email-scoped)
+- [x] `firestore.rules`: koleksi baru `/userDirectory/{uid}` (field aman saja, `write: if false`)
+- [x] `functions/index.js`: trigger `syncUserDirectoryOnWrite` (auto-mirror `/users` → `/userDirectory`) + callable `backfillUserDirectory` (migrasi satu-kali, Super Admin-only, idempotent)
+- [x] 11 file client dipindah baca dari `/users` ke `/userDirectory` untuk lookup lintas-user (form picker, PDF generator, halaman Detail) — self-lookup & halaman Super-Admin-only sengaja tidak disentuh
+- [x] Tombol "Sinkronkan Direktori Pengguna" di `ManageUser.jsx`
+- [x] **(Koreksi)** `functions/index.js`: callable `backfillDisplayIdOwners` (migrasi satu-kali dokumen BS/RBS/LPJ lama ke `/displayIdOwners`, Super Admin-only, idempotent) + tombol "Sinkronkan Kepemilikan Dokumen" di `ManageUser.jsx`
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [x] `firebase deploy --only firestore:rules,storage,functions --dry-run` sukses (rules compile, functions ter-load tanpa error)
+- [ ] **Tes manual oleh user (lihat 21.5) — WAJIB sebelum deploy ke produksi**
+- [ ] Setelah deploy: klik KEDUA tombol sinkronisasi sekali untuk backfill user & dokumen lama
+
+---
+
+# BAGIAN L — Aksi "Send Reminder to Finance" di Tabel BS (2026-09-02)
+
+**Status: SUDAH DIKERJAKAN DI BRANCH `dev`. BELUM DI-DEPLOY.** Dikerjakan langsung setelah Bagian K, jadi bergantung pada perbaikan `displayIdOwners`/`userDirectory` di bagian itu — deploy Bagian K dan Bagian L harus dilakukan BERSAMAAN (satu `firebase deploy`), tidak bisa dipisah.
+
+## 22.1 Permintaan User
+
+Di kolom Aksi tabel "Bon Sementara Diajukan" (`BsTable.jsx`), untuk BS yang sudah berstatus Disetujui, tambahkan tombol **"Send Reminder to Finance"**. Finance = user dengan role Validator. Saat diklik, kirim email ke Finance dengan narasi "Mohon dibantu maker atas BS berikut" + detail BS (format tabel sama seperti email notifikasi yang sudah ada) + lampiran PDF BS (format sama seperti hasil "Print").
+
+Kompleksitas tambahan: sebagian karyawan terdaftar di lebih dari satu Unit Bisnis (perusahaan) di profilnya, sebagian cuma satu.
+- **Terdaftar di 1 Unit Bisnis saja** → email otomatis terkirim ke Finance (Validator) yang ditugaskan di unit itu, tanpa perlu memilih.
+- **Terdaftar di lebih dari 1 Unit Bisnis** → tampilkan pilihan (semua Validator yang ditugaskan di salah satu Unit Bisnis milik karyawan tsb), user memilih satu untuk dikirimi reminder.
+
+## 22.2 Implementasi
+
+**Sumber data kandidat Finance (client, `BsTable.jsx`):**
+- Unit Bisnis milik user yang login: `getDoc(doc(db,'users', uid))` (self-read, field `unit` array) — sama seperti field yang sudah dipakai `FormAddUser.jsx`/`FormEditUser.jsx` untuk assignment Validator-per-unit.
+- Semua user role Validator: query `userDirectory` (BUKAN `users` langsung — mengikuti pola Bagian K, cukup field aman nama/role/unit) `where('role','==','Validator')`.
+- Kandidat = Validator yang `unit`-nya beririsan dengan Unit Bisnis milik submitter.
+
+**Alur klik tombol (`handleSendFinanceReminder`):**
+- 0 kandidat → toast error "Tidak ada Finance terdaftar untuk Unit Bisnis Anda. Hubungi Admin."
+- Submitter cuma terdaftar di 1 Unit Bisnis → langsung kirim ke SEMUA kandidat (Firestore biasanya cuma 1 Validator per unit, tapi kalau lebih dari 1 sengaja dikirim ke semua supaya tidak ada yang terlewat, bukan menebak salah satu).
+- Submitter terdaftar di 2+ Unit Bisnis → modal custom (portal, pola sama seperti `actionMenu` di `ReimbursementTable.jsx`) menampilkan daftar kandidat (nama + unit), user klik satu untuk kirim.
+
+**Kirim reminder (`sendFinanceReminder`):**
+1. Client generate PDF BS via `generateBsPDF(item)` (fungsi yang SAMA dipakai tombol Print di `DetailBs.jsx` — tidak ada logic baru, upload ke Storage `BonSementara/{kategori}/{displayId}/{displayId}.pdf`, return `downloadURL`).
+2. Client panggil Cloud Function baru `sendBsFinanceReminder({ bsId, validatorUid, pdfUrl })`.
+3. Cloud Function (`functions/index.js`):
+   - Validasi: caller harus login, harus pemilik BS tsb (`bsData.user.uid === request.auth.uid`), BS harus berstatus Disetujui.
+   - Ambil data Validator (Admin SDK, akses penuh termasuk email) & submitter, validasi Validator memang role `Validator` dan **defense-in-depth**: unit Validator harus beririsan dengan unit submitter (supaya `validatorUid` yang direkayasa dari client tidak bisa dipakai kirim ke Validator unit lain).
+   - `fetch(pdfUrl)` (downloadURL Storage sudah bawa token akses sendiri, tidak butuh Admin SDK Storage) → buffer → lampirkan ke email sebagai PDF asli hasil generate, bukan link.
+   - Kirim email lewat `sendEmail()` (diperluas terima parameter `attachments`) memakai `createEmailTemplate()` yang SAMA dipakai notifikasi lain (kasus baru `status: 'financeReminder'`, header "Reminder untuk Finance") — tabel detail BS (Nomor BS, Jumlah BS) otomatis konsisten dengan format notifikasi existing karena fungsi ini dipakai ulang, bukan dibuat baru.
+
+## 22.3 Kenapa Bergantung pada Bagian K
+
+Fitur ini butuh dua hal yang baru ada setelah Bagian K:
+- `userDirectory` untuk cari daftar Validator tanpa membuka akses baca `bankName`/`accountNumber` semua user ke setiap karyawan yang buka tabel BS-nya sendiri.
+- `displayIdOwners` (+ tombol "Sinkronkan Kepemilikan Dokumen") supaya `generateBsPDF` (dipanggil ulang di sini, sama seperti tombol Print) tidak gagal `permission-denied` untuk BS lama.
+
+Karena itu Bagian K & L **harus di-deploy bersamaan** — men-deploy L tanpa K (atau sebaliknya) akan membuat fitur reminder gagal total (userDirectory/displayIdOwners belum ada).
+
+## 22.4 Keterbatasan & Keputusan Desain
+
+- Tidak ada penanda persisten "reminder sudah dikirim" (beda dengan pola "Reported"/"Transferred" di Bagian F) — user tidak memintanya, jadi tidak ditambahkan supaya tidak over-engineering. Kalau dibutuhkan nanti, tinggal tambah field `financeReminderSentAt` di dokumen BS + label serupa.
+- Kalau 1 Unit Bisnis punya lebih dari 1 Validator, mode "otomatis" (submitter cuma 1 unit) mengirim ke SEMUA Validator unit itu sekaligus (bukan cuma 1) — belum dikonfirmasi ke user apakah ini perilaku yang diinginkan atau harusnya cuma ke 1 Validator tertentu; kalau ternyata harus 1 orang spesifik, perlu field tambahan (mis. "Validator utama") di profil user/unit.
+- Narasi email persis mengikuti permintaan ("Mohon dibantu maker atas BS berikut") — kalau "maker" ternyata typo/istilah yang dimaksud berbeda (mis. "mohon dibantu proses"), tinggal ubah satu baris `emailContent` di `sendBsFinanceReminder` (`functions/index.js`).
+
+## 22.5 Yang WAJIB Ditest Manual Sebelum Deploy
+
+- [ ] Login sebagai Employee yang HANYA terdaftar di 1 Unit Bisnis, BS Disetujui → klik "Send Reminder to Finance" → email harus langsung terkirim TANPA modal pilihan, ke Validator unit tsb, dengan PDF BS terlampir & narasi benar.
+- [ ] Login sebagai Employee yang terdaftar di 2+ Unit Bisnis → klik tombol yang sama → modal pilihan Finance harus muncul, daftar Validator sesuai unit-unit yang terdaftar di profil, pilih satu → email cuma terkirim ke yang dipilih.
+- [ ] BS yang belum Disetujui → tombol "Send Reminder to Finance" tidak muncul (tetap "Batalkan" seperti biasa).
+- [ ] Cek inbox Validator penerima: subjek, narasi "Mohon dibantu maker atas BS berikut", tabel detail (Nomor BS, Jumlah BS) tampil benar, dan lampiran PDF bisa dibuka & isinya sama seperti hasil "Print" di Detail BS.
+- [ ] Coba BS yang dibuat SEBELUM deploy Bagian K/L (setelah klik "Sinkronkan Kepemilikan Dokumen") — pastikan generate PDF untuk reminder tidak gagal permission-denied.
+
+## 22.6 Task Development — Bagian L
+
+- [x] `functions/index.js`: `sendEmail()` diperluas terima `attachments`
+- [x] `functions/index.js`: `createEmailTemplate()` tambah case `'financeReminder'`
+- [x] `functions/index.js`: callable baru `sendBsFinanceReminder` (validasi pemilik+status, defense-in-depth unit match, fetch PDF dari Storage URL, kirim email+lampiran)
+- [x] `BsTable.jsx`: fetch unit submitter (self) + daftar Validator (`userDirectory`)
+- [x] `BsTable.jsx`: tombol "Send Reminder to Finance" di kolom Aksi (khusus status Disetujui), auto-send (1 unit) vs modal pilihan (2+ unit)
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [x] `firebase deploy --only functions --dry-run` sukses (function ter-load tanpa error)
+- [ ] **Tes manual oleh user (lihat 22.5) — WAJIB sebelum deploy ke produksi**
+- [ ] Deploy BERSAMAAN dengan Bagian K (rules + functions + hosting satu paket)

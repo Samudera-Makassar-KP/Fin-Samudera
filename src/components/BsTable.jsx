@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import ReactDOM from 'react-dom'
 import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore'
-import { db } from '../firebaseConfig'
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { db, functions } from '../firebaseConfig'
+import { httpsCallable } from 'firebase/functions'
 import EmptyState from '../assets/images/EmptyState.png'
 import Select from 'react-select'
 import Modal from './Modal'
@@ -10,6 +12,9 @@ import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import BsTimerDisplay from './bsTimerDisplay'
 import { useTheme } from '../context/ThemeContext'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { generateBsPDF } from '../utils/BsPdf'
 
 const BsTable = () => {
     const { theme } = useTheme()
@@ -17,6 +22,16 @@ const BsTable = () => {
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
     const [lpjStatus, setLpjStatus] = useState({})
+
+    // --- Kirim Reminder ke Finance (Validator) untuk BS berstatus Disetujui ---
+    // submitterUnits: semua Unit Bisnis yang terdaftar di profil user yang login
+    // (bisa lebih dari satu). financeValidators: semua user role Validator
+    // (dari /userDirectory, bukan /users -- lihat Bagian K/21.3) beserta unit
+    // penempatannya, dipakai mencari Finance yang match dengan submitterUnits.
+    const [submitterUnits, setSubmitterUnits] = useState([])
+    const [financeValidators, setFinanceValidators] = useState([])
+    const [reminderSendingId, setReminderSendingId] = useState(null)
+    const [financePickerModal, setFinancePickerModal] = useState(null) // { item, candidates }
 
     // Get current date
     const today = new Date()
@@ -208,6 +223,36 @@ const BsTable = () => {
         }
     }, [data.bonSementara]);
 
+    // Data pendukung untuk tombol "Kirim Reminder ke Finance" -- unit bisnis
+    // milik user yang login (self-read, selalu diizinkan) & daftar semua
+    // Validator lintas user (dari /userDirectory, aman dibaca siapa saja login).
+    useEffect(() => {
+        const fetchFinanceReminderData = async () => {
+            try {
+                const uid = localStorage.getItem('userUid')
+                if (!uid) return
+
+                const userDoc = await getDoc(doc(db, 'users', uid))
+                setSubmitterUnits(Array.isArray(userDoc.data()?.unit) ? userDoc.data().unit : [])
+
+                const validatorSnapshot = await getDocs(
+                    query(collection(db, 'userDirectory'), where('role', '==', 'Validator'))
+                )
+                setFinanceValidators(
+                    validatorSnapshot.docs.map((docSnap) => ({
+                        uid: docSnap.id,
+                        nama: docSnap.data().nama || 'Validator',
+                        unit: Array.isArray(docSnap.data().unit) ? docSnap.data().unit : []
+                    }))
+                )
+            } catch (error) {
+                console.error('Error fetching data reminder finance:', error)
+            }
+        }
+
+        fetchFinanceReminderData()
+    }, []);
+
     const nextPage = () => {
         if (currentPage < totalPages) {
             setCurrentPage(currentPage + 1)
@@ -273,6 +318,55 @@ const BsTable = () => {
             console.error('Error cancelling bon sementara:', error)
             toast.error('Gagal membatalkan bon sementara. Silakan coba lagi.')
         }
+    }
+
+    const sendFinanceReminder = async (item, validator) => {
+        setReminderSendingId(item.id)
+        try {
+            const pdfUrl = await generateBsPDF(item)
+            if (!pdfUrl) {
+                toast.error('Gagal membuat PDF BS untuk lampiran reminder')
+                return
+            }
+
+            const sendBsFinanceReminder = httpsCallable(functions, 'sendBsFinanceReminder')
+            await sendBsFinanceReminder({ bsId: item.id, validatorUid: validator.uid, pdfUrl })
+
+            toast.success(`Reminder terkirim ke ${validator.nama}`)
+        } catch (error) {
+            console.error('Error sending finance reminder:', error)
+            toast.error(error?.message || 'Gagal mengirim reminder ke Finance')
+        } finally {
+            setReminderSendingId(null)
+        }
+    }
+
+    const handleSendFinanceReminder = (item) => {
+        const candidates = financeValidators.filter((validator) =>
+            validator.unit.some((unit) => submitterUnits.includes(unit))
+        )
+
+        if (candidates.length === 0) {
+            toast.error('Tidak ada Finance (Validator) yang terdaftar untuk Unit Bisnis Anda. Hubungi Admin.')
+            return
+        }
+
+        // Cuma 1 perusahaan terdaftar di profil pengaju -> tidak ada pilihan yang
+        // perlu diambil, langsung kirim ke semua Finance yang match unit tsb.
+        if (submitterUnits.length <= 1) {
+            candidates.forEach((validator) => sendFinanceReminder(item, validator))
+            return
+        }
+
+        // Terdaftar di lebih dari 1 perusahaan -> minta pilih salah satu Finance
+        setFinancePickerModal({ item, candidates })
+    }
+
+    const handlePickFinance = (validator) => {
+        if (!financePickerModal) return
+        const { item } = financePickerModal
+        setFinancePickerModal(null)
+        sendFinanceReminder(item, validator)
     }
 
     const shouldShowAlert = (item) => {
@@ -537,13 +631,27 @@ const BsTable = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
-                                                    <button
-                                                        className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed hover"
-                                                        onClick={() => handleCancel(item)}
-                                                        disabled={item.status !== 'Diajukan'}
-                                                    >
-                                                        Batalkan
-                                                    </button>
+                                                    {item.status === 'Disetujui' ? (
+                                                        <button
+                                                            className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            onClick={() => handleSendFinanceReminder(item)}
+                                                            disabled={reminderSendingId === item.id}
+                                                        >
+                                                            {reminderSendingId === item.id ? (
+                                                                <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                                                            ) : (
+                                                                'Send Reminder to Finance'
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed hover"
+                                                            onClick={() => handleCancel(item)}
+                                                            disabled={item.status !== 'Diajukan'}
+                                                        >
+                                                            Batalkan
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -809,6 +917,46 @@ const BsTable = () => {
                 reasonLabel='Alasan Pembatalan'
                 reasonPlaceholder='Masukkan alasan pembatalan...'
             />
+
+            {financePickerModal && ReactDOM.createPortal(
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                    onClick={() => setFinancePickerModal(null)}
+                >
+                    <div
+                        className="bg-white dark:bg-gray-800 rounded-lg p-4 lg:p-6 max-w-md w-full mx-4 relative transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 dark:text-gray-100">
+                            Pilih Finance
+                        </h2>
+                        <p className="mb-3 text-gray-600 dark:text-gray-300 text-sm">
+                            Anda terdaftar di lebih dari satu Unit Bisnis. Pilih Finance (Validator) yang akan menerima reminder untuk {financePickerModal.item.displayId}:
+                        </p>
+                        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                            {financePickerModal.candidates.map((validator) => (
+                                <button
+                                    key={validator.uid}
+                                    className="w-full text-left px-4 py-2 rounded-md border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => handlePickFinance(validator)}
+                                >
+                                    <div className="font-medium">{validator.nama}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">{validator.unit.join(', ')}</div>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex justify-end mt-4">
+                            <button
+                                className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
+                                onClick={() => setFinancePickerModal(null)}
+                            >
+                                Batal
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     )
 }

@@ -138,6 +138,46 @@ const ManageUser = () => {
         setDeleteModal({ isOpen: false, user: null })
     }
 
+    // Migrasi satu-kali (aman diklik berkali-kali) untuk mengisi /userDirectory
+    // dari user LAMA yang sudah ada sebelum trigger syncUserDirectoryOnWrite live
+    // -- trigger itu sendiri hanya jalan untuk write BARU ke /users, bukan
+    // retroaktif. Lihat backfillUserDirectory di functions/index.js.
+    const [isSyncingDirectory, setIsSyncingDirectory] = useState(false)
+    const handleSyncDirectory = async () => {
+        setIsSyncingDirectory(true)
+        try {
+            const backfillUserDirectory = httpsCallable(functions, 'backfillUserDirectory')
+            const result = await backfillUserDirectory()
+            toast.success(`Direktori pengguna disinkronkan (${result.data?.synced ?? 0} pengguna)`)
+        } catch (error) {
+            console.error('Error syncing user directory:', error)
+            toast.error('Gagal menyinkronkan direktori pengguna')
+        } finally {
+            setIsSyncingDirectory(false)
+        }
+    }
+
+    // Migrasi satu-kali (aman diklik berkali-kali) untuk mengisi /displayIdOwners
+    // dari dokumen bonSementara/reimbursement/lpj LAMA yang sudah ada sebelum
+    // koleksi ini diperkenalkan (Bagian K/21.2) -- tanpa ini, pemilik dokumen
+    // lama akan gagal permission-denied saat mencetak ulang PDF-nya sendiri
+    // (tombol Print di Detail BS/RBS/LPJ, Cetak di ReimbursementTable, Reminder
+    // Finance di BsTable). Lihat backfillDisplayIdOwners di functions/index.js.
+    const [isSyncingOwnership, setIsSyncingOwnership] = useState(false)
+    const handleSyncOwnership = async () => {
+        setIsSyncingOwnership(true)
+        try {
+            const backfillDisplayIdOwners = httpsCallable(functions, 'backfillDisplayIdOwners')
+            const result = await backfillDisplayIdOwners()
+            toast.success(`Kepemilikan dokumen disinkronkan (${result.data?.synced ?? 0} dokumen)`)
+        } catch (error) {
+            console.error('Error syncing displayId ownership:', error)
+            toast.error('Gagal menyinkronkan kepemilikan dokumen')
+        } finally {
+            setIsSyncingOwnership(false)
+        }
+    }
+
     // Fungsi untuk menangani input pencarian
     const handleSearch = (event) => {
         setSearchTerm(event.target.value)
@@ -282,7 +322,27 @@ const ManageUser = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-bold mb-4 dark:text-gray-100">Manage Users</h2>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <h2 className="text-xl font-bold dark:text-gray-100">Manage Users</h2>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={handleSyncDirectory}
+                        disabled={isSyncingDirectory}
+                        title="Isi ulang /userDirectory dari data /users -- jalankan sekali setelah deploy fitur ini, aman diklik berkali-kali"
+                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                    >
+                        {isSyncingDirectory ? 'Menyinkronkan...' : 'Sinkronkan Direktori Pengguna'}
+                    </button>
+                    <button
+                        onClick={handleSyncOwnership}
+                        disabled={isSyncingOwnership}
+                        title="Isi ulang /displayIdOwners dari dokumen BS/RBS/LPJ lama -- jalankan sekali setelah deploy fitur ini, aman diklik berkali-kali"
+                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                    >
+                        {isSyncingOwnership ? 'Menyinkronkan...' : 'Sinkronkan Kepemilikan Dokumen'}
+                    </button>
+                </div>
+            </div>
 
             <div className="bg-white p-6 rounded-lg mb-6 shadow-sm dark:bg-gray-800">
                 <h3 className="text-xl font-medium mb-4 dark:text-gray-100">Daftar Pengguna</h3>
