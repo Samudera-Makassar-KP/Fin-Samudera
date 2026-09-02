@@ -17,8 +17,8 @@ Dokumen ini berisi delapan bagian:
 - **Bagian H** — Audit & Pengetatan Firestore Rules, Verifikasi Edit/Hapus Super Admin, 2026-09-01 (bagian 18)
 - **Bagian I** — Detail Item di PDF/Print RBS, 2026-09-01 (bagian 19)
 - **Bagian J** — Detail Item (khusus BBM) di PDF/Print LPJ, Tanpa Ubah Format, 2026-09-01 (bagian 20)
-- **Bagian K** — Eksekusi 2 Temuan Keamanan Tertunda dari Bagian H: Storage Ownership & Proteksi Data Bank User, 2026-09-02 (bagian 21) — **SUDAH DIKERJAKAN DI `dev`, BELUM DI-DEPLOY, wajib tes manual dulu (lihat 21.5)**
-- **Bagian L** — Aksi "Send Reminder to Finance" di Tabel BS, 2026-09-02 (bagian 22) — **SUDAH DIKERJAKAN DI `dev`, BELUM DI-DEPLOY, wajib tes manual dulu (lihat 22.5)**
+- **Bagian K** — Eksekusi 2 Temuan Keamanan Tertunda dari Bagian H: Storage Ownership & Proteksi Data Bank User, 2026-09-02 (bagian 21) — **DI-DEPLOY ke produksi 2026-09-02, WAJIB klik 2 tombol sync di Manage Users + tes manual sebelum dipakai (lihat 21.5)**
+- **Bagian L** — Aksi "Send Reminder to Finance" di Tabel BS, 2026-09-02 (bagian 22) — **DI-DEPLOY ke produksi 2026-09-02 (bersama Bagian K), wajib tes manual (lihat 22.5)**
 
 ## 1.1 Struktur Folder Project
 
@@ -673,7 +673,7 @@ Karena item BBM bisa muncul di LPJ mana pun (khusus BBM ATAU campur), perbaikan 
 
 # BAGIAN K — Eksekusi 2 Temuan Keamanan Tertunda dari Bagian H (2026-09-02)
 
-**Status: SUDAH DIKERJAKAN DI BRANCH `dev`. BELUM DI-DEPLOY.** User diminta tes manual dulu (lihat 21.5) sebelum ini di-push/deploy ke produksi — beda dari bagian-bagian sebelumnya, sesi ini TIDAK ada kredensial login asli untuk verifikasi end-to-end, dan perubahan menyentuh alur inti (submit form, cetak PDF, halaman Detail) yang aktif dipakai untuk approval finansial.
+**Status: DI-DEPLOY KE PRODUKSI 2026-09-02** (`samudera-web-cbf2f`, bersama Bagian L — satu `firebase deploy` mencakup `firestore.rules`, `storage.rules`, seluruh Cloud Functions, dan Hosting). **Belum divalidasi end-to-end oleh user** — sesi ini tidak punya kredensial login asli, jadi verifikasi terbatas pada `CI=true npm run build`, `firebase deploy --dry-run` (rules compile, functions ter-load), dan hasil deploy sungguhan (13 functions semua Successful, termasuk retry 1x untuk `sendBsFinanceReminder` yang sempat gagal transient di percobaan pertama — root cause: `Unable to parse JSON: SyntaxError: Unexpected token '<'` dari Cloud Functions API, bukan error kode; retry langsung sukses). **WAJIB dijalankan segera oleh user** (lihat 21.4 & 21.5): klik tombol "Sinkronkan Direktori Pengguna" & "Sinkronkan Kepemilikan Dokumen" di Manage Users, lalu jalankan checklist tes manual — perubahan menyentuh alur inti (submit form, cetak PDF, halaman Detail) yang aktif dipakai untuk approval finansial.
 
 ## 21.1 Konteks
 
@@ -740,7 +740,7 @@ Sesi ini tidak punya kredensial login asli (sama seperti keterbatasan di semua b
 
 # BAGIAN L — Aksi "Send Reminder to Finance" di Tabel BS (2026-09-02)
 
-**Status: SUDAH DIKERJAKAN DI BRANCH `dev`. BELUM DI-DEPLOY.** Dikerjakan langsung setelah Bagian K, jadi bergantung pada perbaikan `displayIdOwners`/`userDirectory` di bagian itu — deploy Bagian K dan Bagian L harus dilakukan BERSAMAAN (satu `firebase deploy`), tidak bisa dipisah.
+**Status: DI-DEPLOY KE PRODUKSI 2026-09-02** bersama Bagian K (satu `firebase deploy`, sesuai kebutuhan — fitur ini bergantung pada `displayIdOwners`/`userDirectory` dari Bagian K). **Belum divalidasi end-to-end oleh user** — lihat catatan keterbatasan di Bagian K, dan checklist tes wajib di 22.5.
 
 ## 22.1 Permintaan User
 
