@@ -227,8 +227,26 @@ service cloud.firestore {
         );
     }
 
+    // Sebelumnya `allow read: if signedIn()` -- SIAPA PUN yang login bisa baca
+    // profil LENGKAP user lain, termasuk bankName/accountNumber (nomor rekening
+    // bank asli), lewat query langsung ke Firestore (bypass UI resmi). Rule ini
+    // sengaja tetap longgar sebelumnya karena beberapa fitur legit (dropdown
+    // Reviewer/Validator, dropdown plat BBM lintas user, nama approver di
+    // PDF/Detail) butuh baca lintas-user -- tapi semuanya cuma butuh nama/role/
+    // unit/plat, TIDAK PERNAH butuh data bank. Fitur-fitur itu sekarang baca
+    // dari /userDirectory (mirror read-only, field aman saja, lihat
+    // functions/index.js syncUserDirectoryOnWrite) -- lihat Bagian H/18.4.
+    //
+    // - get: pemilik profil sendiri, atau Super Admin (satu-satunya role yang
+    //   punya halaman Manage User & butuh lihat/edit profil lengkap orang lain).
+    // - list: Super Admin (Manage User, Tambah/Edit Pengguna, Ekspor Laporan),
+    //   ATAU query yang provably discope ke email milik requester sendiri
+    //   (dipakai Login.jsx sebagai fallback saat doc ID user tidak sama dengan
+    //   uid Firebase Auth-nya -- kasus migrasi akun lama).
     match /users/{uid} {
-      allow read: if signedIn();
+      allow get: if isSelf(uid) || isSuperAdmin();
+      allow list: if isSuperAdmin()
+        || (signedIn() && resource.data.email == request.auth.token.email);
       allow create: if false;
       allow update: if (
         isSuperAdmin() && request.resource.data.uid == uid && validUserDocument(request.resource.data)
@@ -239,6 +257,17 @@ service cloud.firestore {
         && validOptionalString(request.resource.data.accountNumber, 80)
       );
       allow delete: if false;
+    }
+
+    // Mirror read-only dari /users -- field aman saja (nama/role/unit/plat),
+    // TIDAK PERNAH bankName/accountNumber. Ditulis HANYA oleh Cloud Function
+    // (Admin SDK, bypass rules ini) lewat trigger syncUserDirectoryOnWrite &
+    // callable backfillUserDirectory di functions/index.js. Dibaca bebas oleh
+    // siapa pun yang login untuk dropdown Reviewer/Validator/plat BBM & nama
+    // approver di PDF/Detail -- lihat komentar di /users/{uid} di atas.
+    match /userDirectory/{uid} {
+      allow get, list: if signedIn();
+      allow write: if false;
     }
 
     match /drafts/{draftId} {
@@ -302,6 +331,22 @@ service cloud.firestore {
       allow create: if signedIn() && validCounterFields(request.resource.data);
       allow update: if signedIn() && validCounterUpdate();
       allow delete: if false;
+    }
+
+    // Indeks kepemilikan displayId -> uid. Ditulis atomik di transaksi yang sama saat
+    // nomor dokumen (displayId) digenerate (lihat generateDisplayId() di form-form
+    // RBS/LPJ & transaksi nomor BS di FormBs.jsx), supaya tidak ada celah antara nomor
+    // dibuat dan kepemilikannya tercatat. Dipakai storage.rules (lewat firestore.get()
+    // cross-service, yang bypass rules ini) untuk memvalidasi siapa yang boleh
+    // upload/timpa lampiran & PDF hasil generate di path Storage yang mengandung
+    // displayId tsb -- sebelumnya siapa pun yang login bisa menimpa file di path
+    // manapun asal tahu/menebak displayId-nya (lihat Bagian H/18.4).
+    match /displayIdOwners/{displayId} {
+      allow get, list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
     }
 
     match /bonSementara/{docId} {

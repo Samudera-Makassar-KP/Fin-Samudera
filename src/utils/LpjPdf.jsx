@@ -133,7 +133,7 @@ const getApprovedValidatorName = async (lpjDetail) => {
 
     if (validatorApproval) {
         try {
-            const validatorDocRef = doc(db, 'users', validatorApproval.actor)
+            const validatorDocRef = doc(db, 'userDirectory', validatorApproval.actor)
             const validatorSnapshot = await getDoc(validatorDocRef)
 
             if (validatorSnapshot.exists()) {
@@ -196,7 +196,7 @@ const getApprovedReviewerNames = async (lpjDetail) => {
             reviewer1Name = 'Super Admin'
         } else {
             try {
-                const reviewer1DocRef = doc(db, 'users', reviewer1Approval.actor)
+                const reviewer1DocRef = doc(db, 'userDirectory', reviewer1Approval.actor)
                 const reviewer1Snapshot = await getDoc(reviewer1DocRef)
                 if (reviewer1Snapshot.exists()) {
                     reviewer1Name = reviewer1Snapshot.data().nama
@@ -213,7 +213,7 @@ const getApprovedReviewerNames = async (lpjDetail) => {
             reviewer2Name = 'Super Admin'
         } else {
             try {
-                const reviewer2DocRef = doc(db, 'users', reviewer2Approval.actor)
+                const reviewer2DocRef = doc(db, 'userDirectory', reviewer2Approval.actor)
                 const reviewer2Snapshot = await getDoc(reviewer2DocRef)
                 if (reviewer2Snapshot.exists()) {
                     reviewer2Name = reviewer2Snapshot.data().nama

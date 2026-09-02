@@ -49,7 +49,7 @@ const DetailLpj = () => {
                     if (!Array.isArray(reviewerArray)) return []
                     const promises = reviewerArray.map(async (reviewerUid) => {
                         try {
-                            const reviewerDocRef = doc(db, 'users', reviewerUid)
+                            const reviewerDocRef = doc(db, 'userDirectory', reviewerUid)
                             const reviewerSnapshot = await getDoc(reviewerDocRef)
                             return reviewerSnapshot.exists() ? reviewerSnapshot.data().nama : null
                         } catch (error) {

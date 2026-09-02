@@ -65,7 +65,7 @@ const FormBs = () => {
     useEffect(() => {
         const fetchReviewer = async () => {
             try {
-                const usersRef = collection(db, 'users')
+                const usersRef = collection(db, 'userDirectory')
                 const q = query(usersRef, where('role', 'in', ['Reviewer']))
                 const querySnapshot = await getDocs(q)
 
@@ -649,6 +649,10 @@ const FormBs = () => {
 
                     const sequence = newLastNumber.toString().padStart(7, '0')
                     const nomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`
+
+                    // Dicatat di transaksi yang sama supaya storage.rules bisa memvalidasi
+                    // kepemilikan lampiran/PDF lewat firestore.get() cross-service (lihat 18.6)
+                    transaction.set(doc(db, 'displayIdOwners', nomorBS), { uid: userData.uid })
 
                     transaction.set(newDocRef, {
                         ...bonSementaraData,

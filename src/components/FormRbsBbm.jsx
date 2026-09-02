@@ -76,7 +76,7 @@ const RbsBbmForm = () => {
     useEffect(() => {
         const fetchValidators = async () => {
             try {
-                const usersRef = collection(db, 'users')
+                const usersRef = collection(db, 'userDirectory')
                 const q = query(usersRef, where('role', 'in', ['Validator', 'Admin', 'Reviewer']))
                 const querySnapshot = await getDocs(q)
 
@@ -104,7 +104,7 @@ const RbsBbmForm = () => {
     useEffect(() => {
         const fetchReviewer = async () => {
             try {
-                const usersRef = collection(db, 'users')
+                const usersRef = collection(db, 'userDirectory')
                 const q = query(usersRef, where('role', 'in', ['Reviewer', 'Validator', 'Admin']))
                 const querySnapshot = await getDocs(q)
 
@@ -133,7 +133,7 @@ const RbsBbmForm = () => {
     useEffect(() => {
         const fetchAllPlat = async () => {
             try {
-                const querySnapshot = await getDocs(collection(db, 'users'))
+                const querySnapshot = await getDocs(collection(db, 'userDirectory'))
                 const platMap = new Map()
 
                 querySnapshot.docs.forEach((docSnap) => {
@@ -434,17 +434,21 @@ const RbsBbmForm = () => {
         const day = today.getDate().toString().padStart(2, '0')
         const counterRef = doc(db, 'businessUnitCounters', `${unitCode}_RBS_BBM`)
 
-        const sequence = await runTransaction(db, async (transaction) => {
+        return runTransaction(db, async (transaction) => {
             const counterDoc = await transaction.get(counterRef)
             const newLastNumber = (!counterDoc.exists() || counterDoc.data().lastResetYear !== year)
                 ? 1
                 : counterDoc.data().lastNumber + 1
 
             transaction.set(counterRef, { lastNumber: newLastNumber, lastResetYear: year })
-            return newLastNumber
-        })
 
-        return `RBS.BBM.${unitCode}.${year.slice(-2)}${month}${day}.${sequence.toString().padStart(4, '0')}`
+            const newDisplayId = `RBS.BBM.${unitCode}.${year.slice(-2)}${month}${day}.${newLastNumber.toString().padStart(4, '0')}`
+            // Dicatat di transaksi yang sama supaya storage.rules bisa memvalidasi
+            // kepemilikan lampiran/PDF lewat firestore.get() cross-service (lihat 18.6)
+            transaction.set(doc(db, 'displayIdOwners', newDisplayId), { uid: localStorage.getItem('userUid') })
+
+            return newDisplayId
+        })
     }
 
     // --- PERUBAHAN: Fungsi handler upload untuk multi file ---
