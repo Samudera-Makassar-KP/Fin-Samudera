@@ -26,6 +26,19 @@ service firebase.storage {
         && userRole() in ['Reviewer', 'Validator', 'Admin', 'Super Admin'];
     }
 
+    function isSuperAdminRole() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && userRole() == 'Super Admin';
+    }
+
+    function validImageUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // Pemilik dokumen (dicatat atomik saat displayId digenerate, lihat
     // /displayIdOwners di firestore.rules) -- satu-satunya pihak selain role
     // elevated yang boleh menulis/menimpa file di path bertanda displayId ini.
@@ -66,6 +79,22 @@ service firebase.storage {
     match /lampiran_lpj/{fileName} {
       allow read: if signedIn();
       allow write: if signedIn() && canWriteToDisplayId(fileName.split('_')[0]);
+    }
+
+    // Gambar pengumuman (AnnouncementManager.jsx, tampil lewat AnnouncementPopup.jsx
+    // ke semua user). Sebelumnya path ini TIDAK ADA rule sama sekali -- jatuh ke
+    // deny-all paling bawah, jadi upload/hapus gambar pengumuman selalu gagal
+    // permission-denied. Ditambahkan di sini: upload/hapus khusus Super Admin
+    // (sesuai ProtectedRoute route /manage-announcements di App.jsx), dibatasi
+    // tipe gambar & ukuran (samakan dengan validasi client MAX_FILE_SIZE_MB).
+    match /announcements/{fileName} {
+      allow read: if signedIn();
+      // create/update BUTUH validImageUpload() (request.resource ada isinya).
+      // delete dipisah -- deleteObject() tidak pernah mengirim request.resource,
+      // jadi validImageUpload() akan selalu false untuk delete kalau digabung
+      // dengan 'write' polos (write = create+update+delete).
+      allow create, update: if signedIn() && isSuperAdminRole() && validImageUpload();
+      allow delete: if signedIn() && isSuperAdminRole();
     }
 
     match /{allPaths=**} {

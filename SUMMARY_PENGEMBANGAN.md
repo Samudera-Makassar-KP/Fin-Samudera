@@ -733,8 +733,21 @@ Sesi ini tidak punya kredensial login asli (sama seperti keterbatasan di semua b
 - [x] **(Koreksi)** `functions/index.js`: callable `backfillDisplayIdOwners` (migrasi satu-kali dokumen BS/RBS/LPJ lama ke `/displayIdOwners`, Super Admin-only, idempotent) + tombol "Sinkronkan Kepemilikan Dokumen" di `ManageUser.jsx`
 - [x] `CI=true npm run build` sukses (0 warning/error)
 - [x] `firebase deploy --only firestore:rules,storage,functions --dry-run` sukses (rules compile, functions ter-load tanpa error)
-- [ ] **Tes manual oleh user (lihat 21.5) — WAJIB sebelum deploy ke produksi**
-- [ ] Setelah deploy: klik KEDUA tombol sinkronisasi sekali untuk backfill user & dokumen lama
+- [x] **DEPLOY KE PRODUKSI selesai 2026-09-02** (`firestore.rules`, `storage.rules`, 13 Cloud Functions, Hosting)
+- [ ] **Tes manual oleh user (lihat 21.5) — WAJIB, dijalankan setelah deploy**
+- [ ] Klik KEDUA tombol sinkronisasi di Manage Users sekali untuk backfill user & dokumen lama
+
+## 21.7 Perbaikan Tambahan: Upload Gambar Pengumuman Selalu Gagal (ditemukan & diperbaiki 2026-09-02, setelah deploy awal)
+
+Saat diminta cek "hal lain yang perlu diperhatikan" pasca-deploy, ditemukan bug pra-eksisting (BUKAN regresi dari perubahan di atas — sudah begini sebelum sesi ini dimulai): `AnnouncementManager.jsx` (halaman "Manage Announcements", Super Admin-only) upload gambar pengumuman ke path Storage `announcements/{fileName}`, tapi `storage.rules` **tidak pernah punya rule untuk path ini** — jatuh ke `allow read, write: if false` di paling bawah. Artinya upload/hapus gambar pengumuman kemungkinan besar SELALU gagal `permission-denied` sejak fitur ini dibuat, terlepas dari role.
+
+**Perbaikan:** ditambahkan match block `announcements/{fileName}` di `storage.rules` — `read` untuk siapa saja yang login (dipakai `AnnouncementPopup.jsx` menampilkan ke semua user), `create`/`update` khusus Super Admin (`isSuperAdminRole()`, cross-service `firestore.get()` seperti fungsi lain di file ini) + validasi `validImageUpload()` (harus `image/*`, maks 5MB — disamakan dengan validasi client `MAX_FILE_SIZE_MB` di `AnnouncementManager.jsx`), dan `delete` dipisah dari `create`/`update` (Storage Rules tidak mengirim `request.resource` saat delete, jadi kalau digabung ke satu `allow write` yang mensyaratkan `validImageUpload()`, delete akan SELALU gagal — detail teknis yang perlu diingat kalau menambah pola serupa lagi nanti).
+
+**Deploy:** sudah di-deploy terpisah (`firebase deploy --only storage`), dry-run compile sukses lebih dulu. Tidak menyentuh `firestore.rules`/`functions`/hosting, jadi risikonya kecil & terisolasi dari perubahan Bagian K/L lainnya.
+
+- [x] Tambah rule `announcements/{fileName}` di `storage.rules` (read: signedIn, create/update: Super Admin + validasi gambar, delete: Super Admin terpisah)
+- [x] Dry-run compile sukses, deploy ke produksi sukses
+- [ ] Tes manual: Super Admin upload & hapus gambar pengumuman di Manage Announcements, konfirmasi tidak lagi permission-denied
 
 ---
 
