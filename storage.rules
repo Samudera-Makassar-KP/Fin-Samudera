@@ -13,25 +13,6 @@ service firebase.storage {
         && request.resource.contentType == 'application/pdf';
     }
 
-    // Cross-service rules: firestore.get()/exists() di sini SELALU boleh baca
-    // Firestore (bypass firestore.rules), jadi aman dipakai untuk keputusan akses
-    // walau client sendiri tidak diizinkan baca /users atau /displayIdOwners langsung.
-    function userRole() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
-    }
-
-    function isElevatedRole() {
-      return signedIn()
-        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-        && userRole() in ['Reviewer', 'Validator', 'Admin', 'Super Admin'];
-    }
-
-    function isSuperAdminRole() {
-      return signedIn()
-        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
-        && userRole() == 'Super Admin';
-    }
-
     function validImageUpload() {
       return request.resource != null
         && request.resource.size > 0
@@ -39,62 +20,50 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
-    // Pemilik dokumen (dicatat atomik saat displayId digenerate, lihat
-    // /displayIdOwners di firestore.rules) -- satu-satunya pihak selain role
-    // elevated yang boleh menulis/menimpa file di path bertanda displayId ini.
-    function isOwnerOfDisplayId(displayId) {
-      return signedIn()
-        && firestore.exists(/databases/(default)/documents/displayIdOwners/$(displayId))
-        && firestore.get(/databases/(default)/documents/displayIdOwners/$(displayId)).data.uid == request.auth.uid;
-    }
-
-    // Sebelumnya `allow write: if signedIn()` -- siapa pun yang login bisa
-    // menimpa lampiran/PDF di path MANAPUN kalau tahu/menebak displayId-nya
-    // (lihat Bagian H/18.4). Sekarang wajib pemilik dokumen tsb, atau role
-    // elevated (dipakai saat Super Admin mengedit pengajuan lama & saat
-    // approver/Detail page men-generate ulang PDF pengajuan orang lain).
-    function canWriteToDisplayId(displayId) {
-      return validPdfUpload() && (isOwnerOfDisplayId(displayId) || isElevatedRole());
-    }
-
-    match /Reimbursement/{category}/{displayId}/{fileName} {
+    // ROLLBACK DARURAT (2026-09-02): versi sebelumnya di sini memakai
+    // firestore.get()/firestore.exists() (cross-service rules) untuk
+    // memvalidasi kepemilikan dokumen (isOwnerOfDisplayId) & role elevated
+    // (isElevatedRole/isSuperAdminRole) sebelum mengizinkan upload. Setelah
+    // deploy, TERBUKTI DI PRODUKSI mekanisme cross-service ini tidak bekerja
+    // sama sekali -- bahkan setelah data Firestore-nya dikonfirmasi 100% benar
+    // (uid pemilik cocok persis), upload tetap ditolak 403. Karena ini
+    // memblokir SEMUA generate/cetak PDF (Print BS/RBS/LPJ, Reminder Finance)
+    // untuk SEMUA user termasuk Super Admin, langsung di-rollback ke bentuk
+    // signedIn() sederhana (sama seperti sebelum Bagian K) supaya aplikasi
+    // berfungsi normal lagi. Validasi tipe/ukuran file (request.resource,
+    // TIDAK butuh cross-service) tetap dipertahankan karena itu terbukti jalan.
+    // Perlindungan kepemilikan berbasis path/role perlu didesain ulang pakai
+    // mekanisme yang tidak bergantung ke firestore.get() dari Storage Rules
+    // (mis. custom claims di Firebase Auth token, atau upload lewat Cloud
+    // Function/Admin SDK, bukan langsung dari client) -- lihat SUMMARY_PENGEMBANGAN.md.
+    match /Reimbursement/{allPaths=**} {
       allow read: if signedIn();
-      allow write: if signedIn() && canWriteToDisplayId(displayId);
+      allow write: if signedIn() && validPdfUpload();
     }
 
-    match /BonSementara/{category}/{displayId}/{fileName} {
+    match /BonSementara/{allPaths=**} {
       allow read: if signedIn();
-      allow write: if signedIn() && canWriteToDisplayId(displayId);
+      allow write: if signedIn() && validPdfUpload();
     }
 
-    match /LPJ/{category}/{displayId}/{fileName} {
+    match /LPJ/{allPaths=**} {
       allow read: if signedIn();
-      allow write: if signedIn() && canWriteToDisplayId(displayId);
+      allow write: if signedIn() && validPdfUpload();
     }
 
-    // Path flat 'lampiran_lpj/{displayId}_{namaFile}' (bukan sub-folder per
-    // displayId seperti 3 di atas) -- displayId diambil dari prefix sebelum '_'
-    // pertama pada nama file (displayId LPJ, mis. 'LPJ.MRO.SKEL.260901.3311',
-    // tidak pernah mengandung '_').
     match /lampiran_lpj/{fileName} {
       allow read: if signedIn();
-      allow write: if signedIn() && canWriteToDisplayId(fileName.split('_')[0]);
+      allow write: if signedIn() && validPdfUpload();
     }
 
-    // Gambar pengumuman (AnnouncementManager.jsx, tampil lewat AnnouncementPopup.jsx
-    // ke semua user). Sebelumnya path ini TIDAK ADA rule sama sekali -- jatuh ke
-    // deny-all paling bawah, jadi upload/hapus gambar pengumuman selalu gagal
-    // permission-denied. Ditambahkan di sini: upload/hapus khusus Super Admin
-    // (sesuai ProtectedRoute route /manage-announcements di App.jsx), dibatasi
-    // tipe gambar & ukuran (samakan dengan validasi client MAX_FILE_SIZE_MB).
+    // Gambar pengumuman -- sama seperti di atas, tidak lagi bergantung ke
+    // firestore.get() cross-service (isSuperAdminRole) karena terbukti tidak
+    // bekerja. Sementara dibuka untuk signedIn() (sama level trust seperti
+    // path lain), validasi tipe/ukuran gambar tetap jalan.
     match /announcements/{fileName} {
       allow read: if signedIn();
-      // create/update BUTUH validImageUpload() (request.resource ada isinya).
-      // delete dipisah -- deleteObject() tidak pernah mengirim request.resource,
-      // jadi validImageUpload() akan selalu false untuk delete kalau digabung
-      // dengan 'write' polos (write = create+update+delete).
-      allow create, update: if signedIn() && isSuperAdminRole() && validImageUpload();
-      allow delete: if signedIn() && isSuperAdminRole();
+      allow write: if signedIn() && validImageUpload();
+      allow delete: if signedIn();
     }
 
     match /{allPaths=**} {

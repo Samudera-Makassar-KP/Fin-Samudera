@@ -749,6 +749,30 @@ Saat diminta cek "hal lain yang perlu diperhatikan" pasca-deploy, ditemukan bug 
 - [x] Dry-run compile sukses, deploy ke produksi sukses
 - [ ] Tes manual: Super Admin upload & hapus gambar pengumuman di Manage Announcements, konfirmasi tidak lagi permission-denied
 
+## 21.8 INSIDEN KRITIS: Rollback `storage.rules` — Cross-Service `firestore.get()` Terbukti Tidak Bekerja di Produksi (2026-09-02)
+
+**Ditemukan lewat laporan user:** setelah deploy Bagian K/L & backfill dijalankan, tombol "Send Reminder to Finance" tetap gagal 403 (`storage/unauthorized`) saat generate PDF BS.
+
+**Proses diagnosa:** dibuat Cloud Function debug sementara (`debugCheckDisplayIdOwnership`, sudah dihapus dari kode — TAPI **masih ter-deploy di produksi**, lihat catatan di 21.9) yang membaca langsung via Admin SDK (bypass rules). Hasilnya: `requesterUid`, `ownerDocUid` (dari `/displayIdOwners`), dan `bsUserUid` (dari dokumen `bonSementara`) **ketiganya cocok persis** — data 100% benar. Sebagai tes lanjutan, rule `allow get, list` untuk `/displayIdOwners` di `firestore.rules` sempat dibuka sementara jadi `true` (data di koleksi ini tidak sensitif — cuma pemetaan nomor dokumen→uid) untuk menyingkirkan kemungkinan Firestore Rules-nya sendiri yang menghalangi pembacaan cross-service. **Hasilnya TETAP 403** — membuktikan masalahnya BUKAN di data maupun di Firestore Rules, melainkan mekanisme `firestore.get()`/`firestore.exists()` (cross-service rules dari Storage Rules ke Firestore, dipakai `isOwnerOfDisplayId()` & `isElevatedRole()`/`isSuperAdminRole()` di `storage.rules`) **tidak berfungsi sama sekali di proyek ini**, walau terdokumentasi resmi oleh Firebase dan berhasil `dry-run`/lolos compile setiap kali dideploy.
+
+**Dampak yang BARU disadari:** karena `isElevatedRole()` memakai mekanisme cross-service yang SAMA, ini berarti bukan cuma fitur baru (Reminder Finance) yang terdampak — **tombol Print/Cetak PDF di semua halaman Detail BS/RBS/LPJ dan ReimbursementTable.jsx kemungkinan besar gagal untuk SEMUA user, termasuk Super Admin**, sejak Bagian K di-deploy. Rule `announcements/{fileName}` dari 21.7 (pakai `isSuperAdminRole()`, mekanisme sama) kemungkinan besar juga tidak pernah benar-benar berfungsi walau sempat "berhasil" di-deploy.
+
+**Rollback yang dilakukan:** `storage.rules` ditulis ulang total, SELURUH fungsi `firestore.get()`/`firestore.exists()` cross-service dihapus. Write untuk `Reimbursement/`, `BonSementara/`, `LPJ/`, `lampiran_lpj/` kembali ke `allow write: if signedIn() && validPdfUpload()` (persis seperti sebelum Bagian K — kepemilikan per-displayId TIDAK divalidasi lagi di level Storage Rules untuk sementara). `announcements/{fileName}` juga disederhanakan jadi `signedIn() && validImageUpload()` (tanpa syarat Super Admin di level Storage — Firestore Rules `/announcements` tetap membatasi siapa yang bisa membuat entri metadata-nya). Validasi tipe/ukuran file (`validPdfUpload()`, `validImageUpload()`) TETAP dipertahankan karena terbukti bekerja (murni `request.resource`, tidak butuh cross-service).
+
+`firestore.rules`: rule `/displayIdOwners` dikembalikan ke `allow get, list: if false` (percobaan diagnosa selesai). Koleksi ini & penulisannya di 6 form (FormBs.jsx dkk, lihat 21.2) TIDAK dihapus — datanya tetap valid & berguna kalau desain ownership storage diperbaiki nanti pakai mekanisme lain.
+
+**PENTING — status keamanan setelah rollback:** perlindungan "siapa boleh timpa lampiran/PDF di path Storage" untuk SEMENTARA kembali ke level SEBELUM Bagian K (siapa pun yang login bisa upload ke path manapun asal tahu/menebak `displayId`-nya — celah yang sama seperti dilaporkan di Bagian H/18.4). Proteksi PII di `/users` vs `/userDirectory` (Bagian K bagian lain, murni Firestore Rules biasa — BUKAN cross-service, jadi TIDAK terdampak isu ini) **tetap aktif dan aman**.
+
+**Rencana perbaikan proper (belum dikerjakan, untuk sesi berikutnya):** ganti mekanisme ownership check yang tidak butuh `firestore.get()` dari Storage Rules — dua opsi utama:
+1. **Firebase Auth custom claims** (mis. `role` di-set sebagai custom claim lewat Cloud Function tiap kali dokumen `/users/{uid}` berubah, lalu di Storage Rules cukup baca `request.auth.token.role` — tidak perlu baca Firestore sama sekali). Kepemilikan per-displayId lebih sulit lewat custom claims (terlalu dinamis untuk taruh di token), jadi mungkin perlu digabung opsi 2.
+2. **Upload lewat Cloud Function (Admin SDK)** alih-alih langsung dari client ke Storage — Cloud Function bisa validasi kepemilikan via Firestore (query biasa, BUKAN cross-service, terbukti selalu bekerja di seluruh `functions/index.js`) sebelum menulis ke Storage pakai Admin SDK yang otomatis bypass semua rules.
+
+## 21.9 Belum Dibersihkan — Perlu Deploy Susulan
+
+- [ ] **Deploy ROLLBACK ini SEGERA** (`storage.rules` & `firestore.rules`) — prioritas tertinggi, produksi saat ini kemungkinan besar tidak bisa generate PDF sama sekali untuk siapa pun.
+- [ ] Function `debugCheckDisplayIdOwnership` masih ter-deploy di produksi (dibuat untuk diagnosa 21.8) meski sudah dihapus dari `functions/index.js` di kode — perlu `firebase deploy --only functions` (yang otomatis membersihkan function yang sudah tidak ada di kode) ATAU `firebase functions:delete debugCheckDisplayIdOwnership` manual. Risikonya rendah (cuma baca data non-sensitif, butuh login), tapi tetap sebaiknya dibersihkan.
+- [ ] Setelah rollback dikonfirmasi jalan (Print PDF & Reminder Finance berhasil lagi untuk user biasa), verifikasi ULANG bahwa Super Admin juga masih bisa Print PDF & edit pengajuan lama (fitur yang tadinya mengandalkan `isElevatedRole()` yang ternyata rusak sejak awal deploy Bagian K).
+
 ---
 
 # BAGIAN L — Aksi "Send Reminder to Finance" di Tabel BS (2026-09-02)

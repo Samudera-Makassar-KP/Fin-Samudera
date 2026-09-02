@@ -341,6 +341,12 @@ service cloud.firestore {
     // upload/timpa lampiran & PDF hasil generate di path Storage yang mengandung
     // displayId tsb -- sebelumnya siapa pun yang login bisa menimpa file di path
     // manapun asal tahu/menebak displayId-nya (lihat Bagian H/18.4).
+    // Koleksi ini SEMENTARA TIDAK DIPAKAI storage.rules (lihat rollback darurat
+    // di storage.rules, 2026-09-02 -- cross-service firestore.get() dari
+    // Storage Rules terbukti tidak bekerja di produksi). Rules-nya tetap
+    // dijaga ketat & write-nya tetap dipertahankan (client masih menulis
+    // displayId->uid di sini saat submit) untuk dipakai lagi kalau desain
+    // ownership storage diperbaiki nanti (mis. via custom claims).
     match /displayIdOwners/{displayId} {
       allow get, list: if false;
       allow create: if signedIn()
