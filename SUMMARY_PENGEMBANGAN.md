@@ -769,9 +769,9 @@ Saat diminta cek "hal lain yang perlu diperhatikan" pasca-deploy, ditemukan bug 
 
 ## 21.9 Belum Dibersihkan — Perlu Deploy Susulan
 
-- [ ] **Deploy ROLLBACK ini SEGERA** (`storage.rules` & `firestore.rules`) — prioritas tertinggi, produksi saat ini kemungkinan besar tidak bisa generate PDF sama sekali untuk siapa pun.
-- [ ] Function `debugCheckDisplayIdOwnership` masih ter-deploy di produksi (dibuat untuk diagnosa 21.8) meski sudah dihapus dari `functions/index.js` di kode — perlu `firebase deploy --only functions` (yang otomatis membersihkan function yang sudah tidak ada di kode) ATAU `firebase functions:delete debugCheckDisplayIdOwnership` manual. Risikonya rendah (cuma baca data non-sensitif, butuh login), tapi tetap sebaiknya dibersihkan.
-- [ ] Setelah rollback dikonfirmasi jalan (Print PDF & Reminder Finance berhasil lagi untuk user biasa), verifikasi ULANG bahwa Super Admin juga masih bisa Print PDF & edit pengajuan lama (fitur yang tadinya mengandalkan `isElevatedRole()` yang ternyata rusak sejak awal deploy Bagian K).
+- [x] **Deploy ROLLBACK ini** (`storage.rules` & `firestore.rules`) — **dikonfirmasi & dieksekusi 2026-09-03 pagi**. Ternyata `firestore.rules` sudah ter-deploy duluan (CLI: "latest version already up to date, skipping upload"), TAPI **`storage.rules` — file yang justru berisi rules bermasalah — belum pernah ter-upload ke produksi sebelumnya** (CLI baru menunjukkan "uploading rules storage.rules... released" saat dijalankan pagi ini). Artinya rollback storage rules baru benar-benar live mulai 2026-09-03, bukan 2026-09-02 seperti diasumsikan sebelumnya — ini kemungkinan besar penjelasan kendala yang masih dilaporkan user pagi harinya.
+- [x] Function `debugCheckDisplayIdOwnership` — dicek via `firebase functions:list` (2026-09-03), TIDAK ada lagi di produksi. Sudah bersih (kemungkinan terbersihkan otomatis lewat deploy `--only functions` sebelumnya).
+- [ ] Setelah rollback storage.rules dikonfirmasi jalan (Print PDF & Reminder Finance berhasil lagi untuk user biasa), verifikasi ULANG bahwa Super Admin juga masih bisa Print PDF & edit pengajuan lama (fitur yang tadinya mengandalkan `isElevatedRole()` yang ternyata rusak sejak awal deploy Bagian K).
 
 ---
 
