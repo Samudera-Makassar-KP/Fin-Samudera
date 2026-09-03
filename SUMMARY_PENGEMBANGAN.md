@@ -912,5 +912,5 @@ Setelah lihat hasil, user klarifikasi maksudnya lebih jauh: dropdown "Cetak" (Pr
 - [x] `ReimbursementTable.jsx`: tambah icon di dropdown Transferred (iterasi 1)
 - [x] `ReimbursementTable.jsx`: hapus dropdown Cetak & 3 opsi Print, ganti Aksi jadi icon Transferred langsung (iterasi 2, setelah verifikasi Print masih ada di `DetailRbs.jsx`)
 - [x] `CI=true npm run build` sukses (0 warning/error, bundle size turun ~750B karena dead code print handler & portal dropdown terhapus)
-- [ ] Deploy hosting ke produksi (iterasi 2)
+- [x] Deploy hosting ke produksi (iterasi 2) — sukses 2026-09-03
 - [ ] Tes visual & fungsional: kolom Aksi RBS tampil icon Transferred langsung tanpa dropdown, klik berhasil menandai transferred, icon berubah jadi centang & non-klik setelahnya; pastikan Print RBS Form/Lampiran/Both masih bisa diakses lewat halaman Detail RBS
