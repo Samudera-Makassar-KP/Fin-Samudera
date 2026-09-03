@@ -11,7 +11,7 @@ import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faMoneyBillWave, faCheckCircle } from '@fortawesome/free-solid-svg-icons'
 import { generateReimbursementPDF } from '../utils/ReimbursementPdf'
 
 const ReimbursementTable = () => {
@@ -808,14 +808,16 @@ const ReimbursementTable = () => {
                         </button>
                         <div className="my-1 border-t border-gray-100 dark:border-gray-600" />
                         {actionMenu.item.transferred ? (
-                            <div className="px-4 py-2 text-gray-400 dark:text-gray-500 cursor-not-allowed">
-                                &#10003; Transferred
+                            <div className="flex items-center gap-2 px-4 py-2 text-gray-400 dark:text-gray-500 cursor-not-allowed">
+                                <FontAwesomeIcon icon={faCheckCircle} className="w-3.5 h-3.5" />
+                                Transferred
                             </div>
                         ) : (
                             <button
-                                className="w-full text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                                className="w-full flex items-center gap-2 text-left px-4 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                                 onClick={() => handleMarkTransferred(actionMenu.item)}
                             >
+                                <FontAwesomeIcon icon={faMoneyBillWave} className="w-3.5 h-3.5" />
                                 Transferred
                             </button>
                         )}

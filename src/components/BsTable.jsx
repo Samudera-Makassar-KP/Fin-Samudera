@@ -13,7 +13,7 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import BsTimerDisplay from './bsTimerDisplay'
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faEnvelope } from '@fortawesome/free-solid-svg-icons'
 import { generateBsPDF } from '../utils/BsPdf'
 
 const BsTable = () => {
@@ -633,15 +633,15 @@ const BsTable = () => {
                                                 <td className="px-2 py-2 border text-center">
                                                     {item.status === 'Disetujui' ? (
                                                         <button
-                                                            className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                                             onClick={() => handleSendFinanceReminder(item)}
                                                             disabled={reminderSendingId === item.id}
+                                                            title="Send Reminder to Finance"
                                                         >
-                                                            {reminderSendingId === item.id ? (
-                                                                <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
-                                                            ) : (
-                                                                'Send Reminder to Finance'
-                                                            )}
+                                                            <FontAwesomeIcon
+                                                                icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
+                                                                className={reminderSendingId === item.id ? 'animate-spin' : ''}
+                                                            />
                                                         </button>
                                                     ) : (
                                                         <button

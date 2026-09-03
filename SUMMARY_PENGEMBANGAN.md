@@ -868,8 +868,8 @@ Dampaknya: perbandingan `selectedReviewer1.value === selectedReviewer2.value` (`
 
 Trigger yang sudah diperbaiki hanya berlaku untuk write BARU ke `/users` ke depannya. **Dokumen `/userDirectory` yang SUDAH ADA sebelum fix ini tetap tidak punya field `uid`** sampai di-backfill ulang.
 
-- [ ] **Super Admin WAJIB klik tombol "Sinkronkan Direktori Pengguna" di halaman Manage Users SEKALI LAGI** (sama seperti langkah wajib di 21.4) — kali ini untuk mengisi field `uid` yang hilang di SEMUA dokumen `/userDirectory` existing. Tanpa ini, dropdown Reviewer/Validator/plat BBM tetap mengembalikan `value: undefined` untuk semua user yang belum pernah re-trigger write ke `/users` sejak fix ini dideploy.
-- [ ] Setelah backfill, tes submit RBS baru dengan Reviewer 1 & Reviewer 2 berbeda — pastikan tidak lagi muncul toast "tidak boleh sama".
+- [x] **Super Admin klik tombol "Sinkronkan Direktori Pengguna" di halaman Manage Users SEKALI LAGI** — **dikonfirmasi berhasil 2026-09-03** ("Direktori pengguna disinkronkan (55 pengguna)"), mengisi field `uid` yang tadinya hilang di SEMUA dokumen `/userDirectory` existing.
+- [x] Setelah backfill, tes submit RBS baru dengan Reviewer 1 & Reviewer 2 berbeda — **dikonfirmasi user, toast "tidak boleh sama" tidak muncul lagi**.
 - [ ] Cek juga: dropdown Validator, dropdown plat BBM lintas user, dan nama approver di PDF/Detail — semuanya sama-sama bergantung pada `userData.uid` dari `/userDirectory`, jadi kemungkinan juga ikut terdampak bug ini (misal approval routing `currentApproverUid` tersimpan `undefined` untuk dokumen yang sempat coba disubmit saat bug ini aktif — perlu dicek apakah ada dokumen "nyasar" yang perlu dibersihkan manual).
 
 ## 23.5 Task Development — Bagian M
@@ -879,5 +879,26 @@ Trigger yang sudah diperbaiki hanya berlaku untuk write BARU ke `/users` ke depa
 - [x] `node -c` syntax check & isolated `require()` test sukses
 - [x] `CI=true npm run build` sukses (0 warning/error, tidak ada perubahan client)
 - [x] Deploy `functions:syncUserDirectoryOnWrite,functions:backfillUserDirectory` ke produksi sukses (2026-09-03)
-- [ ] **Super Admin klik ulang "Sinkronkan Direktori Pengguna" — WAJIB, lihat 23.4**
-- [ ] Tes manual submit RBS/LPJ/BS baru pasca-backfill
+- [x] Super Admin klik ulang "Sinkronkan Direktori Pengguna" — selesai, lihat 23.4
+- [x] Tes manual submit RBS/LPJ/BS baru pasca-backfill — berhasil, dikonfirmasi user
+
+---
+
+# BAGIAN N — Rapikan Kolom Aksi: Tombol Reminder Jadi Icon, Tambah Icon di Menu Transferred (2026-09-03)
+
+## 24.1 Permintaan User
+
+Kolom Aksi di `BsTable.jsx` terasa penuh karena tulisan "Send Reminder to Finance" berulang di tiap baris. User minta diganti icon saja (hemat tempat). User juga minta item "Transferred" di dropdown "Cetak" (`ReimbursementTable.jsx`) dirapikan — bebas bentuk icon atau tulisan, asal rapi & bersih.
+
+## 24.2 Perubahan
+
+- `BsTable.jsx`: tombol "Send Reminder to Finance" (kolom Aksi, BS berstatus Disetujui) diganti icon-only `faEnvelope` (FontAwesome), dengan `title="Send Reminder to Finance"` untuk tooltip/aksesibilitas. State loading tetap `faSpinner` seperti sebelumnya.
+- `ReimbursementTable.jsx`: item "Transferred" di dropdown "Cetak" (`actionMenu`) ditambah icon — `faMoneyBillWave` untuk aksi yang belum di-Transferred, `faCheckCircle` untuk status yang sudah Transferred (menggantikan karakter `&#10003;` manual). Teks "Transferred" tetap dipertahankan di dropdown ini (bukan tabel berulang seperti reminder, jadi tidak perlu icon-only).
+
+## 24.3 Task Development — Bagian N
+
+- [x] `BsTable.jsx`: import `faEnvelope`, ganti label tombol reminder jadi icon
+- [x] `ReimbursementTable.jsx`: import `faMoneyBillWave`, `faCheckCircle`, tambah icon di item dropdown Transferred
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [ ] Deploy hosting ke produksi
+- [ ] Tes visual: kolom Aksi BS tampil ringkas dengan icon mail, dropdown Cetak RBS menampilkan icon uang/centang rapi di kedua tema (light/dark)
