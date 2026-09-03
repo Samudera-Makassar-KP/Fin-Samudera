@@ -841,3 +841,43 @@ Karena itu Bagian K & L **harus di-deploy bersamaan** — men-deploy L tanpa K (
 - [x] `firebase deploy --only functions --dry-run` sukses (function ter-load tanpa error)
 - [ ] **Tes manual oleh user (lihat 22.5) — WAJIB sebelum deploy ke produksi**
 - [ ] Deploy BERSAMAAN dengan Bagian K (rules + functions + hosting satu paket)
+
+---
+
+# BAGIAN M — Bug Kritis: Field `uid` Hilang di `/userDirectory`, Blokir Semua Pengajuan RBS/LPJ/BS (ditemukan & diperbaiki 2026-09-03)
+
+## 23.1 Laporan User
+
+Setelah rollback `storage.rules` di Bagian K/21.8 dikonfirmasi & dideploy (Print PDF berhasil kembali), user melaporkan error baru saat submit pengajuan RBS: toast **"Reviewer 1 dan Reviewer 2 tidak boleh sama"** muncul terus-menerus walau Reviewer 1 (Bernard Hutagaol) dan Reviewer 2 (Joko Susilo) jelas berbeda orang.
+
+## 23.2 Root Cause
+
+`buildUserDirectoryEntry()` di `functions/index.js` (dibuat saat Bagian K, lihat 21.6) — fungsi yang membentuk isi dokumen `/userDirectory/{uid}` — **tidak menyertakan field `uid`** sama sekali, hanya `nama`, `role`, `unit`, `platKendaraan`. Semua form (`FormBs.jsx`, `FormRbsBbm/Operasional/Umum.jsx`, `FormLpjUmum/Marketing.jsx`) membangun opsi dropdown Reviewer/Validator dengan `value: userData.uid` (pola yang sama dipakai untuk `/users`, yang memang selalu punya field `uid` — lihat `createManagedUser` di `functions/index.js`). Karena `/userDirectory` tidak punya field itu, **setiap opsi dropdown Reviewer/Validator punya `value: undefined`** — apa pun yang dipilih user.
+
+Dampaknya: perbandingan `selectedReviewer1.value === selectedReviewer2.value` (`undefined === undefined`) SELALU `true`, sehingga validasi "tidak boleh sama" salah nyala setiap kali Reviewer 1 DAN Reviewer 2 sama-sama sudah dipilih — **memblokir SEMUA submit RBS/LPJ/BS baru** sejak Bagian K live (2026-09-02), terlepas dari kombinasi reviewer yang dipilih. Bug ini murni di sisi Cloud Function (bukan di 6 form client), jadi 1 titik perbaikan menyelesaikan semua form sekaligus.
+
+## 23.3 Perbaikan
+
+`functions/index.js`: `buildUserDirectoryEntry` diubah jadi menerima parameter `uid` eksplisit dan menyertakannya di dokumen yang ditulis:
+- `syncUserDirectoryOnWrite` (trigger otomatis): `buildUserDirectoryEntry(uid, event.data.after.data())` — `uid` diambil dari `event.params.uid` (path trigger), bukan dari field di data (lebih aman, tidak bergantung ke `data.uid` yang bisa saja hilang/salah).
+- `backfillUserDirectory` (migrasi manual): `buildUserDirectoryEntry(userDoc.id, userDoc.data())`.
+
+**Deploy:** `firebase deploy --only functions:syncUserDirectoryOnWrite,functions:backfillUserDirectory` — sukses 2026-09-03 (percobaan pertama & kedua sempat gagal `Timeout after 10000` saat firebase-tools memuat kode, tampaknya flaky lokal karena cold-load module besar di Windows — percobaan ketiga berhasil tanpa perubahan apa pun).
+
+## 23.4 WAJIB Dilakukan Setelah Deploy Ini
+
+Trigger yang sudah diperbaiki hanya berlaku untuk write BARU ke `/users` ke depannya. **Dokumen `/userDirectory` yang SUDAH ADA sebelum fix ini tetap tidak punya field `uid`** sampai di-backfill ulang.
+
+- [ ] **Super Admin WAJIB klik tombol "Sinkronkan Direktori Pengguna" di halaman Manage Users SEKALI LAGI** (sama seperti langkah wajib di 21.4) — kali ini untuk mengisi field `uid` yang hilang di SEMUA dokumen `/userDirectory` existing. Tanpa ini, dropdown Reviewer/Validator/plat BBM tetap mengembalikan `value: undefined` untuk semua user yang belum pernah re-trigger write ke `/users` sejak fix ini dideploy.
+- [ ] Setelah backfill, tes submit RBS baru dengan Reviewer 1 & Reviewer 2 berbeda — pastikan tidak lagi muncul toast "tidak boleh sama".
+- [ ] Cek juga: dropdown Validator, dropdown plat BBM lintas user, dan nama approver di PDF/Detail — semuanya sama-sama bergantung pada `userData.uid` dari `/userDirectory`, jadi kemungkinan juga ikut terdampak bug ini (misal approval routing `currentApproverUid` tersimpan `undefined` untuk dokumen yang sempat coba disubmit saat bug ini aktif — perlu dicek apakah ada dokumen "nyasar" yang perlu dibersihkan manual).
+
+## 23.5 Task Development — Bagian M
+
+- [x] `functions/index.js`: `buildUserDirectoryEntry` menerima & menyertakan `uid`
+- [x] Update 2 call site (`syncUserDirectoryOnWrite`, `backfillUserDirectory`)
+- [x] `node -c` syntax check & isolated `require()` test sukses
+- [x] `CI=true npm run build` sukses (0 warning/error, tidak ada perubahan client)
+- [x] Deploy `functions:syncUserDirectoryOnWrite,functions:backfillUserDirectory` ke produksi sukses (2026-09-03)
+- [ ] **Super Admin klik ulang "Sinkronkan Direktori Pengguna" — WAJIB, lihat 23.4**
+- [ ] Tes manual submit RBS/LPJ/BS baru pasca-backfill

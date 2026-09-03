@@ -507,7 +507,8 @@ exports.deleteManagedUser = onCall(async (request) => {
 // H/18.4). Mirror ini disinkron otomatis oleh trigger di bawah setiap kali
 // /users/{uid} ditulis (baik lewat Cloud Function createManagedUser, maupun
 // lewat update langsung client Super Admin di FormEditUser.jsx).
-const buildUserDirectoryEntry = (data) => ({
+const buildUserDirectoryEntry = (uid, data) => ({
+    uid,
     nama: typeof data?.nama === "string" ? data.nama : "",
     role: typeof data?.role === "string" ? data.role : "",
     unit: Array.isArray(data?.unit) ? data.unit : [],
@@ -523,7 +524,7 @@ exports.syncUserDirectoryOnWrite = onDocumentWritten("users/{uid}", async (event
         return;
     }
 
-    await directoryRef.set(buildUserDirectoryEntry(event.data.after.data()));
+    await directoryRef.set(buildUserDirectoryEntry(uid, event.data.after.data()));
 });
 
 // Migrasi satu-kali untuk user LAMA yang sudah ada sebelum trigger di atas
@@ -543,7 +544,7 @@ exports.backfillUserDirectory = onCall(async (request) => {
     for (const chunk of chunks) {
         const batch = db.batch();
         chunk.forEach((userDoc) => {
-            batch.set(db.collection("userDirectory").doc(userDoc.id), buildUserDirectoryEntry(userDoc.data()));
+            batch.set(db.collection("userDirectory").doc(userDoc.id), buildUserDirectoryEntry(userDoc.id, userDoc.data()));
         });
         await batch.commit();
         synced += chunk.length;
