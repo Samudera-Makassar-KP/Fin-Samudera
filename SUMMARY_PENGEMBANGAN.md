@@ -900,5 +900,5 @@ Kolom Aksi di `BsTable.jsx` terasa penuh karena tulisan "Send Reminder to Financ
 - [x] `BsTable.jsx`: import `faEnvelope`, ganti label tombol reminder jadi icon
 - [x] `ReimbursementTable.jsx`: import `faMoneyBillWave`, `faCheckCircle`, tambah icon di item dropdown Transferred
 - [x] `CI=true npm run build` sukses (0 warning/error)
-- [ ] Deploy hosting ke produksi
+- [x] Deploy hosting ke produksi — sukses 2026-09-03
 - [ ] Tes visual: kolom Aksi BS tampil ringkas dengan icon mail, dropdown Cetak RBS menampilkan icon uang/centang rapi di kedua tema (light/dark)
