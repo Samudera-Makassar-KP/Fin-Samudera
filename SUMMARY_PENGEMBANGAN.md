@@ -890,15 +890,27 @@ Trigger yang sudah diperbaiki hanya berlaku untuk write BARU ke `/users` ke depa
 
 Kolom Aksi di `BsTable.jsx` terasa penuh karena tulisan "Send Reminder to Finance" berulang di tiap baris. User minta diganti icon saja (hemat tempat). User juga minta item "Transferred" di dropdown "Cetak" (`ReimbursementTable.jsx`) dirapikan — bebas bentuk icon atau tulisan, asal rapi & bersih.
 
-## 24.2 Perubahan
+## 24.2 Perubahan (Iterasi 1)
 
 - `BsTable.jsx`: tombol "Send Reminder to Finance" (kolom Aksi, BS berstatus Disetujui) diganti icon-only `faEnvelope` (FontAwesome), dengan `title="Send Reminder to Finance"` untuk tooltip/aksesibilitas. State loading tetap `faSpinner` seperti sebelumnya.
-- `ReimbursementTable.jsx`: item "Transferred" di dropdown "Cetak" (`actionMenu`) ditambah icon — `faMoneyBillWave` untuk aksi yang belum di-Transferred, `faCheckCircle` untuk status yang sudah Transferred (menggantikan karakter `&#10003;` manual). Teks "Transferred" tetap dipertahankan di dropdown ini (bukan tabel berulang seperti reminder, jadi tidak perlu icon-only).
+- `ReimbursementTable.jsx`: item "Transferred" di dropdown "Cetak" (`actionMenu`) ditambah icon — `faMoneyBillWave` untuk aksi yang belum di-Transferred, `faCheckCircle` untuk status yang sudah Transferred (menggantikan karakter `&#10003;` manual).
 
-## 24.3 Task Development — Bagian N
+## 24.3 Revisi (Iterasi 2, 2026-09-03) — Dropdown "Cetak" Dihapus Total di `ReimbursementTable.jsx`
+
+Setelah lihat hasil, user klarifikasi maksudnya lebih jauh: dropdown "Cetak" (Print RBS Form/Print Lampiran/Print Both) di kolom Aksi tabel Reimbursement/RBS dianggap tidak perlu — cukup sisakan aksi **Transferred** saja, langsung sebagai icon tanpa dropdown.
+
+**Verifikasi sebelum eksekusi:** dicek dulu apakah 3 opsi Print itu satu-satunya jalan cetak PDF RBS — ternyata TIDAK, `DetailRbs.jsx` (halaman Detail RBS, dibuka lewat klik nomor dokumen) sudah punya tombol "Print" sendiri (baris ~660, pakai `generateReimbursementPDF` yang sama). Jadi dropdown Cetak di tabel murni shortcut duplikat, aman dihapus tanpa menghilangkan fitur cetak dari aplikasi (pola sama seperti `DetailBs.jsx` untuk BS).
+
+**Perubahan:**
+- `ReimbursementTable.jsx`: dihapus total — `actionMenu` state, `printLoadingId` state, fungsi `openActionMenu`/`closeActionMenu`/`handlePrintRbsForm`/`handlePrintLampiran`/`handlePrintBoth`, portal dropdown (`ReactDOM.createPortal`), dan import `generateReimbursementPDF`/`ReactDOM`/`faSpinner` yang jadi tidak terpakai.
+- Kolom Aksi (baris berstatus Disetujui) sekarang langsung tombol icon `faMoneyBillWave` (klik = `handleMarkTransferred`), berubah jadi icon `faCheckCircle` non-aktif setelah sudah ditandai Transferred — tanpa dropdown, konsisten dengan gaya icon-only "Send Reminder to Finance" di `BsTable.jsx`.
+- `utils/ReimbursementPdf.jsx` (`generateReimbursementPDF`) TIDAK dihapus — masih dipakai `DetailRbs.jsx` untuk tombol Print di halaman Detail.
+
+## 24.4 Task Development — Bagian N
 
 - [x] `BsTable.jsx`: import `faEnvelope`, ganti label tombol reminder jadi icon
-- [x] `ReimbursementTable.jsx`: import `faMoneyBillWave`, `faCheckCircle`, tambah icon di item dropdown Transferred
-- [x] `CI=true npm run build` sukses (0 warning/error)
-- [x] Deploy hosting ke produksi — sukses 2026-09-03
-- [ ] Tes visual: kolom Aksi BS tampil ringkas dengan icon mail, dropdown Cetak RBS menampilkan icon uang/centang rapi di kedua tema (light/dark)
+- [x] `ReimbursementTable.jsx`: tambah icon di dropdown Transferred (iterasi 1)
+- [x] `ReimbursementTable.jsx`: hapus dropdown Cetak & 3 opsi Print, ganti Aksi jadi icon Transferred langsung (iterasi 2, setelah verifikasi Print masih ada di `DetailRbs.jsx`)
+- [x] `CI=true npm run build` sukses (0 warning/error, bundle size turun ~750B karena dead code print handler & portal dropdown terhapus)
+- [ ] Deploy hosting ke produksi (iterasi 2)
+- [ ] Tes visual & fungsional: kolom Aksi RBS tampil icon Transferred langsung tanpa dropdown, klik berhasil menandai transferred, icon berubah jadi centang & non-klik setelahnya; pastikan Print RBS Form/Lampiran/Both masih bisa diakses lewat halaman Detail RBS
