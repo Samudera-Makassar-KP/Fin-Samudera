@@ -978,6 +978,55 @@ Diterapkan konsisten di 5 form: `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `For
 - [x] `firebase deploy --only functions --dry-run` sukses
 - [x] `CI=true npm run build` sukses (0 warning/error)
 - [x] Deploy ke produksi — storage rules, functions (`validatePengembalianBukti` & `sendPengembalianReminders` berhasil `Successful create operation`), hosting — semua sukses 2026-09-05
-- [ ] Cek Cloud Vision API aktif di project, tes upload bukti pengembalian dengan struk transfer asli (belum bisa diverifikasi otomatis dari sesi ini -- perlu login sebagai user & submit LPJ dengan sisaLebih > 0 secara nyata)
+- [x] Cek Cloud Vision API aktif di project — **dikonfirmasi user, diaktifkan manual 2026-09-05** lewat Google Cloud Console > APIs & Services
+- [ ] Tes upload bukti pengembalian dengan struk transfer asli (belum divalidasi end-to-end)
 - [ ] Tes manual: multi-upload lampiran RBS/LPJ dengan campuran PDF+JPG, pastikan "Lihat Lampiran" di Detail terbuka 1 file gabungan lengkap
 - [ ] Tes manual: badge icon Transferred/Reported muncul tooltip saat hover
+
+---
+
+# BAGIAN P — PWA: Aplikasi Bisa Di-Install di Android/iOS (2026-09-05)
+
+## 26.1 Permintaan User
+
+User tanya cara supaya aplikasi web ini bisa "diinstall" di HP (Android & iOS). Direkomendasikan PWA (Progressive Web App) dulu (gratis, tidak perlu App Store/Play Store & akun developer) ketimbang bungkus native (Capacitor, butuh Xcode/Android Studio & akun developer berbayar) — user setuju & minta langsung dikerjakan + deploy.
+
+## 26.2 Temuan
+
+Project sudah punya `public/manifest.json` dasar (1 icon 192x192) tapi **tidak pernah benar-benar aktif** — `public/index.html` tidak ada `<link rel="manifest">` sama sekali, dan tidak ada service worker/registrasi apapun (`src/index.js` polos, tidak ada `src/service-worker.js`). Jadi PWA di app ini belum pernah berfungsi walau file dasarnya sudah ada dari awal.
+
+`react-scripts` (react-scripts v5, sudah jadi dependency, TIDAK di-eject) ternyata sudah punya dukungan bawaan: `config/webpack.config.js` otomatis pasang `WorkboxWebpackPlugin.InjectManifest` KALAU `src/service-worker.js` ada. Artinya PWA bisa diaktifkan tanpa eject/craco, cukup tambah file-file standar `cra-template-pwa`. Paket `workbox-*` yang dibutuhkan runtime ternyata sudah ke-hoist di `node_modules` (dependency transitif react-scripts) — tetap ditambahkan eksplisit ke `package.json` (bukan cuma mengandalkan hoisting) supaya `npm install` di mesin lain tetap konsisten.
+
+## 26.3 Implementasi
+
+- `src/service-worker.js` (baru): precache asset build (`self.__WB_MANIFEST`, diisi otomatis saat build), fallback navigasi ke `index.html` (SPA routing tetap jalan offline), `StaleWhileRevalidate` untuk gambar same-origin. **`clientsClaim()` + `self.skipWaiting()` dipanggil unconditional** — pertimbangan khusus: app ini sering di-hotfix/deploy (lihat riwayat sesi ini), jadi service worker baru langsung aktif begitu selesai install (tab yang sedang terbuka tidak dipaksa reload, tapi navigasi/refresh berikutnya pasti dapat build terbaru) — tidak perlu tunggu user tutup SEMUA tab dulu (perilaku default workbox tanpa skipWaiting).
+- `src/serviceWorkerRegistration.js` (baru): adaptasi boilerplate resmi CRA (`register()`/`unregister()`), dipanggil dari `src/index.js`.
+- `public/manifest.json`: tambah icon 512x512 (kriteria minimum Chrome untuk install banner), `theme_color` diganti ke merah brand (`#ED1C24`, dipakai luas di email/tombol) dari default hitam bawaan CRA.
+- `public/index.html`: tambah `<link rel="manifest">`, `<link rel="apple-touch-icon">`, meta `apple-mobile-web-app-*` (iOS baca ini untuk Add to Home Screen, BUKAN manifest.json seperti Android/Chrome).
+- Icon baru (`logo192.png`, `logo512.png`, `apple-touch-icon.png` 180x180): di-generate dari `logo-tanpa-tulisan.png` (sumber asli cuma 192x192, satu-satunya aset persegi yang ada — 2 logo lain di `src/assets/images/` berupa wordmark horizontal 7898x1211, tidak cocok jadi icon) pakai `sharp` yang diinstall SEMENTARA (`npm install --no-save`, langsung di-uninstall lagi setelah generate) supaya tidak menambah dependency permanen cuma untuk tugas one-off ini.
+- `firebase.json`: header `Cache-Control: no-cache` khusus untuk `/service-worker.js` (nama file tetap/tidak di-hash, browser wajib re-check tiap saat, bukan ikut cache default Hosting).
+- `package.json`: tambah `workbox-core/expiration/precaching/routing/strategies` (versi dipin sama seperti yang sudah ke-hoist dari react-scripts, 6.6.0) sebagai dependency eksplisit.
+
+## 26.4 Kenapa TIDAK Bungkus Native (Capacitor) Dulu
+
+Ditawarkan ke user sebagai opsi lanjutan kalau butuh app "resmi" di Play Store/App Store — belum dikerjakan karena user pilih mulai dari PWA. Kalau nanti dibutuhkan, kode React yang sama bisa dipakai ulang (tidak perlu rewrite), tinggal tambah wrapper Capacitor.
+
+## 26.5 Keterbatasan yang Diketahui
+
+- Instalasi di iOS Safari tetap manual lewat menu Share > "Add to Home Screen" — Apple tidak punya install-prompt otomatis seperti Chrome/Android.
+- Tab yang SUDAH terbuka saat deploy baru tidak otomatis reload paksa (sengaja, lihat 26.3) — kalau user butuh notifikasi "versi baru tersedia" yang lebih eksplisit, perlu tambahan UI (toast + tombol refresh), belum dikerjakan supaya tidak mengganggu user yang sedang isi form.
+- Icon di-upscale dari sumber 192x192 (bukan didesain ulang di resolusi tinggi) — cukup tajam untuk logo sederhana ini (dicek visual), tapi kalau ada source vector/resolusi tinggi asli, sebaiknya dipakai untuk hasil lebih optimal.
+
+## 26.6 Task Development — Bagian P
+
+- [x] `src/service-worker.js`, `src/serviceWorkerRegistration.js` (baru)
+- [x] `src/index.js`: panggil `serviceWorkerRegistration.register()`
+- [x] `public/manifest.json`: icon 192+512, theme_color brand
+- [x] `public/index.html`: link manifest, apple-touch-icon, meta iOS
+- [x] Generate `logo192.png`, `logo512.png`, `apple-touch-icon.png` dari source yang ada (sharp sementara, langsung dihapus)
+- [x] `package.json`: tambah 5 dependency workbox eksplisit, `npm install` sukses
+- [x] `firebase.json`: header no-cache untuk `/service-worker.js`
+- [x] `CI=true npm run build` sukses (0 warning/error) — dicek `build/service-worker.js` benar berisi precache manifest asset hasil build (nama file hash JS/CSS terbaru ketemu di dalamnya)
+- [x] Cek visual icon 512x512 & apple-touch-icon hasil generate — tajam & jelas
+- [ ] Deploy hosting ke produksi
+- [ ] Tes manual: buka di Chrome Android → muncul prompt "Install app" atau lewat menu ⋮ > Install; buka di Safari iOS → Share > Add to Home Screen → ikon & nama muncul benar, buka fullscreen tanpa address bar

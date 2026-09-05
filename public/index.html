@@ -3,11 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#ED1C24" />
     <meta name="description" content="Samudera Indonesia Web Application" />
-    
+
     <!-- Favicon -->
     <link rel="icon" href="%PUBLIC_URL%/logo-tanpa-tulisan.png" />
+
+    <!-- PWA: installable di Android/desktop lewat manifest, di iOS lewat apple-touch-icon + meta di bawah -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Samudera" />
 
     <title>Samudera Indonesia</title>
   </head>
