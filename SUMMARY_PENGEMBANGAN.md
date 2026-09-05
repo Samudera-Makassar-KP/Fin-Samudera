@@ -977,7 +977,7 @@ Diterapkan konsisten di 5 form: `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `For
 - [x] `node -c` + isolated `require()` test functions sukses
 - [x] `firebase deploy --only functions --dry-run` sukses
 - [x] `CI=true npm run build` sukses (0 warning/error)
-- [ ] Deploy ke produksi (storage rules + functions + hosting)
-- [ ] Cek Cloud Vision API aktif di project, tes upload bukti pengembalian dengan struk transfer asli
+- [x] Deploy ke produksi — storage rules, functions (`validatePengembalianBukti` & `sendPengembalianReminders` berhasil `Successful create operation`), hosting — semua sukses 2026-09-05
+- [ ] Cek Cloud Vision API aktif di project, tes upload bukti pengembalian dengan struk transfer asli (belum bisa diverifikasi otomatis dari sesi ini -- perlu login sebagai user & submit LPJ dengan sisaLebih > 0 secara nyata)
 - [ ] Tes manual: multi-upload lampiran RBS/LPJ dengan campuran PDF+JPG, pastikan "Lihat Lampiran" di Detail terbuka 1 file gabungan lengkap
 - [ ] Tes manual: badge icon Transferred/Reported muncul tooltip saat hover
