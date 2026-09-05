@@ -1028,5 +1028,6 @@ Ditawarkan ke user sebagai opsi lanjutan kalau butuh app "resmi" di Play Store/A
 - [x] `firebase.json`: header no-cache untuk `/service-worker.js`
 - [x] `CI=true npm run build` sukses (0 warning/error) — dicek `build/service-worker.js` benar berisi precache manifest asset hasil build (nama file hash JS/CSS terbaru ketemu di dalamnya)
 - [x] Cek visual icon 512x512 & apple-touch-icon hasil generate — tajam & jelas
-- [ ] Deploy hosting ke produksi
+- [x] Deploy hosting ke produksi — sukses 2026-09-05
+- [x] Verifikasi langsung di `smdr-mks.com` (custom domain, bukan cuma `*.web.app`): `manifest.json` (200, isi benar), `service-worker.js` (200, header `Cache-Control: no-cache` benar terpasang), `logo512.png`/`apple-touch-icon.png` (200), tag `<link rel="manifest">` & `<link rel="apple-touch-icon">` muncul di HTML — semua terkonfirmasi via curl
 - [ ] Tes manual: buka di Chrome Android → muncul prompt "Install app" atau lewat menu ⋮ > Install; buka di Safari iOS → Share > Add to Home Screen → ikon & nama muncul benar, buka fullscreen tanpa address bar
