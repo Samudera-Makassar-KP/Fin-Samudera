@@ -9,7 +9,8 @@ import ModalPDF from './ModalPDF'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faCheckCircle, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { PENGEMBALIAN_ACCEPT, PENGEMBALIAN_MAX_SIZE_BYTES, describePengembalianStatus, isValidPengembalianFile, uploadAndValidatePengembalian } from '../utils/pengembalianUpload'
 
 const DetailLpj = () => {
     const [userData, setUserData] = useState(null)
@@ -17,6 +18,8 @@ const DetailLpj = () => {
     const [reviewers, setReviewers] = useState([])
     const [, setError] = useState(null)
     const [isLoading, setIsLoading] = useState(false)
+    const [pengembalianFile, setPengembalianFile] = useState(null)
+    const [isUploadingPengembalian, setIsUploadingPengembalian] = useState(false)
 
     const { id } = useParams()
     const uid = localStorage.getItem('userUid')
@@ -247,6 +250,45 @@ const DetailLpj = () => {
     const closePreview = () => {
         setModalPdfUrl(null)
         setModalTitle('')
+    }
+
+    const handlePengembalianFileChange = async (e) => {
+        const file = e.target.files[0]
+        if (!file) return
+
+        if (file.size > PENGEMBALIAN_MAX_SIZE_BYTES) {
+            toast.error(`Ukuran file ${file.name} maksimal 250MB.`)
+            e.target.value = ''
+            return
+        }
+        if (!(await isValidPengembalianFile(file))) {
+            toast.error(`File ${file.name} bukan PDF/JPG/PNG yang valid.`)
+            e.target.value = ''
+            return
+        }
+
+        setPengembalianFile(file)
+        e.target.value = ''
+    }
+
+    const handleUploadPengembalian = async () => {
+        if (!pengembalianFile) return
+
+        setIsUploadingPengembalian(true)
+        try {
+            const { status, fileUrl } = await uploadAndValidatePengembalian(id, lpjDetail.displayId, pengembalianFile)
+            const { label, tone } = describePengembalianStatus(status)
+            if (tone === 'success') toast.success(label)
+            else toast.warning(label)
+
+            setLpjDetail((prev) => ({ ...prev, pengembalianStatus: status, pengembalianBuktiUrl: fileUrl }))
+            setPengembalianFile(null)
+        } catch (error) {
+            console.error('Gagal upload/validasi bukti pengembalian:', error)
+            toast.error('Gagal mengupload bukti pengembalian. Silakan coba lagi.')
+        } finally {
+            setIsUploadingPengembalian(false)
+        }
     }
 
     const handleGenerateAndPreviewPDF = async () => {
@@ -641,6 +683,85 @@ const DetailLpj = () => {
                         </table>
                     </div>
                 </div>
+
+                {lpjDetail?.sisaLebih > 0 && (
+                    <div className="mt-6 p-4 border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Bukti Pengembalian Dana</p>
+
+                        {lpjDetail?.pengembalianStatus === 'valid' ? (
+                            <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                                <FontAwesomeIcon icon={faCheckCircle} />
+                                <span>Tervalidasi sesuai nominal pengembalian</span>
+                                {lpjDetail?.pengembalianBuktiUrl && (
+                                    <button
+                                        type="button"
+                                        className="underline ml-2"
+                                        onClick={() => handleViewAttachment(lpjDetail.pengembalianBuktiUrl)}
+                                    >
+                                        Lihat Bukti
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                {lpjDetail?.pengembalianStatus && (
+                                    <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400 mb-3">
+                                        <FontAwesomeIcon icon={faTriangleExclamation} />
+                                        <span>{describePengembalianStatus(lpjDetail.pengembalianStatus).label}</span>
+                                        {lpjDetail?.pengembalianBuktiUrl && (
+                                            <button
+                                                type="button"
+                                                className="underline ml-2"
+                                                onClick={() => handleViewAttachment(lpjDetail.pengembalianBuktiUrl)}
+                                            >
+                                                Lihat Bukti Sebelumnya
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {(userData?.uid === lpjDetail?.user.uid || userRole === 'Super Admin') && (
+                                    <>
+                                        <div className="flex flex-col xl:flex-row items-start xl:items-center gap-2">
+                                            <input
+                                                type="file"
+                                                id="pengembalian-upload-detail"
+                                                className="hidden"
+                                                accept={PENGEMBALIAN_ACCEPT}
+                                                onChange={handlePengembalianFileChange}
+                                            />
+                                            <label
+                                                htmlFor="pengembalian-upload-detail"
+                                                className="text-center px-4 py-2 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 dark:text-gray-200"
+                                            >
+                                                Pilih File Bukti
+                                            </label>
+                                            <span className="text-gray-500 dark:text-gray-400 text-sm">Format .pdf/.jpg/.png, Max Size: 250MB</span>
+                                        </div>
+
+                                        {pengembalianFile && (
+                                            <div className="flex flex-col xl:flex-row xl:items-center gap-2 mt-3">
+                                                <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-full xl:max-w-xs">{pengembalianFile.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleUploadPengembalian}
+                                                    disabled={isUploadingPengembalian}
+                                                    className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+                                                >
+                                                    {isUploadingPengembalian ? (
+                                                        <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+                                                    ) : (
+                                                        'Upload & Validasi'
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                )}
 
                 {/* Responsive action buttons */}
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">

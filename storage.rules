@@ -20,6 +20,16 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // Bukti pengembalian dana LPJ boleh PDF atau foto (JPG/PNG) -- beda dari
+    // validPdfUpload() karena file ini TIDAK digabung/dikonversi jadi PDF
+    // (butuh tetap dalam bentuk asli supaya OCR Cloud Vision baca isinya).
+    function validPdfOrImageUpload() {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 250 * 1024 * 1024
+        && (request.resource.contentType == 'application/pdf' || request.resource.contentType.matches('image/.*'));
+    }
+
     // ROLLBACK DARURAT (2026-09-02): versi sebelumnya di sini memakai
     // firestore.get()/firestore.exists() (cross-service rules) untuk
     // memvalidasi kepemilikan dokumen (isOwnerOfDisplayId) & role elevated
@@ -54,6 +64,11 @@ service firebase.storage {
     match /lampiran_lpj/{fileName} {
       allow read: if signedIn();
       allow write: if signedIn() && validPdfUpload();
+    }
+
+    match /lpj_pengembalian/{allPaths=**} {
+      allow read: if signedIn();
+      allow write: if signedIn() && validPdfOrImageUpload();
     }
 
     // Gambar pengumuman -- sama seperti di atas, tidak lagi bergantung ke

@@ -370,8 +370,8 @@ const ReimbursementTable = () => {
                                                 <td className="px-4 py-2 border dark:border-gray-600">
                                                     <div className="flex items-center gap-2">
                                                         {item.transferred && (
-                                                            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                                Transferred
+                                                            <span className="text-gray-500 dark:text-gray-400" title="Transferred">
+                                                                <FontAwesomeIcon icon={faMoneyBillWave} className="w-3 h-3" />
                                                             </span>
                                                         )}
                                                         <Link

@@ -13,7 +13,7 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import BsTimerDisplay from './bsTimerDisplay'
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner, faEnvelope } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faEnvelope, faFileCircleCheck } from '@fortawesome/free-solid-svg-icons'
 import { generateBsPDF } from '../utils/BsPdf'
 
 const BsTable = () => {
@@ -555,8 +555,8 @@ const BsTable = () => {
                                                 <td className="px-4 py-2 border dark:border-gray-600">
                                                     <div className="flex items-center gap-2">
                                                         {lpjStatus[item.id]?.status === 'Sudah LPJ' && (
-                                                            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                                Reported
+                                                            <span className="text-gray-500 dark:text-gray-400" title="Reported">
+                                                                <FontAwesomeIcon icon={faFileCircleCheck} className="w-3 h-3" />
                                                             </span>
                                                         )}
                                                         <Link

@@ -8,7 +8,8 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons' // Tambah faTimes untuk icon hapus file
 import { useLocation, useNavigate } from 'react-router-dom';
-import { isValidPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
+import { uploadPdfFile } from '../utils/uploadPdfFile'
+import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES, isValidAttachmentFile, mergeAttachmentsToPdf } from '../utils/attachmentUpload'
 import { useTheme } from '../context/ThemeContext'
 
 const RbsBbmForm = () => {
@@ -459,13 +460,13 @@ const RbsBbmForm = () => {
         const validFiles = []
         for (let file of files) {
             // Validate file size (250MB limit)
-            if (file.size > PDF_MAX_SIZE_BYTES) {
+            if (file.size > ATTACHMENT_MAX_SIZE_BYTES) {
                 toast.error(`Ukuran file ${file.name} maksimal 250MB`)
                 continue
             }
-            // Validate file type (PDF only, dicek dari isi file bukan cuma nama/ekstensi)
-            if (!(await isValidPdfFile(file))) {
-                toast.error(`File ${file.name} bukan PDF, hanya PDF yang diperbolehkan`)
+            // Validate file type (PDF/JPG/PNG, dicek dari isi file bukan cuma nama/ekstensi)
+            if (!(await isValidAttachmentFile(file))) {
+                toast.error(`File ${file.name} bukan PDF/JPG/PNG yang valid`)
                 continue
             }
             validFiles.push(file)
@@ -479,22 +480,17 @@ const RbsBbmForm = () => {
         setAttachmentFiles(prev => prev.filter((_, index) => index !== indexToRemove))
     }
 
-    // --- PERUBAHAN: Mengupload banyak file sekaligus ---
+    // --- Gabungkan semua lampiran (PDF/JPG/PNG) jadi SATU file PDF sebelum diupload ---
     const uploadAttachments = async (files, displayId) => {
-        if (!files || files.length === 0) return []
+        if (!files || files.length === 0) return null
 
         try {
-            const uploadPromises = files.map(async (file, index) => {
-                // Beri penomoran file jika lebih dari 1
-                const newFileName = `Lampiran_${index + 1}_${displayId}.pdf`
-                return await uploadPdfFile(storage, `Reimbursement/BBM/${displayId}/${newFileName}`, file)
-            })
-
-            return await Promise.all(uploadPromises)
+            const mergedFile = await mergeAttachmentsToPdf(files, `Lampiran_${displayId}.pdf`)
+            return await uploadPdfFile(storage, `Reimbursement/BBM/${displayId}/${mergedFile.name}`, mergedFile)
         } catch (error) {
             console.error('Error uploading files:', error)
             toast.error('Gagal mengunggah lampiran')
-            return []
+            return null
         }
     }
 
@@ -620,8 +616,7 @@ const RbsBbmForm = () => {
 
             const displayId = isEditMode ? editData.displayId : await generateDisplayId()
 
-            // --- PERUBAHAN: Terima array URL lampiran ---
-            const lampiranUrls = await uploadAttachments(attachmentFiles, displayId)
+            const mergedLampiranUrl = await uploadAttachments(attachmentFiles, displayId)
 
             const totalBiaya = reimbursements.reduce((total, item) => {
                 const biayaNumber = parseInt(item.biaya.replace(/[^0-9]/g, ''))
@@ -664,9 +659,9 @@ const RbsBbmForm = () => {
                 rejectedBySuperAdmin: false,
                 tanggalPengajuan: todayDate,
                 totalBiaya: totalBiaya,
-                // --- PERUBAHAN: Simpan sebagai Array agar bisa di-map saat rendering Detail ---
-                lampiran: attachmentFiles.map(f => f.name), 
-                lampiranUrl: lampiranUrls, 
+                // --- Lampiran digabung jadi 1 file PDF sebelum diupload ---
+                lampiran: [`Lampiran_${displayId}.pdf`],
+                lampiranUrl: mergedLampiranUrl,
                 statusHistory: [
                     {
                         status: 'Diajukan',
@@ -738,7 +733,7 @@ const RbsBbmForm = () => {
                         type="file"
                         id="file-upload"
                         className="hidden"
-                        accept=".pdf"
+                        accept={ATTACHMENT_ACCEPT}
                         multiple // Mengizinkan seleksi lebih dari 1 file sekaligus
                         onChange={handleFileUpload}
                     />
@@ -749,7 +744,7 @@ const RbsBbmForm = () => {
                         Upload File
                     </label>
                     <span className="ml-0 xl:ml-4 text-gray-500 dark:text-gray-400 mt-2 xl:mt-0 text-sm">
-                        Format .pdf Max Size: 250MB
+                        Format .pdf/.jpg/.png, bisa lebih dari 1 file (Max Size: 250MB/file)
                     </span>
                 </div>
                 

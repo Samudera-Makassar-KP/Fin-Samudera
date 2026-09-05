@@ -9,7 +9,9 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
 import useFormDraft from '../hooks/useFormDraft'
-import { getUploadablePdfFiles, isValidPdfFile, PDF_MAX_SIZE_BYTES, uploadPdfFile } from '../utils/uploadPdfFile'
+import { uploadPdfFile } from '../utils/uploadPdfFile'
+import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES, getUploadableAttachments, isValidAttachmentFile, mergeAttachmentsToPdf } from '../utils/attachmentUpload'
+import { PENGEMBALIAN_ACCEPT, PENGEMBALIAN_MAX_SIZE_BYTES, describePengembalianStatus, isValidPengembalianFile, uploadAndValidatePengembalian } from '../utils/pengembalianUpload'
 import { useTheme } from '../context/ThemeContext'
 
 const FormLpjMarketing = () => {
@@ -69,6 +71,10 @@ const FormLpjMarketing = () => {
 
     // --- State untuk Multi File Upload ---
     const [attachmentFiles, setAttachmentFiles] = useState([])
+
+    // --- State untuk bukti pengembalian dana (opsional, muncul jika sisaLebih > 0) ---
+    const [pengembalianFile, setPengembalianFile] = useState(null)
+    const [isUploadingPengembalian, setIsUploadingPengembalian] = useState(false)
 
     const [calculatedCosts, setCalculatedCosts] = useState({
         totalBiaya: 0,
@@ -466,54 +472,87 @@ const FormLpjMarketing = () => {
         })
     }
 
-    const getUploadableAttachments = (files = []) => {
-        return getUploadablePdfFiles(files);
-    }
-
     const handleFileUpload = async (event) => {
-        const selectedFile = event.target.files[0];
+        const files = Array.from(event.target.files)
+        if (!files.length) return
 
-        if (selectedFile) {
-            if (selectedFile.size === 0) {
+        const validFiles = []
+        for (const file of files) {
+            if (file.size === 0) {
                 toast.error(`File lampiran tidak boleh kosong`);
-                event.target.value = '';
-                return;
+                continue;
             }
-
-            if (selectedFile.size > PDF_MAX_SIZE_BYTES) {
-                toast.error(`Ukuran file maksimal 250MB`);
-                event.target.value = '';
-                return;
+            if (file.size > ATTACHMENT_MAX_SIZE_BYTES) {
+                toast.error(`Ukuran file ${file.name} maksimal 250MB`);
+                continue;
             }
-            if (!(await isValidPdfFile(selectedFile))) {
-                toast.error(`File bukan PDF, hanya PDF yang diperbolehkan`);
-                event.target.value = '';
-                return;
+            if (!(await isValidAttachmentFile(file))) {
+                toast.error(`File ${file.name} bukan PDF/JPG/PNG yang valid`);
+                continue;
             }
-
-            setAttachmentFiles([selectedFile]); 
+            validFiles.push(file)
         }
+
+        setAttachmentFiles(prev => [...prev, ...validFiles]);
         event.target.value = '';
     }
 
-    const removeAttachment = () => {
-        setAttachmentFiles([]);
+    const removeAttachment = (indexToRemove) => {
+        setAttachmentFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     }
 
+    // --- Gabungkan semua lampiran (PDF/JPG/PNG) jadi SATU file PDF sebelum diupload ---
     const uploadAttachments = async (files, displayId) => {
         const uploadableFiles = getUploadableAttachments(files);
         if (uploadableFiles.length === 0) return null;
 
         try {
-            const file = uploadableFiles[0];
-            const newFileName = `Lampiran_1_${displayId}.pdf`;
-            const downloadUrl = await uploadPdfFile(storage, `LPJ/Marketing_Operasional/${displayId}/${newFileName}`, file);
-            
-            return downloadUrl; 
+            const mergedFile = await mergeAttachmentsToPdf(uploadableFiles, `Lampiran_${displayId}.pdf`)
+            return await uploadPdfFile(storage, `LPJ/Marketing_Operasional/${displayId}/${mergedFile.name}`, mergedFile);
         } catch (error) {
             console.error('Error uploading files:', error);
             toast.error('Gagal mengunggah lampiran');
             throw error;
+        }
+    }
+
+    const handlePengembalianFileChange = async (e) => {
+        const file = e.target.files[0]
+        if (!file) return
+
+        if (file.size > PENGEMBALIAN_MAX_SIZE_BYTES) {
+            toast.error(`Ukuran file ${file.name} maksimal 250MB.`)
+            e.target.value = ''
+            return
+        }
+        if (!(await isValidPengembalianFile(file))) {
+            toast.error(`File ${file.name} bukan PDF/JPG/PNG yang valid.`)
+            e.target.value = ''
+            return
+        }
+
+        setPengembalianFile(file)
+        e.target.value = ''
+    }
+
+    const removePengembalianFile = () => setPengembalianFile(null)
+
+    // Diupload & divalidasi (OCR) SETELAH dokumen LPJ tersimpan -- lihat
+    // catatan yang sama di FormLpjUmum.jsx.
+    const uploadPengembalianIfProvided = async (lpjId, displayId) => {
+        if (!pengembalianFile) return
+
+        setIsUploadingPengembalian(true)
+        try {
+            const { status } = await uploadAndValidatePengembalian(lpjId, displayId, pengembalianFile)
+            const { label, tone } = describePengembalianStatus(status)
+            if (tone === 'success') toast.success(label)
+            else toast.warning(label)
+        } catch (error) {
+            console.error('Gagal upload/validasi bukti pengembalian:', error)
+            toast.warning('Gagal mengupload bukti pengembalian. Silakan upload lagi lewat halaman Detail LPJ.')
+        } finally {
+            setIsUploadingPengembalian(false)
         }
     }
 
@@ -697,7 +736,7 @@ const FormLpjMarketing = () => {
                 ...calculatedCosts,
                 tanggalPengajuan: tanggalPengajuan,
                 tanggal: tanggal,
-                lampiran: attachmentFiles.map(f => f.name),
+                lampiran: [`Lampiran_${displayId}.pdf`],
                 lampiranUrl: lampiranUrls,
                 totalBiaya: totalBiaya,
                 statusHistory: [
@@ -743,6 +782,8 @@ const FormLpjMarketing = () => {
                 }
 
                 await updateDoc(lpjRef, updateData)
+                await uploadPengembalianIfProvided(editData.id, displayId)
+
                 toast.success('LPJ Marketing berhasil diperbarui!')
                 setIsSubmitting(false)
                 navigate('/lpj/cek-pengajuan')
@@ -753,7 +794,8 @@ const FormLpjMarketing = () => {
                 const newDocRef = doc(collection(db, 'lpj'))
                 await setDoc(newDocRef, { ...lpjData, id: newDocRef.id })
 
-                
+                await uploadPengembalianIfProvided(newDocRef.id, displayId)
+
                 // --- PERBAIKAN: Clear Draft yang aman ---
                 if (typeof clearDraft === 'function') {
                     const draftCleared = await clearDraft();
@@ -798,6 +840,7 @@ const FormLpjMarketing = () => {
         fileInputs.forEach((input) => (input.value = ''))
 
         setAttachmentFiles([])
+        setPengembalianFile(null)
 
         if (isAdmin || userUnitOptions.length > 1) {
             setSelectedUnit(null)
@@ -816,7 +859,8 @@ const FormLpjMarketing = () => {
                         type="file"
                         id="file-upload"
                         className="hidden"
-                        accept=".pdf"
+                        accept={ATTACHMENT_ACCEPT}
+                        multiple
                         onChange={handleFileUpload}
                     />
                     <label
@@ -826,10 +870,10 @@ const FormLpjMarketing = () => {
                         Upload File
                     </label>
                     <span className="ml-0 xl:ml-4 text-gray-500 dark:text-gray-400 mt-2 xl:mt-0 text-sm">
-                        Format .pdf Max Size: 250MB
+                        Format .pdf/.jpg/.png, bisa lebih dari 1 file (Max Size: 250MB/file)
                     </span>
                 </div>
-                
+
                 {attachmentFiles.length > 0 && (
                     <div className="mt-3 w-full">
                         {attachmentFiles.map((file, index) => (
@@ -837,7 +881,7 @@ const FormLpjMarketing = () => {
                                 <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[80%]">{file.name}</span>
                                 <button
                                     type="button"
-                                    onClick={() => removeAttachment()}
+                                    onClick={() => removeAttachment(index)}
                                     className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 ml-2 font-bold"
                                 >
                                     <FontAwesomeIcon icon={faTimes} />
@@ -1452,9 +1496,45 @@ const FormLpjMarketing = () => {
                 <hr className="border-gray-300 dark:border-gray-600 my-6" />
 
                 {calculatedCosts.sisaLebih > 0 && (
-                    <div className="text-right text-gray-700 dark:text-gray-300">
-                        *Pastikan sudah memasukkan bukti pengembalian dana sebesar{' '}
-                        <span className="font-bold text-red-600"> {formatRupiah(calculatedCosts.sisaLebih)}</span> di lampiran
+                    <div className="mb-6 p-4 border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
+                        <p className="text-gray-700 dark:text-gray-300 mb-3">
+                            BS ini ada pengembalian dana ke perusahaan sebesar{' '}
+                            <span className="font-bold text-red-600">{formatRupiah(calculatedCosts.sisaLebih)}</span>.
+                            {' '}Upload bukti pengembalian (opsional) — kalau di-skip, sistem akan mengirim reminder email tiap 2 hari sampai bukti diupload &amp; sesuai.
+                        </p>
+                        <div className="flex flex-col xl:flex-row items-start xl:items-center gap-2">
+                            <input
+                                type="file"
+                                id="pengembalian-upload"
+                                className="hidden"
+                                accept={PENGEMBALIAN_ACCEPT}
+                                onChange={handlePengembalianFileChange}
+                            />
+                            <label
+                                htmlFor="pengembalian-upload"
+                                className="text-center px-4 py-2 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded-md cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 dark:text-gray-200"
+                            >
+                                Upload Bukti Pengembalian
+                            </label>
+                            <span className="text-gray-500 dark:text-gray-400 text-sm">Format .pdf/.jpg/.png, Max Size: 250MB</span>
+                        </div>
+                        {pengembalianFile && (
+                            <div className="flex justify-between items-center bg-white dark:bg-gray-700 px-3 py-2 rounded mt-3 border border-gray-200 dark:border-gray-600">
+                                <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[80%]">{pengembalianFile.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={removePengembalianFile}
+                                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 ml-2 font-bold"
+                                >
+                                    <FontAwesomeIcon icon={faTimes} />
+                                </button>
+                            </div>
+                        )}
+                        {isUploadingPengembalian && (
+                            <div className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                                <FontAwesomeIcon icon={faSpinner} className="animate-spin mr-1" /> Memvalidasi bukti pengembalian...
+                            </div>
+                        )}
                     </div>
                 )}
 

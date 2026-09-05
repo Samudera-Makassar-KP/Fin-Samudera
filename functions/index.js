@@ -9,6 +9,7 @@ const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
+const vision = require("@google-cloud/vision");
 
 const emailUserSecret = defineSecret("EMAIL");
 const emailPasswordSecret = defineSecret("EMAIL_PASSWORD");
@@ -21,6 +22,7 @@ setGlobalOptions({
 // Inisialisasi Firebase Admin
 initializeApp();
 const db = getFirestore();
+const visionClient = new vision.ImageAnnotatorClient();
 
 let cachedTransporter = null;
 let cachedEmailUser = null;
@@ -225,6 +227,9 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
             break;
         case 'financeReminder':
             headerText = 'Reminder untuk Finance';
+            break;
+        case 'pengembalianReminder':
+            headerText = 'Reminder Bukti Pengembalian BS';
             break;
         default:
             headerText = 'Permintaan Approval';
@@ -830,6 +835,103 @@ exports.sendBsFinanceReminder = onCall(async (request) => {
     }
 
     return { sent: true, to: validatorData.email };
+});
+
+// Baca teks dari bukti pengembalian (foto/PDF struk transfer) lewat Google Cloud
+// Vision OCR. Gambar pakai textDetection biasa; PDF butuh endpoint terpisah
+// (batchAnnotateFiles + DOCUMENT_TEXT_DETECTION) karena Vision tidak menerima
+// PDF di textDetection biasa.
+const extractTextFromBuktiFile = async (buffer, contentType) => {
+    if (contentType === "application/pdf") {
+        const [result] = await visionClient.batchAnnotateFiles({
+            requests: [{
+                inputConfig: { content: buffer.toString("base64"), mimeType: "application/pdf" },
+                features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+                pages: [1, 2, 3, 4, 5]
+            }]
+        });
+
+        return (result.responses?.[0]?.responses || [])
+            .map((page) => page.fullTextAnnotation?.text || "")
+            .join("\n");
+    }
+
+    const [result] = await visionClient.textDetection({ image: { content: buffer } });
+    return result.fullTextAnnotation?.text || "";
+};
+
+// Cocokkan nominal target (mis. sisaLebih) dengan angka-angka yang kebaca OCR --
+// dibersihkan dari titik/koma pemisah ribuan (format Rupiah) baru dibandingkan.
+const textContainsAmount = (text, targetAmount) => {
+    const target = Math.round(targetAmount);
+    if (!target || !text) return false;
+
+    const matches = text.match(/\d[\d.,]{2,}/g) || [];
+    return matches.some((match) => {
+        const normalized = parseInt(match.replace(/[.,]/g, ""), 10);
+        return normalized === target;
+    });
+};
+
+// Upload bukti pengembalian (JPG/PNG/PDF, lihat storage.rules `lpj_pengembalian/`)
+// divalidasi di sini lewat OCR: nominal `sisaLebih` LPJ harus muncul di teks hasil
+// baca file. Dipanggil client SAAT upload (form LPJ maupun Detail LPJ) supaya
+// pengaju langsung dapat feedback valid/tidak sesuai, bukan menunggu review manual.
+exports.validatePengembalianBukti = onCall(async (request) => {
+    if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
+    }
+
+    const lpjId = normalizeText(request.data?.lpjId, "ID LPJ", 200);
+    const fileUrl = normalizeText(request.data?.fileUrl, "URL bukti pengembalian", 2000);
+
+    const lpjDoc = await db.collection("lpj").doc(lpjId).get();
+    if (!lpjDoc.exists) {
+        throw new HttpsError("not-found", "Data LPJ tidak ditemukan.");
+    }
+    const lpjData = lpjDoc.data();
+
+    const requesterData = await getUserData(request.auth.uid);
+    const isOwner = lpjData.user?.uid === request.auth.uid;
+    const isSuperAdmin = requesterData?.role === "Super Admin";
+    if (!isOwner && !isSuperAdmin) {
+        throw new HttpsError("permission-denied", "Anda hanya bisa mengunggah bukti pengembalian untuk LPJ milik sendiri.");
+    }
+
+    const sisaLebih = Number(lpjData.sisaLebih) || 0;
+    if (sisaLebih <= 0) {
+        throw new HttpsError("failed-precondition", "LPJ ini tidak memiliki sisa lebih yang perlu dikembalikan.");
+    }
+
+    let status;
+    let note;
+    try {
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+            throw new Error(`Fetch bukti gagal, status ${response.status}`);
+        }
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const contentType = response.headers.get("content-type") || "";
+
+        const extractedText = await extractTextFromBuktiFile(buffer, contentType);
+        const isValid = textContainsAmount(extractedText, sisaLebih);
+
+        status = isValid ? "valid" : "tidak_sesuai";
+        note = extractedText.slice(0, 1000);
+    } catch (error) {
+        console.error("Gagal membaca/validasi bukti pengembalian:", error);
+        status = "gagal_baca";
+        note = "Sistem tidak bisa membaca isi file. Silakan cek manual atau upload ulang dengan foto/scan yang lebih jelas.";
+    }
+
+    await lpjDoc.ref.update({
+        pengembalianBuktiUrl: fileUrl,
+        pengembalianStatus: status,
+        pengembalianValidationNote: note,
+        pengembalianUploadedAt: new Date().toISOString()
+    });
+
+    return { status, expectedAmount: sisaLebih };
 });
 
 // Trigger saat Reimbursement pertama kali dibuat
@@ -1499,4 +1601,80 @@ exports.sendApprovalReminders = onSchedule({
     }
 
     console.log("✅ Selesai pengecekan pengajuan.");
+});
+
+const PENGEMBALIAN_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // 2 hari
+
+// Reminder email berkala (tiap 2 hari, mulai 2 hari sejak LPJ diajukan) untuk LPJ
+// yang punya sisaLebih (BS ada pengembalian ke perusahaan) tapi buktinya belum
+// diupload/belum valid. Berhenti otomatis begitu pengembalianStatus == 'valid'.
+// Terpisah dari sendApprovalReminders() karena beda concern (bukti pengembalian,
+// bukan approval) meski keduanya jalan harian.
+exports.sendPengembalianReminders = onSchedule({
+    schedule: "30 9 * * *",
+    timeZone: REMINDER_TIME_ZONE,
+    timeoutSeconds: 300,
+    memory: "256MiB"
+}, async () => {
+    console.log("⏰ Mulai pengecekan bukti pengembalian LPJ...");
+
+    const now = new Date();
+
+    const querySnapshot = await db.collection("lpj")
+        .where("sisaLebih", ">", 0)
+        .get();
+
+    for (const docSnap of querySnapshot.docs) {
+        const data = docSnap.data();
+
+        if (data.pengembalianStatus === "valid") continue;
+        if (!data.user?.uid) continue;
+
+        const lastReminderAt = data.pengembalianLastReminderAt
+            ? new Date(data.pengembalianLastReminderAt)
+            : null;
+        const baseline = lastReminderAt || new Date(data.tanggalPengajuan || data.createdAt);
+        if (isNaN(baseline.getTime())) continue;
+
+        const dueAt = new Date(baseline.getTime() + PENGEMBALIAN_REMINDER_INTERVAL_MS);
+        if (now < dueAt) continue;
+
+        try {
+            const submitterData = await getUserData(data.user.uid);
+            if (!submitterData?.email) {
+                console.log(`⚠️ Skip reminder pengembalian ${data.displayId}: email pengaju tidak ditemukan.`);
+                continue;
+            }
+
+            const subject = `[REMINDER] Bukti Pengembalian BS Belum Diupload - ${data.displayId}`;
+            const emailContent = `
+                Dear <strong>${submitterData.nama}</strong>,
+                <br><br>
+                Ini adalah pengingat otomatis. Anda belum mengupload bukti pengembalian BS atas LPJ berikut,
+                atau bukti yang diupload belum sesuai dengan nominal yang harus dikembalikan.
+                <br><br>
+                Silakan upload bukti pengembalian pada halaman Detail LPJ.
+            `;
+
+            const sent = await sendEmail(
+                submitterData.email,
+                subject,
+                createEmailTemplate(emailContent, submitterData, data, true, "pengembalianReminder")
+            );
+
+            if (!sent) {
+                console.error(`❌ Gagal kirim reminder pengembalian untuk ${data.displayId}`);
+                continue;
+            }
+
+            await docSnap.ref.update({
+                pengembalianLastReminderAt: now.toISOString(),
+                pengembalianReminderCount: (data.pengembalianReminderCount || 0) + 1
+            });
+        } catch (error) {
+            console.error(`❌ Error reminder pengembalian untuk ${data.displayId}:`, error);
+        }
+    }
+
+    console.log("✅ Selesai pengecekan bukti pengembalian LPJ.");
 });

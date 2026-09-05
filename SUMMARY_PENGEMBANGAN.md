@@ -914,3 +914,70 @@ Setelah lihat hasil, user klarifikasi maksudnya lebih jauh: dropdown "Cetak" (Pr
 - [x] `CI=true npm run build` sukses (0 warning/error, bundle size turun ~750B karena dead code print handler & portal dropdown terhapus)
 - [x] Deploy hosting ke produksi (iterasi 2) — sukses 2026-09-03
 - [ ] Tes visual & fungsional: kolom Aksi RBS tampil icon Transferred langsung tanpa dropdown, klik berhasil menandai transferred, icon berubah jadi centang & non-klik setelahnya; pastikan Print RBS Form/Lampiran/Both masih bisa diakses lewat halaman Detail RBS
+
+---
+
+# BAGIAN O — Icon Badge, Multi-Lampiran Digabung, & Validasi Bukti Pengembalian LPJ (2026-09-05)
+
+## 25.1 Permintaan User
+
+Tiga permintaan terpisah dalam satu sesi:
+1. Badge kecil "Transferred" (RBS, dekat nomor dokumen) & "Reported" (BS) diganti icon saja, tulisan baru muncul saat disorot (tooltip).
+2. Lampiran RBS/LPJ bisa upload lebih dari 1 file, bebas PDF/JPG/PNG, tapi saat dibuka di Detail tetap tampil sebagai 1 file (digabung).
+3. LPJ: kalau BS ada pengembalian ke perusahaan (`sisaLebih > 0`), muncul upload bukti pengembalian (opsional, PDF/JPG/PNG) yang divalidasi otomatis (baca isi file, cocokkan nominal). Kalau di-skip atau tidak sesuai, sistem kirim reminder email tiap 2 hari (mulai 2 hari setelah submit) sampai bukti valid diupload, ke pengaju, mengarahkan ke Detail LPJ untuk upload.
+
+Dua keputusan teknis dikonfirmasi user sebelum eksekusi: OCR pakai **Google Cloud Vision API** (bukan Tesseract.js gratis atau validasi manual), reminder **setiap 2 hari sejak submit**.
+
+## 25.2 Icon Badge (Item 1)
+
+- `ReimbursementTable.jsx`: badge "Transferred" (dekat nomor dokumen) jadi `faMoneyBillWave` + `title="Transferred"` (tooltip native browser saat hover).
+- `BsTable.jsx`: badge "Reported" jadi `faFileCircleCheck` + `title="Reported"`.
+
+## 25.3 Multi-Lampiran Digabung Jadi 1 PDF (Item 2)
+
+**Temuan saat investigasi:** kode lama sudah punya multi-file upload di 3 form RBS (BBM/Operasional/Umum) tapi menyimpan `lampiranUrl` sebagai ARRAY berisi banyak URL terpisah — sementara `DetailRbs.jsx`/`DetailLpj.jsx` (`handleViewAttachment`) selalu mengasumsikan `lampiranUrl` STRING tunggal. Artinya submit RBS dengan 2+ lampiran sebenarnya **sudah lama rusak** (tombol "Lihat Lampiran" gagal terbuka) — bug ini baru kesentuh sekarang lewat permintaan user. `FormLpjUmum.jsx`/`FormLpjMarketing.jsx` malah sebaliknya: UI kelihatan multi-select tapi `handleFileUpload` cuma ambil `files[0]` dan SELALU replace (bukan multi beneran).
+
+**Solusi:** `src/utils/attachmentUpload.js` (baru) — `mergeAttachmentsToPdf()` pakai `pdf-lib` (sudah jadi dependency, belum pernah dipakai untuk ini): PDF disalin apa adanya per halaman, JPG/PNG dikonversi jadi 1 halaman PDF ukuran A4 (di-scale proporsional). Semua lampiran yang dipilih user digabung jadi SATU file PDF SEBELUM diupload, jadi `lampiranUrl` tetap string tunggal seperti yang diharapkan Detail — tidak perlu ubah apapun di `DetailRbs.jsx`/`DetailLpj.jsx`.
+
+Diterapkan konsisten di 5 form: `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx` — `accept` diperluas ke `.pdf,.jpg,.jpeg,.png`, validasi file (`isValidAttachmentFile`, cek signature byte pertama seperti pola `isValidPdfFile` yang sudah ada) juga menerima gambar, dan 2 form LPJ yang tadinya single-file sekarang benar-benar multi (append, bukan replace) dengan `removeAttachment` per-index yang benar.
+
+## 25.4 Validasi Bukti Pengembalian LPJ (Item 3)
+
+**Skema baru di dokumen `lpj`:** `pengembalianBuktiUrl`, `pengembalianStatus` (`valid` / `tidak_sesuai` / `gagal_baca` / kosong = belum upload), `pengembalianValidationNote` (teks OCR, untuk audit manual kalau perlu), `pengembalianUploadedAt`, `pengembalianLastReminderAt`, `pengembalianReminderCount`. `sisaLebih` (sudah ada sejak dulu lewat `calculatedCosts`) dipakai sebagai penentu apakah fitur ini aktif untuk LPJ tsb.
+
+**Upload & validasi (`src/utils/pengembalianUpload.js`, baru):** file bukti diupload APA ADANYA ke Storage path baru `lpj_pengembalian/{displayId}/...` (BUKAN digabung/dikonversi seperti lampiran biasa — Cloud Vision perlu baca file aslinya), lalu client panggil Cloud Function `validatePengembalianBukti` (onCall).
+
+**`functions/index.js`:**
+- `extractTextFromBuktiFile()`: gambar pakai `visionClient.textDetection()`, PDF pakai `visionClient.batchAnnotateFiles()` (`DOCUMENT_TEXT_DETECTION`, maks 5 halaman) — API Vision berbeda untuk 2 tipe file ini.
+- `textContainsAmount()`: bersihkan titik/koma pemisah ribuan dari angka yang kebaca OCR, cocokkan exact match dengan `Math.round(sisaLebih)`.
+- `validatePengembalianBukti` (onCall): validasi caller = pemilik LPJ atau Super Admin, `sisaLebih > 0`, fetch file dari Storage URL, OCR, update dokumen `lpj` dengan hasil (`valid`/`tidak_sesuai`/`gagal_baca` kalau fetch/OCR error). Dipanggil SETELAH dokumen LPJ tersimpan (butuh `lpjId` yang sudah ada).
+- `sendPengembalianReminders` (onSchedule baru, `"30 9 * * *"` Asia/Makassar, terpisah dari `sendApprovalReminders` yang jalan jam 09:00 — beda concern): query `lpj` where `sisaLebih > 0`, skip yang `pengembalianStatus === 'valid'`, kirim reminder kalau sudah lewat 2 hari sejak `pengembalianLastReminderAt` (atau sejak `tanggalPengajuan` untuk reminder pertama). Reuse `createEmailTemplate` (case baru `'pengembalianReminder'`) yang otomatis include Nomor Dokumen LPJ, Nomor BS, Jumlah BS, Sisa Lebih BS -- sesuai permintaan user.
+- `functions/package.json`: tambah dependency `@google-cloud/vision`.
+
+**Client:** `FormLpjUmum.jsx` & `FormLpjMarketing.jsx` — kotak upload opsional muncul menggantikan catatan teks lama saat `sisaLebih > 0`, upload+validasi jalan setelah LPJ tersimpan (create maupun edit), toast sukses/warning sesuai hasil OCR. `DetailLpj.jsx` — section baru menampilkan status (badge tervalidasi/tidak sesuai/gagal baca) + tombol upload/re-upload untuk kasus yang di-skip saat submit atau butuh perbaikan, supaya reminder email yang mengarahkan ke Detail LPJ punya tempat nyata untuk ditindaklanjuti.
+
+**`storage.rules`:** fungsi baru `validPdfOrImageUpload()` (PDF ATAU gambar, beda dari `validPdfUpload()` yang PDF-only) + path baru `match /lpj_pengembalian/{allPaths=**}`.
+
+**Keterbatasan yang diketahui (didokumentasikan, belum divalidasi manual):**
+- Akurasi OCR tergantung kualitas foto/scan struk transfer -- kalau nominal tidak konsisten format (mis. ada desimal, spasi tidak biasa), `textContainsAmount()` bisa false-negative (dianggap "tidak_sesuai" padahal sebenarnya benar). User perlu tes dengan struk transfer nyata dari bank yang biasa dipakai.
+- Cloud Vision API BELUM TENTU otomatis aktif di project `samudera-web-cbf2f` -- `firebase deploy --only functions` cuma otomatis meng-enable API infra Cloud Functions (cloudfunctions/cloudbuild/scheduler/dst), BUKAN `vision.googleapis.com`. Kalau `validatePengembalianBukti` gagal dengan galat terkait API/permission, perlu aktifkan manual di Google Cloud Console > APIs & Services (project sudah Blaze, jadi billing bukan penghalang).
+- Reminder pertama baru terkirim setelah scheduled function `sendPengembalianReminders` jalan jam 09:30 WITA H+2 dari submit -- belum ada cara trigger manual/test cepat selain menunggu jadwal atau mengubah `pengembalianLastReminderAt` manual di Firestore untuk simulasi.
+
+## 25.5 Task Development — Bagian O
+
+- [x] `BsTable.jsx`, `ReimbursementTable.jsx`: badge Transferred/Reported jadi icon + tooltip
+- [x] `src/utils/attachmentUpload.js` (baru): validasi PDF/JPG/PNG + `mergeAttachmentsToPdf()`
+- [x] 5 form (RbsBbm/RbsOperasional/RbsUmum/LpjUmum/LpjMarketing): multi-upload PDF/JPG/PNG digabung 1 PDF sebelum upload
+- [x] `src/utils/pengembalianUpload.js` (baru): upload bukti apa adanya + panggil validasi
+- [x] `functions/index.js`: `validatePengembalianBukti` (onCall, OCR Cloud Vision) + `sendPengembalianReminders` (onSchedule, tiap 2 hari)
+- [x] `functions/package.json`: tambah `@google-cloud/vision`, `npm install` sukses
+- [x] `FormLpjUmum.jsx`, `FormLpjMarketing.jsx`: UI upload bukti pengembalian opsional + hook ke submit
+- [x] `DetailLpj.jsx`: section status + upload/re-upload bukti pengembalian
+- [x] `storage.rules`: `validPdfOrImageUpload()` + path `lpj_pengembalian/`
+- [x] `node -c` + isolated `require()` test functions sukses
+- [x] `firebase deploy --only functions --dry-run` sukses
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [ ] Deploy ke produksi (storage rules + functions + hosting)
+- [ ] Cek Cloud Vision API aktif di project, tes upload bukti pengembalian dengan struk transfer asli
+- [ ] Tes manual: multi-upload lampiran RBS/LPJ dengan campuran PDF+JPG, pastikan "Lihat Lampiran" di Detail terbuka 1 file gabungan lengkap
+- [ ] Tes manual: badge icon Transferred/Reported muncul tooltip saat hover
