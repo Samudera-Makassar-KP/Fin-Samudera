@@ -1,4 +1,8 @@
-import { describePengembalianStatus } from './pengembalianUpload'
+// Import langsung dari pengembalianStatus.js (bukan pengembalianUpload.js) --
+// pengembalianUpload.js mengimpor firebaseConfig (butuh env var API key asli,
+// gagal di lingkungan tanpa itu seperti CI) padahal fungsi yang dites di sini
+// murni logic, tidak menyentuh Firebase sama sekali.
+import { describePengembalianStatus } from './pengembalianStatus'
 
 describe('describePengembalianStatus', () => {
     test('status valid -> tone success', () => {

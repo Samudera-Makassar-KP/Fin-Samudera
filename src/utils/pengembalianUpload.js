@@ -2,6 +2,9 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { httpsCallable } from 'firebase/functions'
 import { storage, functions } from '../firebaseConfig'
 import { isValidAttachmentFile, ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES } from './attachmentUpload'
+import { describePengembalianStatus } from './pengembalianStatus'
+
+export { describePengembalianStatus }
 
 export const PENGEMBALIAN_ACCEPT = ATTACHMENT_ACCEPT
 export const PENGEMBALIAN_MAX_SIZE_BYTES = ATTACHMENT_MAX_SIZE_BYTES
@@ -19,17 +22,4 @@ export const uploadAndValidatePengembalian = async (lpjId, displayId, file) => {
     const validate = httpsCallable(functions, 'validatePengembalianBukti')
     const result = await validate({ lpjId, fileUrl })
     return { ...result.data, fileUrl }
-}
-
-export const describePengembalianStatus = (status) => {
-    switch (status) {
-        case 'valid':
-            return { label: 'Bukti pengembalian tervalidasi', tone: 'success' }
-        case 'tidak_sesuai':
-            return { label: 'Nominal di bukti tidak sesuai, silakan upload ulang', tone: 'warning' }
-        case 'gagal_baca':
-            return { label: 'Bukti tidak dapat dibaca sistem, silakan upload ulang dengan foto/scan lebih jelas', tone: 'warning' }
-        default:
-            return { label: 'Bukti pengembalian belum diupload', tone: 'neutral' }
-    }
 }
