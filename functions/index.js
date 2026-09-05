@@ -10,6 +10,9 @@ const { getFirestore } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const vision = require("@google-cloud/vision");
+const { formatCurrency, formatDateIndonesia } = require("./lib/format");
+const { buildUserDirectoryEntry } = require("./lib/userDirectory");
+const { textContainsAmount } = require("./lib/pengembalianMatcher");
 
 const emailUserSecret = defineSecret("EMAIL");
 const emailPasswordSecret = defineSecret("EMAIL_PASSWORD");
@@ -76,32 +79,6 @@ const getMailTransporter = () => {
     }
 
     return { transporter: cachedTransporter, fromEmail: credentials.user };
-};
-
-// Helper Function: Format currency ke format Rupiah
-const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
-        currencyDisplay: 'narrowSymbol',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(amount).replace(/\s+/g, '');
-};
-
-// Helper Function: Format tanggal ke format Indonesia
-const formatDateIndonesia = (dateString) => {
-    const months = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-    ];
-
-    const date = new Date(dateString);
-    const day = date.getDate();
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-
-    return `${day} ${month} ${year}`;
 };
 
 // Helper Function: Mengambil data user dari Firestore
@@ -502,24 +479,8 @@ exports.deleteManagedUser = onCall(async (request) => {
     }
 });
 
-// /userDirectory adalah mirror read-only dari /users yang HANYA berisi field
-// aman (bukan bankName/accountNumber dkk) -- dibaca client manapun yang login
-// (lihat firestore.rules) untuk kebutuhan lintas-user yang legit tapi tidak
-// butuh data finansial: dropdown Reviewer/Validator, dropdown plat BBM lintas
-// user, dan nama approver di PDF/Detail. Sebelumnya semua kebutuhan itu
-// query langsung ke /users collection, yang berarti SIAPA PUN yang login bisa
-// baca profil lengkap user lain termasuk nomor rekening bank (lihat Bagian
-// H/18.4). Mirror ini disinkron otomatis oleh trigger di bawah setiap kali
-// /users/{uid} ditulis (baik lewat Cloud Function createManagedUser, maupun
-// lewat update langsung client Super Admin di FormEditUser.jsx).
-const buildUserDirectoryEntry = (uid, data) => ({
-    uid,
-    nama: typeof data?.nama === "string" ? data.nama : "",
-    role: typeof data?.role === "string" ? data.role : "",
-    unit: Array.isArray(data?.unit) ? data.unit : [],
-    platKendaraan: Array.isArray(data?.platKendaraan) ? data.platKendaraan : [],
-});
-
+// buildUserDirectoryEntry() dipisah ke functions/lib/userDirectory.js supaya
+// bisa dites langsung (lihat komentar di file itu untuk konteks kenapa).
 exports.syncUserDirectoryOnWrite = onDocumentWritten("users/{uid}", async (event) => {
     const uid = event.params.uid;
     const directoryRef = db.collection("userDirectory").doc(uid);
@@ -860,18 +821,8 @@ const extractTextFromBuktiFile = async (buffer, contentType) => {
     return result.fullTextAnnotation?.text || "";
 };
 
-// Cocokkan nominal target (mis. sisaLebih) dengan angka-angka yang kebaca OCR --
-// dibersihkan dari titik/koma pemisah ribuan (format Rupiah) baru dibandingkan.
-const textContainsAmount = (text, targetAmount) => {
-    const target = Math.round(targetAmount);
-    if (!target || !text) return false;
-
-    const matches = text.match(/\d[\d.,]{2,}/g) || [];
-    return matches.some((match) => {
-        const normalized = parseInt(match.replace(/[.,]/g, ""), 10);
-        return normalized === target;
-    });
-};
+// textContainsAmount() dipisah ke functions/lib/pengembalianMatcher.js supaya
+// bisa dites langsung.
 
 // Upload bukti pengembalian (JPG/PNG/PDF, lihat storage.rules `lpj_pengembalian/`)
 // divalidasi di sini lewat OCR: nominal `sisaLebih` LPJ harus muncul di teks hasil

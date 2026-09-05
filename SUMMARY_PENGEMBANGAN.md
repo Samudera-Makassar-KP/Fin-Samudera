@@ -1031,3 +1031,66 @@ Ditawarkan ke user sebagai opsi lanjutan kalau butuh app "resmi" di Play Store/A
 - [x] Deploy hosting ke produksi — sukses 2026-09-05
 - [x] Verifikasi langsung di `smdr-mks.com` (custom domain, bukan cuma `*.web.app`): `manifest.json` (200, isi benar), `service-worker.js` (200, header `Cache-Control: no-cache` benar terpasang), `logo512.png`/`apple-touch-icon.png` (200), tag `<link rel="manifest">` & `<link rel="apple-touch-icon">` muncul di HTML — semua terkonfirmasi via curl
 - [ ] Tes manual: buka di Chrome Android → muncul prompt "Install app" atau lewat menu ⋮ > Install; buka di Safari iOS → Share > Add to Home Screen → ikon & nama muncul benar, buka fullscreen tanpa address bar
+
+---
+
+# BAGIAN Q — Testing Dasar + CI (2026-09-05)
+
+## 27.1 Konteks
+
+Setelah diminta pendapat soal kematangan aplikasi, rekomendasi prioritas #1 yang diberikan: tidak ada automated testing sama sekali di project ini, padahal beberapa insiden kritis di sesi ini (Bagian M: field `uid` hilang blokir semua submit; Bagian O: `lampiranUrl` array vs string yang diam-diam rusak) adalah persis jenis bug yang seharusnya ketahuan dari unit test sebelum sampai ke user. User setuju, minta dikerjakan duluan sebelum lanjut ke rekomendasi lain.
+
+**Prinsip yang dipakai:** tidak menulis test untuk SEMUA hal (project ini besar, coverage 100% bukan tujuan realistis dalam satu sesi) -- fokus ke logic murni yang PALING beresiko salah tanpa ketahuan (parsing/validasi/transformasi data), terutama yang sudah pernah terbukti jadi sumber bug produksi.
+
+## 27.2 Frontend (`react-scripts test`, sudah bawaan CRA -- tidak ada test sama sekali sebelum ini)
+
+`src/setupTests.js` (baru, standar CRA, import `@testing-library/jest-dom`). Test ditulis untuk modul utilitas murni yang sudah ada (bukan komponen -- komponen di app ini rata-rata terikat erat ke Firebase/routing sehingga butuh setup mocking besar untuk ditest, sengaja ditunda ke sesi berikutnya):
+
+- `src/utils/attachmentUpload.test.js` (26 assertion): validasi PDF/JPG/PNG (termasuk kasus file di-rename palsu supaya lolos cek ekstensi), `getUploadableAttachments` (filter file mock kosong), dan `mergeAttachmentsToPdf` (gabung 2 PDF asli + campur gambar, dicek jumlah halaman hasil gabungan pakai `pdf-lib` yang sama).
+- `src/utils/uploadPdfFile.test.js`: pola sama untuk util PDF-only yang lebih lama.
+- `src/utils/pengembalianUpload.test.js`: `describePengembalianStatus` (fungsi murni, gampang ditest, belum pernah ditest sejak dibuat di Bagian O).
+
+**Kendala teknis yang ditemukan & solusinya:** `File`/`Blob` bawaan jsdom (environment default Jest CRA) tidak implementasi `arrayBuffer()`/`text()` dengan benar -- 2 file test yang butuh baca isi file (`attachmentUpload.test.js`, `uploadPdfFile.test.js`) dipindah ke `@jest-environment node` (docblock per-file, bukan ubah config global) karena logic yang dites murni & tidak butuh DOM. Tapi `jest-environment-node` versi lama (ikut react-scripts 5) juga tidak otomatis expose `File` sebagai global Node run-time (walau Node 22 sendiri mendukung) -- diimpor eksplisit dari `node:buffer` + `global.File = File` di test file (bukan di source code produksi, supaya `attachmentUpload.js` tetap murni kode browser tanpa dependency Node).
+
+## 27.3 Cloud Functions (`jest`, ditambahkan baru -- `firebase-functions-test` sudah jadi devDependency lama tapi tidak pernah dipakai)
+
+Diekstrak 3 fungsi murni dari `functions/index.js` (1600+ baris, semua logic nempel jadi satu file) ke `functions/lib/` supaya bisa dites tanpa mock Admin SDK/Vision API:
+- `functions/lib/format.js` -- `formatCurrency`, `formatDateIndonesia`
+- `functions/lib/userDirectory.js` -- `buildUserDirectoryEntry` (fungsi yang JADI PENYEBAB insiden Bagian M -- field `uid` hilang tanpa ketahuan sampai berhari-hari di produksi)
+- `functions/lib/pengembalianMatcher.js` -- `textContainsAmount` (logic pencocokan nominal OCR yang baru ditulis di Bagian O, belum pernah divalidasi selain manual)
+
+`index.js` diubah jadi `require()` dari `./lib/...`, TIDAK ada perubahan behavior sama sekali (diverifikasi: `node -c` + isolated `require()` test hasilnya identik sebelum/sesudah refactor, semua 16 export Cloud Function tetap ada). **Sengaja TIDAK deploy ulang functions** untuk perubahan ini -- murni reorganisasi kode + tambah test, tidak ada behavior yang berubah di produksi, jadi tidak ada risiko yang perlu diambil dengan re-deploy.
+
+19 test ditulis di `functions/test/` (format, userDirectory, pengembalianMatcher) -- termasuk test regresi eksplisit untuk kasus Bagian M ("field uid HARUS selalu ada, apapun data inputnya").
+
+`functions/package.json`: tambah `jest` sebagai devDependency + script `test`. `firebase.json`: tambah `test`/`*.test.js` ke ignore list functions deploy (supaya tidak ikut ke-upload ke Cloud Functions runtime, murni kosmetik/lean package).
+
+## 27.4 CI (`.github/workflows/ci.yml`, baru -- belum pernah ada CI sama sekali)
+
+2 job paralel, jalan di tiap push/PR ke `main` dan `dev`:
+- **frontend**: `npm ci` → `react-scripts test --watchAll=false` → `npm run build` (build sekaligus jadi lint gate, karena `CI=true` bikin warning ESLint jadi error -- pola yang sudah dipakai manual sepanjang sesi ini, sekarang otomatis).
+- **functions**: `npm ci` di folder `functions/` → `node -c index.js` (syntax check cepat, pola yang sama dipakai manual sepanjang sesi ini) → `npm test`.
+
+Tidak butuh secret Firebase apapun (build/test tidak connect ke Firebase asli, cuma compile+test logic murni) -- aman dari risiko kebocoran credential di log CI.
+
+## 27.5 Kenapa Berhenti di Sini (Belum Coverage Penuh/E2E)
+
+- Belum ada test untuk komponen React (butuh mock Firebase Auth/Firestore/Storage yang cukup ekstensif, lebih cocok jadi task terpisah).
+- Belum ada test integrasi/e2e (mis. Playwright) yang benar-benar submit form lewat browser -- akan jadi lapisan test berikutnya kalau dibutuhkan.
+- Cloud Function yang trigger Firestore/kirim email/panggil Vision API TIDAK ditest langsung (butuh emulator Firestore + mock Vision API) -- baru logic PARSING/VALIDASI murni di dalamnya yang diekstrak & ditest.
+- CI cuma jalan build+test, BELUM auto-deploy apapun (sengaja -- deploy ke produksi tetap manual by design, supaya tetap ada kontrol/keputusan manusia sebelum sesuatu masuk produksi, konsisten dengan cara kerja project ini sejauh ini).
+
+## 27.6 Task Development — Bagian Q
+
+- [x] `src/setupTests.js` (baru)
+- [x] `src/utils/attachmentUpload.test.js`, `uploadPdfFile.test.js`, `pengembalianUpload.test.js` (baru, 26 test)
+- [x] `functions/lib/format.js`, `userDirectory.js`, `pengembalianMatcher.js` (ekstraksi dari index.js, behavior identik)
+- [x] `functions/test/format.test.js`, `userDirectory.test.js`, `pengembalianMatcher.test.js` (baru, 19 test, termasuk regresi Bagian M)
+- [x] `functions/package.json`: tambah `jest` devDependency + script `test`
+- [x] `firebase.json`: exclude `test`/`*.test.js` dari deploy functions
+- [x] `.github/workflows/ci.yml` (baru): job frontend (test+build) & functions (syntax+test)
+- [x] Verifikasi: 26 test frontend + 19 test functions semua PASS
+- [x] `node -c` + isolated `require()` test functions setelah refactor — identik dengan sebelum refactor (16 export, semua fungsi ada)
+- [x] `CI=true npm run build` sukses (hash bundle identik dengan sebelum penambahan test, konfirmasi test file tidak ikut ke bundle produksi)
+- [ ] **Tidak perlu deploy produksi untuk bagian ini** (murni dev-tooling, tidak ada behavior berubah) — TAPI commit perlu di-push supaya GitHub Actions CI benar-benar jalan pertama kali & bisa diverifikasi hijau
+- [ ] Cek run CI pertama di GitHub Actions benar-benar hijau (bukan cuma lolos lokal)
