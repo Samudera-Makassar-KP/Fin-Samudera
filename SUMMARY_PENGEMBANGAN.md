@@ -1372,6 +1372,6 @@ Modal pakai `renderClassificationRow` yang sama -- Admin bisa langsung ubah Stat
 - [x] Modal drill-down (overlay + card, tabel `renderClassificationRow` per item, tombol tutup)
 - [x] `CI=true npm run build` sukses
 - [x] Semua test PASS: 56 frontend (tidak ada logic aggregasi baru, cuma UI -- tidak ada test baru)
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-07, diverifikasi teks "Rincian Transaksi" ada di bundle live
 - [ ] Tes manual: klik sel Biaya di tabel BBM Total (per unit), modal muncul dengan transaksi yang benar, ubah status salah satu, konfirmasi tabel di belakang modal ikut update setelah modal ditutup
 - [ ] Tes manual: klik sel di tabel per Plat Nomor, konfirmasi transaksi yang muncul sesuai plat & bulan yang diklik
