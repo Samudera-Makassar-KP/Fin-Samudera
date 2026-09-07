@@ -132,10 +132,10 @@ export const formatPlatDisplay = (normalizedKey) => {
  * Sharing (Bagian U): sejak ini, TIDAK ADA lagi redistribusi otomatis-blanket
  * untuk semua BBM 1 unit -- setiap BARIS BBM dicek satu-satu lewat
  * `sharingClassification` (opsional): { [buildBbmItemKey(...)]: { dibagi:
- * boolean, splitMode: 'pool'|'custom', customShares?: {[unit]: persen} } },
- * data dari koleksi Firestore `rekapanBbmSharing` (diisi manual Admin/Super
- * Admin lewat panel "Kelola Sharing BBM" -- lihat RekapanUnitBisnis.jsx).
- * Baris yang BELUM diklasifikasi (tidak ada entry, atau `dibagi` bukan true)
+ * boolean, splitMode: 'pool'|'custom', customShares?: {[unit]: persen},
+ * dikecualikan?: boolean } }, data dari koleksi Firestore `rekapanBbmSharing`
+ * (diisi manual Admin/Super Admin lewat panel "Kelola Sharing BBM" -- lihat
+ * RekapanUnitBisnis.jsx). Baris yang BELUM diklasifikasi (tidak ada entry)
  * defaultnya TETAP 100% ke unit pengaju -- TIDAK ada asumsi "otomatis dibagi"
  * lagi (beda dari versi pertama Bagian T yang keliru: MJS di-share 100%-nya
  * secara blanket, padahal kenyataannya cuma sebagian transaksi yang genuinely
@@ -146,8 +146,16 @@ export const formatPlatDisplay = (normalizedKey) => {
  * pakai splitMode 'pool') KECUALI baris itu punya `customShares` sendiri
  * (splitMode 'custom' -- persentase spesifik cuma untuk baris/plat itu).
  *
- * `byPlat`/`byJenis` TIDAK ikut sharing -- selalu murni data submission asli
- * per unit pengaju, cuma `totals` yang kena redistribusi.
+ * Baris yang `dikecualikan: true` (Bagian V) TIDAK MUNCUL SAMA SEKALI di
+ * Rekapan -- beda dari "tidak dibagi" (yang tetap tampil 100% di unit
+ * pengaju). Dipakai untuk BBM yang sebenarnya di luar scope Biaya GA (mis.
+ * kendaraan operasional/project yang kebetulan disubmit lewat form GA/Umum).
+ * `dikecualikan` diprioritaskan di atas `dibagi` -- tidak ikut `totals`
+ * MAUPUN `byPlat`/`byJenis` sama sekali.
+ *
+ * `byPlat`/`byJenis` TIDAK ikut sharing (redistribusi) -- selalu murni data
+ * submission asli per unit pengaju, cuma `totals` yang kena redistribusi.
+ * Keduanya TETAP ikut aturan `dikecualikan` (dibuang sama sekali).
  *
  * @returns {{ totals: object, byJenis: object, byPlat: { [plat: string]: { liter: number[], biaya: number[] } } }}
  */
@@ -166,6 +174,15 @@ export function aggregateBbm(reimbursementDocs, lpjDocs, { year, units, sharingC
     // lain), TAPI baris tetap diproses untuk `totals` supaya unit yang difilter
     // ke tampilan tetap dapat porsi share-nya kalau baris ini ditandai "dibagi".
     const processItem = ({ docType, docId, itemIndex, unit, month, jenis, plat, liter, biayaTotal, includeInDrilldown }) => {
+        const classification = sharingClassification?.[buildBbmItemKey(docType, docId, itemIndex)]
+
+        // Dikecualikan: TIDAK muncul sama sekali di Rekapan (beda dari "tidak
+        // dibagi", yang tetap tampil 100% di unit pengaju) -- dipakai untuk BBM
+        // yang memang di luar scope Biaya GA (mis. kendaraan operasional/project
+        // yang kebetulan disubmit lewat form GA/Umum). Tidak ikut totals MAUPUN
+        // byPlat/byJenis.
+        if (classification?.dikecualikan) return
+
         if (includeInDrilldown) {
             const jenisLabel = jenis || 'BBM Lainnya'
             if (!byJenis[jenisLabel]) byJenis[jenisLabel] = {}
@@ -178,7 +195,6 @@ export function aggregateBbm(reimbursementDocs, lpjDocs, { year, units, sharingC
             byPlat[platKey].biaya[month] += biayaTotal
         }
 
-        const classification = sharingClassification?.[buildBbmItemKey(docType, docId, itemIndex)]
         if (classification?.dibagi) {
             const shares = (classification.splitMode === 'custom' && classification.customShares)
                 ? classification.customShares

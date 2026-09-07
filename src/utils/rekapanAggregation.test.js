@@ -173,3 +173,66 @@ describe('aggregateBbm - filter unit + sharing', () => {
         expect(result.totals[MJS]).toBeUndefined() // MJS difilter dari tampilan & tidak dibagi ke SAG
     })
 })
+
+describe('aggregateBbm - baris dikecualikan (Bagian V)', () => {
+    const MKT = 'PT Masaji Kargosentra Tama'
+    const makeReimbursement = (id, unit, biaya, jenis = 'BBM Solar', plat = 'CDE') => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis, biaya, liter: 10, plat, tanggal: '2026-03-15' }
+        ]
+    })
+
+    test('baris dikecualikan:true tidak muncul di totals sama sekali (tidak juga di unit pengajunya sendiri)', () => {
+        const docs = [makeReimbursement('doc1', MKT, 1000000)]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dikecualikan: true } }
+
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(result.totals[MKT]).toBeUndefined()
+    })
+
+    test('baris dikecualikan:true tidak muncul di byPlat/byJenis', () => {
+        const docs = [makeReimbursement('doc1', MKT, 1000000)]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dikecualikan: true } }
+
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(result.byPlat).toEqual({})
+        expect(result.byJenis).toEqual({})
+    })
+
+    test('dikecualikan diprioritaskan di atas dibagi -- kalau keduanya true, tetap tidak muncul', () => {
+        const docs = [makeReimbursement('doc1', MKT, 1000000)]
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dikecualikan: true, dibagi: true, splitMode: 'pool' }
+        }
+        const defaultPoolShares = { [MKT]: 50, [SAG]: 50 }
+
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification, defaultPoolShares })
+
+        expect(result.totals[MKT]).toBeUndefined()
+        expect(result.totals[SAG]).toBeUndefined()
+    })
+
+    test('baris lain (tidak dikecualikan) di dokumen/unit yang sama tetap tampil normal', () => {
+        const docs = [{
+            id: 'doc1',
+            status: 'Disetujui',
+            user: { unit: MKT },
+            reimbursements: [
+                { jenis: 'BBM Solar', biaya: 1000000, liter: 10, plat: 'CDE', tanggal: '2026-03-15' },
+                { jenis: 'BBM Pertalite', biaya: 200000, liter: 5, plat: 'FGH', tanggal: '2026-03-15' }
+            ]
+        }]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dikecualikan: true } }
+
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(result.totals[MKT][2]).toBe(200000)
+        expect(result.byPlat['CDE']).toBeUndefined()
+        expect(result.byPlat['FGH'].biaya[2]).toBe(200000)
+    })
+})

@@ -282,11 +282,21 @@ const RekapanUnitBisnis = () => {
         }
     }
 
-    const toggleItemDibagi = (item) => {
+    // 3 status per baris (Bagian V): 'default' (100% ke unit pengaju, tampil
+    // normal), 'dibagi' (displit ke unit lain), 'dikecualikan' (tidak muncul
+    // di Rekapan sama sekali -- mis. BBM di luar scope Biaya GA).
+    const getItemStatus = (item) => {
+        const c = sharingClassification[item.key]
+        if (c?.dikecualikan) return 'dikecualikan'
+        if (c?.dibagi) return 'dibagi'
+        return 'default'
+    }
+
+    const setItemStatus = (item, status) => {
         const current = sharingClassification[item.key]
-        const nextDibagi = !current?.dibagi
         saveClassification(item.key, {
-            dibagi: nextDibagi,
+            dibagi: status === 'dibagi',
+            dikecualikan: status === 'dikecualikan',
             splitMode: current?.splitMode || 'pool',
             customShares: current?.customShares || null
         })
@@ -307,13 +317,13 @@ const RekapanUnitBisnis = () => {
         SHARING_UNITS.forEach((u) => {
             customShares[u.name] = Number(customEditDraft[u.code]) || 0
         })
-        await saveClassification(item.key, { dibagi: true, splitMode: 'custom', customShares })
+        await saveClassification(item.key, { dibagi: true, dikecualikan: false, splitMode: 'custom', customShares })
         setCustomEditKey(null)
     }
 
     const applyDefaultPoolSplit = (item) => {
         const current = sharingClassification[item.key]
-        saveClassification(item.key, { dibagi: true, splitMode: 'pool', customShares: current?.customShares || null })
+        saveClassification(item.key, { dibagi: true, dikecualikan: false, splitMode: 'pool', customShares: current?.customShares || null })
         setCustomEditKey(null)
     }
 
@@ -860,9 +870,10 @@ const RekapanUnitBisnis = () => {
                                         Kelola Sharing BBM
                                     </p>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        Tandai satu-satu baris BBM mana yang genuinely dibagi ke unit lain (mis. BBM
-                                        yang ditalangi dulu oleh 1 unit). Baris yang belum ditandai tetap 100% ke
-                                        unit pengaju -- tidak ada yang otomatis dibagi.
+                                        Tandai satu-satu baris BBM: <strong>Dibagi</strong> ke unit lain (mis. BBM
+                                        yang ditalangi dulu oleh 1 unit), atau <strong>Kecualikan</strong> kalau BBM
+                                        itu di luar scope Biaya GA (tidak muncul di Rekapan sama sekali). Baris yang
+                                        belum ditandai tetap 100% ke unit pengaju -- tidak ada yang otomatis berubah.
                                     </p>
                                 </div>
                                 <button
@@ -911,7 +922,7 @@ const RekapanUnitBisnis = () => {
                                                     <th className="px-3 py-2 text-left">Plat</th>
                                                     <th className="px-3 py-2 text-left">Jenis</th>
                                                     <th className="px-3 py-2 text-right">Biaya</th>
-                                                    <th className="px-3 py-2 text-center">Dibagi?</th>
+                                                    <th className="px-3 py-2 text-left">Status</th>
                                                     <th className="px-3 py-2 text-left">Split</th>
                                                 </tr>
                                             </thead>
@@ -925,7 +936,8 @@ const RekapanUnitBisnis = () => {
                                                 )}
                                                 {pagedBbmLineItems.map((item) => {
                                                     const classification = sharingClassification[item.key]
-                                                    const isDibagi = Boolean(classification?.dibagi)
+                                                    const status = getItemStatus(item)
+                                                    const isDibagi = status === 'dibagi'
                                                     const isEditingCustom = customEditKey === item.key
                                                     return (
                                                         <React.Fragment key={item.key}>
@@ -935,14 +947,17 @@ const RekapanUnitBisnis = () => {
                                                                 <td className="px-3 py-2">{item.plat}</td>
                                                                 <td className="px-3 py-2">{item.jenis}</td>
                                                                 <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
-                                                                <td className="px-3 py-2 text-center">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={isDibagi}
+                                                                <td className="px-3 py-2">
+                                                                    <select
+                                                                        value={status}
                                                                         disabled={savingItemKey === item.key}
-                                                                        onChange={() => toggleItemDibagi(item)}
-                                                                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                                                                    />
+                                                                        onChange={(e) => setItemStatus(item, e.target.value)}
+                                                                        className="text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                                                    >
+                                                                        <option value="default">Tampilkan (default)</option>
+                                                                        <option value="dibagi">Dibagi ke unit lain</option>
+                                                                        <option value="dikecualikan">Kecualikan dari Rekapan</option>
+                                                                    </select>
                                                                 </td>
                                                                 <td className="px-3 py-2">
                                                                     {isDibagi && (

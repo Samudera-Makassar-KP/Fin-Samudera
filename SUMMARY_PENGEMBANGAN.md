@@ -1286,3 +1286,29 @@ Setelah Bagian T live & roster diisi, user melaporkan hasilnya **salah**: "ada b
 - [ ] Tes manual: tandai 1 baris BBM MJS sebagai "dibagi" (pool default), konfirmasi tabel "BBM -- Total Biaya" MJS berkurang sejumlah baris itu & unit lain bertambah proporsional -- baris BBM MJS LAIN yang tidak ditandai tetap 100% di MJS
 - [ ] Tes manual: custom split 1 baris (mis. cuma ke 2 unit spesifik), konfirmasi split-nya BEDA dari baris lain yang pakai pool default
 - [ ] Tes manual: checkbox Unit Bisnis pilih 2-3 unit sekaligus, konfirmasi tabel menampilkan gabungan unit yang dipilih saja
+
+---
+
+# BAGIAN V — Kelola Sharing BBM: Opsi "Kecualikan dari Rekapan" (2026-09-07)
+
+## 32.1 Konteks
+
+Dua pertanyaan susulan dari user setelah Bagian U:
+1. "Apakah hasilnya otomatis?" -- dikonfirmasi YA, `saveClassification` update Firestore + state lokal sekaligus, `bbmData` (useMemo) otomatis re-compute tanpa refresh.
+2. Permintaan baru: kemampuan MENYEMBUNYIKAN total BBM tertentu dari Rekapan (bukan cuma soal dibagi/tidak) -- contoh user: MKT punya mobil "CDE" pakai BBM Solar yang bukan Biaya GA (kemungkinan biaya project/operasional yang kebetulan disubmit lewat form GA/Umum), tidak mau muncul di Rekapan GA sama sekali.
+
+## 32.2 Implementasi
+
+Status per baris BBM di panel "Kelola Sharing BBM" diperluas dari 2 jadi **3 pilihan** (dropdown, bukan checkbox lagi): **Tampilkan (default)** / **Dibagi ke unit lain** / **Kecualikan dari Rekapan**. Field baru `dikecualikan: boolean` di `rekapanBbmSharing/{itemKey}` (Firestore, TIDAK butuh perubahan `firestore.rules` -- field tambahan tidak dibatasi rule yang sudah ada).
+
+`aggregateBbm()`: `dikecualikan: true` dicek PALING AWAL di `processItem()`, diprioritaskan di atas `dibagi` -- kalau true, baris itu `return` langsung, TIDAK masuk `totals` (baik ke unit pengaju maupun unit manapun), TIDAK JUGA masuk `byPlat`/`byJenis` (beda dari "tidak dibagi", yang tetap 100% tampil di unit pengaju).
+
+## 32.3 Task Development — Bagian V
+
+- [x] `rekapanAggregation.js`: cek `dikecualikan` di awal `processItem()`, skip totals+byPlat+byJenis
+- [x] `RekapanUnitBisnis.jsx`: kolom "Dibagi?" (checkbox) diganti kolom "Status" (dropdown 3 opsi), `getItemStatus`/`setItemStatus` baru menggantikan `toggleItemDibagi`
+- [x] Test baru: 4 test kasus dikecualikan (termasuk prioritas di atas dibagi, dan baris lain di dokumen sama tetap normal)
+- [x] `CI=true npm run build` sukses
+- [x] Semua test PASS: 53 frontend
+- [ ] Deploy ke produksi (hosting saja, firestore rules tidak berubah)
+- [ ] Admin coba tandai baris BBM Solar plat "CDE" milik MKT jadi "Kecualikan dari Rekapan", konfirmasi tidak lagi muncul di tabel BBM Total maupun breakdown per jenis/plat
