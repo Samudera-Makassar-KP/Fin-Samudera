@@ -1094,3 +1094,48 @@ Tidak butuh secret Firebase apapun (build/test tidak connect ke Firebase asli, c
 - [x] `CI=true npm run build` sukses (hash bundle identik dengan sebelum penambahan test, konfirmasi test file tidak ikut ke bundle produksi)
 - [x] **Tidak perlu deploy produksi untuk bagian ini** (murni dev-tooling, tidak ada behavior berubah) — commit di-push supaya GitHub Actions CI jalan
 - [x] Cek run CI pertama di GitHub Actions — **run pertama (`df4ff51`) GAGAL**: `src/utils/pengembalianUpload.test.js` ikut mengimpor `firebaseConfig.js` (butuh `REACT_APP_FIREBASE_API_KEY` asli, tidak ada di GitHub Actions runner) padahal cuma mau tes `describePengembalianStatus` yang murni logic. **Persis skenario yang CI ini dibuat untuk tangkap** — fix: `describePengembalianStatus` dipindah ke `src/utils/pengembalianStatus.js` baru (modul murni, tanpa import Firebase sama sekali), `pengembalianUpload.js` re-export dari sana untuk kompatibilitas caller yang sudah ada (`FormLpjUmum.jsx`, `FormLpjMarketing.jsx`, `DetailLpj.jsx`). Diverifikasi juga lokal dengan env var Firebase sengaja dikosongkan (simulasi kondisi CI) sebelum push ulang. Commit fix (`ed5a5b7`) — **run kedua di kedua branch (`dev` & `main`) SUKSES hijau**, diverifikasi langsung lewat GitHub API (`gh` CLI tidak tersedia di environment ini, dipakai token dari git credential store untuk cek status run & baca log job yang gagal)
+
+---
+
+# BAGIAN R — INSIDEN KRITIS: Bom Email Reminder Pengembalian LPJ untuk Data Lama (2026-09-07)
+
+## 28.1 Laporan User
+
+Beberapa jam setelah Bagian O (fitur validasi bukti pengembalian LPJ) live, user melaporkan menerima puluhan email `[REMINDER] Bukti Pengembalian BS Belum Diupload` beruntun dalam hitungan menit (screenshot: 9:37–9:43 pagi), masing-masing untuk LPJ berbeda. User tidak mungkin mencari lampiran bukti pengembalian untuk LPJ-LPJ lama itu lagi (sudah lama terlewat), minta LPJ lama (sampai hari ini) ditandai selesai TANPA lampiran.
+
+## 28.2 Root Cause
+
+`sendPengembalianReminders` (Bagian O) query `db.collection("lpj").where("sisaLebih", ">", 0)` — ini mengambil **SEMUA LPJ yang PERNAH dibuat** dengan `sisaLebih > 0`, bukan cuma LPJ baru sejak fitur ini live. Untuk LPJ yang belum pernah dapat reminder (`pengembalianLastReminderAt` kosong), baseline jatuh tempo dihitung dari `tanggalPengajuan` -- yang untuk LPJ lama sudah lama lewat dari "2 hari sejak submit". Akibatnya: begitu Cloud Scheduler menjalankan fungsi ini untuk PERTAMA KALINYA (2026-09-07, 09:30 WITA), SEMUA LPJ lama yang punya `sisaLebih>0` langsung dianggap "jatuh tempo" secara bersamaan, dan fungsi mengirim email satu per satu secara berurutan (`await` di dalam loop) untuk tiap dokumen -- proses ini makan beberapa menit, muncul di inbox user sebagai email beruntun ("bom email").
+
+**Analisis kesalahan desain:** fitur reminder pengembalian seharusnya cuma berlaku untuk LPJ yang dibuat SETELAH fitur ini live, bukan diterapkan retroaktif ke seluruh histori data. Ini seharusnya diantisipasi sebelum deploy Bagian O (pola yang sama seperti kebutuhan backfill di Bagian K/M -- data lama butuh migrasi/pengecualian eksplisit, tidak bisa diasumsikan otomatis cocok dengan aturan baru).
+
+## 28.3 Perbaikan
+
+**Status baru `'grandfathered'`** (beda dari `'valid'` supaya tidak diklaim tervalidasi OCR sungguhan padahal tidak ada lampiran):
+- `sendPengembalianReminders`: skip kalau `pengembalianStatus` adalah `'valid'` ATAU `'grandfathered'`.
+- `grandfatherPengembalianLpj` (onCall baru, Super Admin-only): tandai LPJ dengan `sisaLebih>0` yang `createdAt`-nya **≤ cutoff tanggal TETAP di kode** (`PENGEMBALIAN_GRANDFATHER_CUTOFF = "2026-09-07T23:59:59+08:00"`, BUKAN "sekarang" secara dinamis) jadi `pengembalianStatus: 'grandfathered'`. Cutoff tetap (bukan dinamis) supaya fungsi ini AMAN diklik kapan pun di masa depan tanpa ikut "menyelamatkan" LPJ baru yang genuinely belum upload dari reminder yang seharusnya.
+- `ManageUser.jsx`: tombol baru **"Selesaikan LPJ Lama (Pengembalian)"** (merah, menonjol dari 2 tombol sync lain) memanggil fungsi di atas.
+- `DetailLpj.jsx`, `pengembalianStatus.js`: status `grandfathered` ditampilkan beda dari `valid` (abu-abu + label "LPJ lama, ditandai selesai (sebelum fitur validasi aktif)", bukan hijau "Tervalidasi").
+
+**Dideploy darurat:** `firebase deploy --only functions` lalu `--only hosting`, keduanya sukses 2026-09-07.
+
+## 28.4 WAJIB Dilakukan Segera Setelah Deploy Ini
+
+- [ ] **Super Admin klik tombol "Selesaikan LPJ Lama (Pengembalian)" di halaman Manage Users SEKARANG** -- ini yang menghentikan siklus reminder untuk LPJ lama (kalau tidak diklik, LPJ yang sudah dapat reminder pagi ini akan dapat reminder lagi 2 hari kemudian, dan seterusnya tiap 2 hari tanpa henti).
+- [ ] Setelah diklik, cek toast konfirmasi jumlah LPJ yang di-update masuk akal (bandingkan dengan estimasi jumlah LPJ ber-`sisaLebih>0` yang pernah dibuat).
+- [ ] Pastikan tidak ada reminder susulan 2 hari lagi (2026-09-09) untuk LPJ-LPJ yang sama.
+
+## 28.5 Pelajaran untuk Fitur Retroaktif Berikutnya
+
+Sebelum deploy fitur yang scan/proses SELURUH data existing (bukan cuma data baru), **selalu cek dulu**: apakah aturan baru ini valid diterapkan ke data lama, atau butuh cutoff/pengecualian eksplisit? Kalau butuh, siapkan migrasi/grandfather SEBELUM fitur live, bukan sesudah insiden terjadi.
+
+## 28.6 Task Development — Bagian R
+
+- [x] `functions/index.js`: skip `'grandfathered'` di `sendPengembalianReminders`, tambah `grandfatherPengembalianLpj`
+- [x] `ManageUser.jsx`: tombol "Selesaikan LPJ Lama (Pengembalian)"
+- [x] `DetailLpj.jsx`, `pengembalianStatus.js`: tampilan status `grandfathered` terpisah dari `valid`
+- [x] `pengembalianUpload.test.js`: tambah test status `grandfathered`
+- [x] `node -c` + isolated `require()` test functions sukses
+- [x] `CI=true npm run build` sukses, semua test (27 frontend + 19 functions) PASS
+- [x] Deploy darurat: functions (`grandfatherPengembalianLpj` -- `Successful create operation`) + hosting, sukses 2026-09-07
+- [ ] **Super Admin klik "Selesaikan LPJ Lama (Pengembalian)" — WAJIB SEGERA, lihat 28.4**
