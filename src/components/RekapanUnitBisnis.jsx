@@ -327,6 +327,125 @@ const RekapanUnitBisnis = () => {
         setCustomEditKey(null)
     }
 
+    // Drill-down (Bagian X): klik sel Biaya/Liter di tabel "BBM -- Total Biaya"
+    // (per unit) atau "BBM -- Liter per Plat Nomor" (per plat) -> modal berisi
+    // transaksi MENTAH di balik angka itu (bulan yang sama), supaya Admin bisa
+    // langsung tandai Dibagi/Kecualikan tanpa cari-cari di panel "Kelola Sharing
+    // BBM". type 'unit': item yang DISUBMIT unit itu (bukan porsi share masuk
+    // dari unit lain -- itu pecahan dari item unit lain, tidak bisa "dikeluarkan"
+    // sendiri di sini). type 'plat': byPlat selalu data mentah, jadi akurat penuh.
+    const [drillDown, setDrillDown] = useState(null) // { type: 'unit'|'plat', value, month, label }
+
+    const openDrillDown = (type, value, month, label) => {
+        setDrillDown({ type, value, month, label })
+    }
+
+    const closeDrillDown = () => setDrillDown(null)
+
+    const drillDownItems = useMemo(() => {
+        if (!drillDown) return []
+        return allBbmLineItems.filter((item) => {
+            if (item.month !== drillDown.month) return false
+            return drillDown.type === 'plat' ? item.plat === drillDown.value : item.unit === drillDown.value
+        })
+    }, [drillDown, allBbmLineItems])
+
+    // Baris klasifikasi (dropdown status + "Atur Split") -- dipakai SAMA baik
+    // di panel "Kelola Sharing BBM" maupun modal drill-down, supaya kontrolnya
+    // konsisten & tidak duplikat ~90 baris JSX.
+    const renderClassificationRow = (item) => {
+        const classification = sharingClassification[item.key]
+        const status = getItemStatus(item)
+        const isDibagi = status === 'dibagi'
+        const isEditingCustom = customEditKey === item.key
+        return (
+            <React.Fragment key={item.key}>
+                <tr className="border-t dark:border-gray-700">
+                    <td className="px-3 py-2">{MONTH_LABELS[item.month]}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{getUnitLabel(item.unit)}</td>
+                    <td className="px-3 py-2">{item.plat}</td>
+                    <td className="px-3 py-2">{item.jenis}</td>
+                    <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
+                    <td className="px-3 py-2">
+                        <select
+                            value={status}
+                            disabled={savingItemKey === item.key}
+                            onChange={(e) => setItemStatus(item, e.target.value)}
+                            className="text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                        >
+                            <option value="default">Tampilkan (default)</option>
+                            <option value="dibagi">Dibagi ke unit lain</option>
+                            <option value="dikecualikan">Kecualikan dari Rekapan</option>
+                        </select>
+                    </td>
+                    <td className="px-3 py-2">
+                        {isDibagi && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">
+                                    {classification?.splitMode === 'custom' ? 'Custom' : 'Pool Default'}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => openCustomEditor(item)}
+                                    className="text-red-600 dark:text-red-400 hover:underline"
+                                >
+                                    Atur Split
+                                </button>
+                            </div>
+                        )}
+                    </td>
+                </tr>
+                {isEditingCustom && (
+                    <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                        <td colSpan={7} className="px-3 py-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                                {SHARING_UNITS.map((u) => (
+                                    <div key={u.code}>
+                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                            {u.code}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            value={customEditDraft[u.code] || ''}
+                                            onChange={(e) => setCustomEditDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
+                                            className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex justify-end gap-2 mt-3">
+                                <button
+                                    type="button"
+                                    onClick={() => applyDefaultPoolSplit(item)}
+                                    className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline"
+                                >
+                                    Pakai Pool Default
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCustomEditKey(null)}
+                                    className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => saveCustomSplit(item)}
+                                    disabled={savingItemKey === item.key}
+                                    className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+                                >
+                                    Simpan Split Custom
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                )}
+            </React.Fragment>
+        )
+    }
+
     const startEditHeadcount = () => {
         const draft = {}
         SHARING_UNITS.forEach((u) => {
@@ -484,7 +603,7 @@ const RekapanUnitBisnis = () => {
         })
     }
 
-    const renderCategoryTable = (title, rowsData, extraUnits = []) => {
+    const renderCategoryTable = (title, rowsData, extraUnits = [], enableDrillDown = false) => {
         // rowsData: { [unit]: number[12] }. extraUnits: unit "virtual" tambahan
         // (mis. PPNP, bukan Unit Bisnis resmi aplikasi) yang cuma relevan untuk
         // tabel ini -- ditambahkan setelah displayUnits, bukan menggantikannya.
@@ -525,11 +644,17 @@ const RekapanUnitBisnis = () => {
                             <tbody>
                                 {rowUnits.map((unit, idx) => {
                                     const months = rowsData[unit] || Array(12).fill(0)
+                                    const canDrillDown = enableDrillDown && isAdmin
                                     return (
                                         <tr key={unit} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}>
                                             <td className="py-2 px-4 text-gray-800 dark:text-gray-100 whitespace-nowrap">{getUnitLabel(unit)}</td>
                                             {months.map((val, i) => (
-                                                <td key={i} className="py-2 px-2 text-right text-gray-700 dark:text-gray-200">
+                                                <td
+                                                    key={i}
+                                                    onClick={canDrillDown && val ? () => openDrillDown('unit', unit, i, getUnitLabel(unit)) : undefined}
+                                                    title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
+                                                    className={`py-2 px-2 text-right text-gray-700 dark:text-gray-200 ${canDrillDown && val ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 hover:underline' : ''}`}
+                                                >
                                                     {val ? val.toLocaleString('id-ID') : '-'}
                                                 </td>
                                             ))}
@@ -594,6 +719,8 @@ const RekapanUnitBisnis = () => {
                             )}
                             {plats.map((plat, idx) => {
                                 const rowBg = idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'
+                                const canDrillDown = isAdmin
+                                const cellCls = (val) => `py-1 px-2 text-right text-gray-700 dark:text-gray-200 ${canDrillDown && val ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 hover:underline' : ''}`
                                 return (
                                     <React.Fragment key={plat}>
                                         <tr className={rowBg}>
@@ -602,7 +729,12 @@ const RekapanUnitBisnis = () => {
                                             </td>
                                             <td className="py-1 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">Liter (L)</td>
                                             {bbmData.byPlat[plat].liter.map((val, i) => (
-                                                <td key={i} className="py-1 px-2 text-right text-gray-700 dark:text-gray-200">
+                                                <td
+                                                    key={i}
+                                                    onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
+                                                    title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
+                                                    className={cellCls(val)}
+                                                >
                                                     {val ? val.toLocaleString('id-ID') : '-'}
                                                 </td>
                                             ))}
@@ -613,7 +745,12 @@ const RekapanUnitBisnis = () => {
                                         <tr className={`${rowBg} border-b dark:border-gray-600`}>
                                             <td className="py-1 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">Biaya (Rp)</td>
                                             {bbmData.byPlat[plat].biaya.map((val, i) => (
-                                                <td key={i} className="py-1 px-2 text-right text-gray-700 dark:text-gray-200">
+                                                <td
+                                                    key={i}
+                                                    onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
+                                                    title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
+                                                    className={cellCls(val)}
+                                                >
                                                     {val ? val.toLocaleString('id-ID') : '-'}
                                                 </td>
                                             ))}
@@ -791,7 +928,7 @@ const RekapanUnitBisnis = () => {
                 </div>
             ) : (
                 <>
-                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals, bbmSharingExtraUnits)}
+                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals, bbmSharingExtraUnits, true)}
                     {isTableVisible(BBM_LITER_KEY) && renderBbmLiterTable()}
                     {orderedBbmJenis
                         .filter((jenis) => isTableVisible(jenis))
@@ -954,98 +1091,7 @@ const RekapanUnitBisnis = () => {
                                                         </td>
                                                     </tr>
                                                 )}
-                                                {pagedBbmLineItems.map((item) => {
-                                                    const classification = sharingClassification[item.key]
-                                                    const status = getItemStatus(item)
-                                                    const isDibagi = status === 'dibagi'
-                                                    const isEditingCustom = customEditKey === item.key
-                                                    return (
-                                                        <React.Fragment key={item.key}>
-                                                            <tr className="border-t dark:border-gray-700">
-                                                                <td className="px-3 py-2">{MONTH_LABELS[item.month]}</td>
-                                                                <td className="px-3 py-2 whitespace-nowrap">{getUnitLabel(item.unit)}</td>
-                                                                <td className="px-3 py-2">{item.plat}</td>
-                                                                <td className="px-3 py-2">{item.jenis}</td>
-                                                                <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
-                                                                <td className="px-3 py-2">
-                                                                    <select
-                                                                        value={status}
-                                                                        disabled={savingItemKey === item.key}
-                                                                        onChange={(e) => setItemStatus(item, e.target.value)}
-                                                                        className="text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                                                                    >
-                                                                        <option value="default">Tampilkan (default)</option>
-                                                                        <option value="dibagi">Dibagi ke unit lain</option>
-                                                                        <option value="dikecualikan">Kecualikan dari Rekapan</option>
-                                                                    </select>
-                                                                </td>
-                                                                <td className="px-3 py-2">
-                                                                    {isDibagi && (
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-gray-500 dark:text-gray-400">
-                                                                                {classification?.splitMode === 'custom' ? 'Custom' : 'Pool Default'}
-                                                                            </span>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => openCustomEditor(item)}
-                                                                                className="text-red-600 dark:text-red-400 hover:underline"
-                                                                            >
-                                                                                Atur Split
-                                                                            </button>
-                                                                        </div>
-                                                                    )}
-                                                                </td>
-                                                            </tr>
-                                                            {isEditingCustom && (
-                                                                <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
-                                                                    <td colSpan={7} className="px-3 py-3">
-                                                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                                            {SHARING_UNITS.map((u) => (
-                                                                                <div key={u.code}>
-                                                                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                                                                        {u.code}
-                                                                                    </label>
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        min="0"
-                                                                                        max="100"
-                                                                                        value={customEditDraft[u.code] || ''}
-                                                                                        onChange={(e) => setCustomEditDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
-                                                                                        className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                                                                                    />
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                        <div className="flex justify-end gap-2 mt-3">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => applyDefaultPoolSplit(item)}
-                                                                                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline"
-                                                                            >
-                                                                                Pakai Pool Default
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setCustomEditKey(null)}
-                                                                                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline"
-                                                                            >
-                                                                                Batal
-                                                                            </button>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => saveCustomSplit(item)}
-                                                                                disabled={savingItemKey === item.key}
-                                                                                className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
-                                                                            >
-                                                                                Simpan Split Custom
-                                                                            </button>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            )}
-                                                        </React.Fragment>
-                                                    )
-                                                })}
+                                                {pagedBbmLineItems.map((item) => renderClassificationRow(item))}
                                             </tbody>
                                         </table>
                                     </div>
@@ -1077,6 +1123,60 @@ const RekapanUnitBisnis = () => {
                             )}
                         </div>
                     )}
+                </>
+            )}
+
+            {drillDown && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/40" onClick={closeDrillDown} />
+                    <div className="fixed z-50 inset-0 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+                            <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">
+                                        Rincian Transaksi -- {drillDown.label} -- {MONTH_LABELS[drillDown.month]}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {drillDown.type === 'unit'
+                                            ? 'Transaksi BBM yang disubmit unit ini (belum termasuk porsi share masuk dari unit lain).'
+                                            : 'Semua transaksi BBM plat ini pada bulan tersebut.'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeDrillDown}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-2"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="overflow-auto p-4">
+                                <table className="w-full text-sm border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-100 dark:bg-gray-700">
+                                            <th className="px-3 py-2 text-left">Bulan</th>
+                                            <th className="px-3 py-2 text-left">Unit Pengaju</th>
+                                            <th className="px-3 py-2 text-left">Plat</th>
+                                            <th className="px-3 py-2 text-left">Jenis</th>
+                                            <th className="px-3 py-2 text-right">Biaya</th>
+                                            <th className="px-3 py-2 text-left">Status</th>
+                                            <th className="px-3 py-2 text-left">Split</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {drillDownItems.length === 0 && (
+                                            <tr>
+                                                <td colSpan={7} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                    Tidak ada transaksi.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {drillDownItems.map((item) => renderClassificationRow(item))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </>
             )}
         </div>

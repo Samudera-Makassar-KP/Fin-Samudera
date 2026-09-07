@@ -1341,3 +1341,37 @@ Sebagian transaksi BBM LAMA (sebelum field `plat` terpisah ada) diisi bebas di f
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-07, diverifikasi teks "BBM Lainnya"/"Liter (L)"/"Biaya (Rp)" ada di bundle live
 - [ ] Cek dropdown "Tampilkan Rekapan" sekarang cuma berisi jenis baku + "BBM Lainnya" (tidak ada lagi entri per-tanggal)
 - [ ] Cek tabel "BBM -- Liter per Plat Nomor" menampilkan baris Liter & Biaya terpisah per plat
+
+---
+
+# BAGIAN X — Drill-Down: Klik Sel Angka untuk Lihat & Kelola Transaksi Mentahnya (2026-09-07)
+
+## 34.1 Permintaan User
+
+Daripada scroll/cari manual di panel "Kelola Sharing BBM" untuk menemukan transaksi tertentu, user minta klik langsung ke sel angka bulanan di tabel (per unit atau per plat) supaya muncul modal berisi transaksi mentah di baliknya, dan bisa langsung "takeout" (kecualikan) dari situ.
+
+## 34.2 Implementasi
+
+**Refactor dulu**: baris kontrol klasifikasi (dropdown Status + editor split custom, ~90 baris JSX) diekstrak jadi `renderClassificationRow(item)`, dipakai ULANG di panel "Kelola Sharing BBM" (sudah ada) MAUPUN modal baru (baru) -- tidak ada duplikasi kode.
+
+**Klik sel** (Admin/Super Admin only, `isAdmin` check yang sama seperti panel lain):
+- Tabel **"BBM -- Total Biaya"** (per unit): `renderCategoryTable` dapat parameter baru `enableDrillDown` (cuma `true` untuk pemanggilan BBM Total, kategori lain seperti ATK/RTG tidak ada tombolnya karena tidak ada sistem klasifikasi untuk itu). Klik sel = filter `allBbmLineItems` by `unit === X && month === Y`.
+- Tabel **"BBM -- Liter per Plat Nomor"**: kedua baris (Liter maupun Biaya) bisa diklik, filter by `plat === X && month === Y`.
+- Sel kosong (`val` falsy) TIDAK bisa diklik (tidak ada apa-apa untuk ditampilkan).
+
+**Keterbatasan yang didokumentasikan di modal**: untuk drill-down dari tabel PER UNIT, yang ditampilkan adalah transaksi yang DISUBMIT unit itu -- BUKAN termasuk porsi share yang MASUK dari unit lain (itu pecahan dari item unit lain, tidak bisa "dikeluarkan" dari drill-down unit penerima, harus dari drill-down unit ASAL/plat-nya). Drill-down dari tabel PER PLAT selalu akurat penuh (byPlat tidak pernah kena redistribusi sharing).
+
+Modal pakai `renderClassificationRow` yang sama -- Admin bisa langsung ubah Status (Tampilkan/Dibagi/Kecualikan) & atur split custom dari dalam modal, tersimpan & ter-refresh otomatis sama seperti dari panel utama.
+
+## 34.3 Task Development — Bagian X
+
+- [x] `RekapanUnitBisnis.jsx`: ekstrak `renderClassificationRow()` (dipakai ulang panel + modal)
+- [x] State `drillDown` + `drillDownItems` (useMemo, filter `allBbmLineItems`)
+- [x] `renderCategoryTable`: parameter `enableDrillDown`, sel BBM Total bisa diklik (Admin only)
+- [x] `renderBbmLiterTable`: baris Liter & Biaya bisa diklik (Admin only)
+- [x] Modal drill-down (overlay + card, tabel `renderClassificationRow` per item, tombol tutup)
+- [x] `CI=true npm run build` sukses
+- [x] Semua test PASS: 56 frontend (tidak ada logic aggregasi baru, cuma UI -- tidak ada test baru)
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: klik sel Biaya di tabel BBM Total (per unit), modal muncul dengan transaksi yang benar, ubah status salah satu, konfirmasi tabel di belakang modal ikut update setelah modal ditutup
+- [ ] Tes manual: klik sel di tabel per Plat Nomor, konfirmasi transaksi yang muncul sesuai plat & bulan yang diklik
