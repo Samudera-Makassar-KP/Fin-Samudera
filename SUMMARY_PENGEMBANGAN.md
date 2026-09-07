@@ -1139,3 +1139,62 @@ Sebelum deploy fitur yang scan/proses SELURUH data existing (bukan cuma data bar
 - [x] `CI=true npm run build` sukses, semua test (27 frontend + 19 functions) PASS
 - [x] Deploy darurat: functions (`grandfatherPengembalianLpj` -- `Successful create operation`) + hosting, sukses 2026-09-07
 - [x] Super Admin klik "Selesaikan LPJ Lama (Pengembalian)" — **selesai & dikonfirmasi berhasil, lihat 28.4**
+
+---
+
+# BAGIAN S — Auth Custom Claims, Dependency Update, Konsolidasi Constant, Export PNG Rekapan (2026-09-07)
+
+## 29.1 Konteks
+
+Lanjutan dari rekomendasi jangka panjang (setelah Bagian Q/testing+CI): security model Storage Rules via Auth custom claims, sekaligus 3 item "utang teknis lama" yang disebut berulang di summary tapi tidak pernah dikerjakan.
+
+## 29.2 Auth Custom Claims untuk Role
+
+**Scope yang dikerjakan:** custom claim `role` di token Firebase Auth, dipakai Storage Rules untuk cek role TANPA `firestore.get()` (mekanisme yang terbukti tidak bekerja, lihat rollback Bagian K/21.8).
+
+**Scope yang SENGAJA TIDAK dikerjakan (dan kenapa):** custom claims cocok untuk ROLE (jarang berubah, aman ditaruh di token) tapi TIDAK cocok untuk KEPEMILIKAN PER-DOKUMEN (siapa boleh timpa lampiran BS/RBS/LPJ tertentu) -- itu terlalu dinamis untuk custom claims. Path `Reimbursement/`, `BonSementara/`, `LPJ/`, `lampiran_lpj/` di `storage.rules` TETAP `signedIn() && validPdfUpload()` (siapa pun yang login bisa upload asal tahu/menebak `displayId`) -- **ini masih lubang keamanan terbuka**, solusinya beda (upload lewat Cloud Function/Admin SDK yang validasi kepemilikan via query Firestore biasa, bukan lewat rules), belum dikerjakan di sesi ini, perlu keputusan/effort terpisah.
+
+**Implementasi:**
+- `functions/index.js`: `syncUserDirectoryOnWrite` (trigger yang sudah ada, jalan tiap `/users/{uid}` ditulis) diperluas set `getAuth().setCustomUserClaims(uid, { role })` sekaligus sinkronisasi `/userDirectory` seperti biasa. Kegagalan set claim di-catch terpisah supaya TIDAK menggagalkan sinkronisasi userDirectory (concern yang lebih kritikal).
+- `backfillCustomClaims` (onCall baru, Super Admin-only, idempotent, pakai `Promise.allSettled` biar 1 user gagal tidak menghentikan yang lain): migrasi retroaktif untuk user LAMA yang sudah ada sebelum trigger di atas live -- pola sama seperti `backfillUserDirectory`/`backfillDisplayIdOwners`.
+- `ManageUser.jsx`: tombol baru "Sinkronkan Role Token".
+- `storage.rules`: `isSuperAdminRole()` (baca `request.auth.token.role`, BUKAN Firestore) dipakai untuk kembalikan `announcements/` ke Super Admin-only (sempat dilonggarkan ke `signedIn()` saat rollback darurat Bagian K/21.8-21.9 karena cross-service check-nya rusak).
+
+**Keterbatasan yang perlu diketahui:** custom claims baru masuk ke token client setelah refresh (otomatis ~1 jam sekali, atau re-login) -- kalau Super Admin baru saja mengubah role seseorang, perubahan itu TIDAK langsung berlaku di sesi yang sedang aktif sampai token-nya refresh. Bukan bug, itu batasan bawaan mekanisme custom claims.
+
+## 29.3 Dependency Update
+
+`npm update` (frontend & functions) -- hanya bump minor/patch dalam rentang semver yang sudah dideklarasikan di `package.json` (TIDAK ada major version jump seperti React 19, react-router-dom 7, firebase 12, jsPDF 4, FontAwesome 7 -- semua itu butuh testing/migrasi terpisah, sengaja tidak disentuh). Total vulnerability Dependabot turun dari 248 ke ~50 gabungan frontend+functions.
+
+**Insiden kecil saat proses ini:** `npm update` di frontend menaikkan `typescript` (dependency transitif, sebelumnya tidak pernah dipin eksplisit, versi lama `4.9.5`) ke `7.0.2` -- versi yang tidak didukung `@typescript-eslint` bawaan `react-scripts`, bikin `npm run build` gagal total (`[eslint] Failed to load plugin 'jest'`). Ketahuan langsung dari build check sebelum sempat di-push/deploy. Fix: pin `typescript@4.9.5` eksplisit sebagai devDependency (project ini tidak pernah pakai TypeScript untuk source code, cuma dipakai tooling ESLint react-scripts di belakang layar, jadi versi lama sama sekali tidak berdampak fungsional).
+
+## 29.4 Konsolidasi `UNIT_CODES`/`BBM_PRICE_PER_LITER`
+
+Disarankan sejak Bagian 13 (13.5), disebut ulang di 15.10 & 21.6, tidak pernah dikerjakan. Sekarang: `src/constants/businessUnits.js`, `src/constants/bbmPrice.js` (baru).
+
+**Temuan penting selama konsolidasi (bukan bug, tapi nyaris jadi bug kalau tidak dicek):** `FormBs.jsx` pakai skema kode BEDA dari 5 form RBS/LPJ lain untuk 3 Unit Bisnis (`PT Makassar Jaya Samudera`, `PT Samudera Makassar Logistik`, `PT Kendari Jaya Samudera` -> BS: `019`/`035`/`083`, RBS/LPJ: `MJS`/`SML`/`KEJS`). Ini skema penomoran dokumen yang SENGAJA beda sejak awal per jenis dokumen (dipakai langsung di nomor BS/RBS/LPJ yang sudah jadi identitas dokumen). Kalau ini disatukan paksa jadi satu constant, nomor BS BARU untuk 3 unit itu akan tiba-tiba berubah format di tengah jalan (nomor lama tetap `019...`, nomor baru mendadak `MJS...`) -- membingungkan dan berpotensi bentrok sama asumsi lain yang mengandalkan format nomor BS. **Dipertahankan sebagai 2 constant terpisah** (`BS_UNIT_CODES` vs `RBS_LPJ_UNIT_CODES`), plus test regresi (`businessUnits.test.js`) yang akan gagal kalau ada yang mencoba menyatukannya lagi tanpa sadar.
+
+`BBM_PRICE_PER_LITER` ternyata konsisten nilainya di semua file (cuma subset key yang beda-beda sesuai `jenisOptions` tiap form) -- aman disatukan jadi 1 daftar lengkap tanpa temuan serupa.
+
+## 29.5 Export Tabel Rekapan ke PNG
+
+`RekapanUnitBisnis.jsx`: tombol "Export PNG" di atas tiap tabel kategori (termasuk 2 tabel BBM), pakai `html2canvas` (baru diinstall) untuk screenshot elemen tabel (bukan cuma data mentah -- termasuk styling header merah brand) jadi file PNG yang otomatis ke-download, nama file `Rekapan_{judul}_{tahun}.png`. Tombol export sendiri TIDAK ikut kefoto (ditaruh di luar elemen yang di-capture).
+
+## 29.6 Task Development — Bagian S
+
+- [x] `functions/index.js`: `syncUserDirectoryOnWrite` set custom claim `role`, tambah `backfillCustomClaims`
+- [x] `storage.rules`: `isSuperAdminRole()` (custom claims), `announcements/` kembali Super Admin-only
+- [x] `ManageUser.jsx`: tombol "Sinkronkan Role Token"
+- [x] `npm update` frontend & functions (minor/patch saja), turunkan vulnerability 248 -> ~50
+- [x] Pin `typescript@4.9.5` (fix regresi build dari `npm update`, ketahuan sebelum sempat di-push)
+- [x] `src/constants/businessUnits.js`, `bbmPrice.js` (baru) + konsolidasi 6 form, test regresi `businessUnits.test.js`
+- [x] Install `html2canvas`, tombol Export PNG di `RekapanUnitBisnis.jsx`
+- [x] `node -c` + isolated `require()` test functions sukses
+- [x] `firebase deploy --only functions --dry-run` sukses (juga konfirmasi warning "firebase-functions outdated" hilang setelah update)
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [x] Semua test PASS: 31 frontend + 19 functions
+- [ ] Deploy ke produksi (storage rules + functions + hosting)
+- [ ] Super Admin klik "Sinkronkan Role Token" di Manage Users setelah deploy (WAJIB, supaya `announcements/` yang sekarang Super Admin-only tidak memblokir Super Admin yang tokennya masih lama)
+- [ ] Tes manual: upload/hapus gambar pengumuman sebagai Super Admin (harus tetap berhasil), coba sebagai role lain (harus ditolak)
+- [ ] Tes manual: klik "Export PNG" di halaman Rekapan, pastikan file PNG ke-download dengan tampilan tabel yang benar (termasuk dark mode)
+- [ ] Tes manual: submit RBS/LPJ/BS baru, pastikan nomor dokumen BS untuk PT Makassar Jaya Samudera/Samudera Makassar Logistik/Kendari Jaya Samudera TETAP pakai kode lama (019/035/083), tidak berubah jadi MJS/SML/KEJS

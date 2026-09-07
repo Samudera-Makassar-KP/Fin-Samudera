@@ -490,7 +490,49 @@ exports.syncUserDirectoryOnWrite = onDocumentWritten("users/{uid}", async (event
         return;
     }
 
-    await directoryRef.set(buildUserDirectoryEntry(uid, event.data.after.data()));
+    const userData = event.data.after.data();
+    await directoryRef.set(buildUserDirectoryEntry(uid, userData));
+
+    // Custom claim `role` dipakai storage.rules (lihat isSuperAdminRole()) supaya
+    // tidak perlu firestore.get() dari Storage Rules -- mekanisme itu TERBUKTI
+    // tidak berfungsi di produksi (rollback darurat Bagian K/21.8). Token client
+    // baru bawa claim terbaru setelah refresh (otomatis tiap ~1 jam, atau re-login) --
+    // ini batasan bawaan custom claims, bukan bug. Kegagalan set claim TIDAK
+    // menggagalkan trigger ini (sinkronisasi userDirectory tetap harus jalan).
+    try {
+        await getAuth().setCustomUserClaims(uid, {
+            role: typeof userData?.role === "string" ? userData.role : null
+        });
+    } catch (error) {
+        console.error(`Gagal set custom claim role untuk ${uid}:`, error);
+    }
+});
+
+// Migrasi satu-kali (aman dipanggil berkali-kali) untuk mengisi custom claim
+// `role` di token Auth semua user LAMA -- trigger di atas hanya jalan untuk
+// write BARU ke /users, bukan retroaktif (pola sama seperti backfillUserDirectory).
+// Dipakai lewat tombol di Manage Users setelah fitur ini live.
+exports.backfillCustomClaims = onCall(async (request) => {
+    await requireSuperAdmin(request.auth);
+
+    const usersSnapshot = await db.collection("users").get();
+
+    const results = await Promise.allSettled(
+        usersSnapshot.docs.map((userDoc) => {
+            const data = userDoc.data();
+            return getAuth().setCustomUserClaims(userDoc.id, {
+                role: typeof data?.role === "string" ? data.role : null
+            });
+        })
+    );
+
+    const updated = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - updated;
+    if (failed > 0) {
+        console.error(`backfillCustomClaims: ${failed} user gagal di-set claim-nya.`);
+    }
+
+    return { updated, failed };
 });
 
 // Migrasi satu-kali untuk user LAMA yang sudah ada sebelum trigger di atas

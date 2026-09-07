@@ -178,6 +178,27 @@ const ManageUser = () => {
         }
     }
 
+    // Migrasi satu-kali (aman diklik berkali-kali) untuk mengisi custom claim
+    // `role` di token Auth semua user LAMA -- trigger syncUserDirectoryOnWrite
+    // cuma jalan untuk write BARU ke /users, bukan retroaktif. Tanpa ini,
+    // storage.rules (isSuperAdminRole()) menganggap user lama TIDAK punya role
+    // apapun di token-nya sampai dokumen /users mereka ditulis ulang. Lihat
+    // backfillCustomClaims di functions/index.js.
+    const [isSyncingClaims, setIsSyncingClaims] = useState(false)
+    const handleSyncClaims = async () => {
+        setIsSyncingClaims(true)
+        try {
+            const backfillCustomClaims = httpsCallable(functions, 'backfillCustomClaims')
+            const result = await backfillCustomClaims()
+            toast.success(`Role di token disinkronkan (${result.data?.updated ?? 0} user${result.data?.failed ? `, ${result.data.failed} gagal` : ''})`)
+        } catch (error) {
+            console.error('Error syncing custom claims:', error)
+            toast.error('Gagal menyinkronkan role di token')
+        } finally {
+            setIsSyncingClaims(false)
+        }
+    }
+
     // Migrasi darurat SATU KALI (insiden 2026-09-07): sendPengembalianReminders
     // diterapkan retroaktif ke SEMUA LPJ lama yang punya sisaLebih>0, bukan cuma
     // LPJ baru -- run pertama scheduler langsung mengirim email reminder beruntun
@@ -364,6 +385,14 @@ const ManageUser = () => {
                         className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
                     >
                         {isSyncingOwnership ? 'Menyinkronkan...' : 'Sinkronkan Kepemilikan Dokumen'}
+                    </button>
+                    <button
+                        onClick={handleSyncClaims}
+                        disabled={isSyncingClaims}
+                        title="Isi ulang custom claim role di token Auth dari data /users -- jalankan sekali setelah deploy fitur ini, aman diklik berkali-kali"
+                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                    >
+                        {isSyncingClaims ? 'Menyinkronkan...' : 'Sinkronkan Role Token'}
                     </button>
                     <button
                         onClick={handleGrandfatherPengembalian}

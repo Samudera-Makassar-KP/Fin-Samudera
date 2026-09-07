@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
 import Select from 'react-select'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import html2canvas from 'html2canvas'
+import { toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faDownload } from '@fortawesome/free-solid-svg-icons'
 import { db } from '../firebaseConfig'
 import { useTheme } from '../context/ThemeContext'
 import {
@@ -67,6 +72,42 @@ const RekapanUnitBisnis = () => {
     const [isDataLoading, setIsDataLoading] = useState(true)
     const [reimbursementDocs, setReimbursementDocs] = useState([])
     const [lpjDocs, setLpjDocs] = useState([])
+
+    // Ref per tabel (keyed by title) untuk export PNG -- diisi lewat callback
+    // ref di elemen wrapper masing-masing tabel di renderCategoryTable/renderBbmLiterTable.
+    const tableRefs = useRef({})
+    const [exportingTitle, setExportingTitle] = useState(null)
+
+    const handleExportPng = async (title) => {
+        const el = tableRefs.current[title]
+        if (!el) return
+
+        setExportingTitle(title)
+        try {
+            const canvas = await html2canvas(el, {
+                backgroundColor: isDark ? '#1f2937' : '#ffffff',
+                scale: 2
+            })
+
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+            if (!blob) throw new Error('Gagal membuat file PNG')
+
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            const safeName = title.replace(/[^a-zA-Z0-9]+/g, '_')
+            link.href = url
+            link.download = `Rekapan_${safeName}_${selectedYear?.value || ''}.png`
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            URL.revokeObjectURL(url)
+        } catch (error) {
+            console.error('Gagal export tabel ke PNG:', error)
+            toast.error('Gagal export tabel ke PNG')
+        } finally {
+            setExportingTitle(null)
+        }
+    }
 
     // 1. Ambil role & unit user login (pola sama seperti FormBs.jsx)
     useEffect(() => {
@@ -222,57 +263,89 @@ const RekapanUnitBisnis = () => {
     const renderCategoryTable = (title, rowsData) => {
         // rowsData: { [unit]: number[12] }
         return (
-            <div key={title} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden mb-6">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                        <thead>
-                            <tr style={{ backgroundColor: '#ED1C24' }}>
-                                <th colSpan={14} className="py-2 px-4 text-white text-left font-semibold">
-                                    {title}
-                                </th>
-                            </tr>
-                            <tr style={{ backgroundColor: '#ED1C24' }}>
-                                <th className="py-2 px-4 text-white text-left font-medium min-w-[220px]">Unit Bisnis</th>
-                                {MONTH_LABELS.map((m) => (
-                                    <th key={m} className="py-2 px-2 text-white text-center font-medium">{m}</th>
-                                ))}
-                                <th className="py-2 px-3 text-white text-center font-medium">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {displayUnits.map((unit, idx) => {
-                                const months = rowsData[unit] || Array(12).fill(0)
-                                return (
-                                    <tr key={unit} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}>
-                                        <td className="py-2 px-4 text-gray-800 dark:text-gray-100 whitespace-nowrap">{getUnitLabel(unit)}</td>
-                                        {months.map((val, i) => (
-                                            <td key={i} className="py-2 px-2 text-right text-gray-700 dark:text-gray-200">
-                                                {val ? val.toLocaleString('id-ID') : '-'}
+            <div key={title} className="mb-6">
+                <div className="flex justify-end mb-2">
+                    <button
+                        type="button"
+                        onClick={() => handleExportPng(title)}
+                        disabled={exportingTitle === title}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    >
+                        <FontAwesomeIcon icon={faDownload} />
+                        {exportingTitle === title ? 'Mengekspor...' : 'Export PNG'}
+                    </button>
+                </div>
+                <div
+                    ref={(el) => { tableRefs.current[title] = el }}
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden"
+                >
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-collapse">
+                            <thead>
+                                <tr style={{ backgroundColor: '#ED1C24' }}>
+                                    <th colSpan={14} className="py-2 px-4 text-white text-left font-semibold">
+                                        {title}
+                                    </th>
+                                </tr>
+                                <tr style={{ backgroundColor: '#ED1C24' }}>
+                                    <th className="py-2 px-4 text-white text-left font-medium min-w-[220px]">Unit Bisnis</th>
+                                    {MONTH_LABELS.map((m) => (
+                                        <th key={m} className="py-2 px-2 text-white text-center font-medium">{m}</th>
+                                    ))}
+                                    <th className="py-2 px-3 text-white text-center font-medium">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {displayUnits.map((unit, idx) => {
+                                    const months = rowsData[unit] || Array(12).fill(0)
+                                    return (
+                                        <tr key={unit} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}>
+                                            <td className="py-2 px-4 text-gray-800 dark:text-gray-100 whitespace-nowrap">{getUnitLabel(unit)}</td>
+                                            {months.map((val, i) => (
+                                                <td key={i} className="py-2 px-2 text-right text-gray-700 dark:text-gray-200">
+                                                    {val ? val.toLocaleString('id-ID') : '-'}
+                                                </td>
+                                            ))}
+                                            <td className="py-2 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
+                                                {sumMonths(months).toLocaleString('id-ID')}
                                             </td>
-                                        ))}
-                                        <td className="py-2 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
-                                            {sumMonths(months).toLocaleString('id-ID')}
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         )
     }
 
     const renderBbmLiterTable = () => {
+        const title = 'BBM -- Liter per Plat Nomor'
         const plats = Object.keys(bbmData.byPlat).sort()
         return (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden mb-6">
+            <div className="mb-6">
+                <div className="flex justify-end mb-2">
+                    <button
+                        type="button"
+                        onClick={() => handleExportPng(title)}
+                        disabled={exportingTitle === title}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                    >
+                        <FontAwesomeIcon icon={faDownload} />
+                        {exportingTitle === title ? 'Mengekspor...' : 'Export PNG'}
+                    </button>
+                </div>
+                <div
+                    ref={(el) => { tableRefs.current[title] = el }}
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden"
+                >
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm border-collapse">
                         <thead>
                             <tr style={{ backgroundColor: '#ED1C24' }}>
                                 <th colSpan={14} className="py-2 px-4 text-white text-left font-semibold">
-                                    BBM -- Liter per Plat Nomor
+                                    {title}
                                 </th>
                             </tr>
                             <tr style={{ backgroundColor: '#ED1C24' }}>
@@ -306,6 +379,7 @@ const RekapanUnitBisnis = () => {
                             ))}
                         </tbody>
                     </table>
+                </div>
                 </div>
             </div>
         )

@@ -6,6 +6,17 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // Custom claim `role` di-set server-side lewat Admin SDK (functions/index.js,
+    // syncUserDirectoryOnWrite) setiap kali /users/{uid} ditulis -- BUKAN
+    // firestore.get() dari dalam rules ini (mekanisme itu TERBUKTI tidak
+    // berfungsi di produksi, lihat catatan ROLLBACK DARURAT di bawah). Token
+    // client baru bawa claim terbaru setelah refresh (otomatis ~1 jam sekali,
+    // atau re-login) -- kalau baru saja naik jadi Super Admin dan rule ini
+    // belum "melihatnya", itu batasan bawaan custom claims, bukan bug.
+    function isSuperAdminRole() {
+      return signedIn() && request.auth.token.role == 'Super Admin';
+    }
+
     function validPdfUpload() {
       return request.resource != null
         && request.resource.size > 0
@@ -42,10 +53,17 @@ service firebase.storage {
     // signedIn() sederhana (sama seperti sebelum Bagian K) supaya aplikasi
     // berfungsi normal lagi. Validasi tipe/ukuran file (request.resource,
     // TIDAK butuh cross-service) tetap dipertahankan karena itu terbukti jalan.
-    // Perlindungan kepemilikan berbasis path/role perlu didesain ulang pakai
-    // mekanisme yang tidak bergantung ke firestore.get() dari Storage Rules
-    // (mis. custom claims di Firebase Auth token, atau upload lewat Cloud
-    // Function/Admin SDK, bukan langsung dari client) -- lihat SUMMARY_PENGEMBANGAN.md.
+    // Perlindungan ROLE (siapa Super Admin dkk) sudah diperbaiki pakai custom
+    // claims (isSuperAdminRole() di atas, lihat pemakaiannya di announcements/).
+    // Perlindungan KEPEMILIKAN per-dokumen (siapa boleh timpa lampiran/PDF
+    // path INI) untuk path di bawah (Reimbursement/BonSementara/LPJ/
+    // lampiran_lpj) MASIH belum diperbaiki -- custom claims cocok untuk role
+    // (jarang berubah, cocok ditaruh di token) tapi TIDAK cocok untuk
+    // kepemilikan per-dokumen (terlalu dinamis). Opsi yang masih perlu
+    // dikerjakan: upload lampiran lewat Cloud Function (Admin SDK) yang
+    // validasi kepemilikan via query Firestore biasa (BUKAN cross-service,
+    // terbukti selalu bekerja) sebelum menulis ke Storage -- lihat
+    // SUMMARY_PENGEMBANGAN.md Bagian S untuk detail rencana.
     match /Reimbursement/{allPaths=**} {
       allow read: if signedIn();
       allow write: if signedIn() && validPdfUpload();
@@ -71,14 +89,15 @@ service firebase.storage {
       allow write: if signedIn() && validPdfOrImageUpload();
     }
 
-    // Gambar pengumuman -- sama seperti di atas, tidak lagi bergantung ke
-    // firestore.get() cross-service (isSuperAdminRole) karena terbukti tidak
-    // bekerja. Sementara dibuka untuk signedIn() (sama level trust seperti
-    // path lain), validasi tipe/ukuran gambar tetap jalan.
+    // Gambar pengumuman -- dulu dibatasi Super Admin lewat firestore.get()
+    // cross-service (Bagian K/21.7), terbukti tidak bekerja, sempat dibuka
+    // sementara ke signedIn() saja (rollback darurat). Sekarang dikembalikan
+    // ke Super Admin-only pakai custom claim role (isSuperAdminRole() di atas),
+    // yang TIDAK bergantung ke firestore.get() dari dalam rules.
     match /announcements/{fileName} {
       allow read: if signedIn();
-      allow write: if signedIn() && validImageUpload();
-      allow delete: if signedIn();
+      allow write: if isSuperAdminRole() && validImageUpload();
+      allow delete: if isSuperAdminRole();
     }
 
     match /{allPaths=**} {
