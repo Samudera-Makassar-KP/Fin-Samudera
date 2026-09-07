@@ -1281,7 +1281,7 @@ Setelah Bagian T live & roster diisi, user melaporkan hasilnya **salah**: "ada b
 - [x] Test diupdate total: `rekapanAggregation.test.js` (14 test, model baru), `rekapanSharing.test.js` (4 test, `applySharingToBbmTotals` test dihapus)
 - [x] `CI=true npm run build` sukses (termasuk fix lint palsu: fungsi `useDefaultPoolSplit` di-rename `applyDefaultPoolSplit` karena ESLint react-hooks salah kira nama diawali "use" itu Hook)
 - [x] Semua test PASS: 49 frontend
-- [ ] Deploy ke produksi (firestore rules + hosting)
+- [x] Deploy ke produksi — firestore rules (compiled successfully) + hosting, sukses 2026-09-07
 - [ ] Admin mulai kurasi baris BBM lewat panel "Kelola Sharing BBM" -- tabel Rekapan BBM akan tampil 100% ke unit pengaju (belum ada yang dibagi) sampai baris-baris relevan ditandai manual
 - [ ] Tes manual: tandai 1 baris BBM MJS sebagai "dibagi" (pool default), konfirmasi tabel "BBM -- Total Biaya" MJS berkurang sejumlah baris itu & unit lain bertambah proporsional -- baris BBM MJS LAIN yang tidak ditandai tetap 100% di MJS
 - [ ] Tes manual: custom split 1 baris (mis. cuma ke 2 unit spesifik), konfirmasi split-nya BEDA dari baris lain yang pakai pool default
