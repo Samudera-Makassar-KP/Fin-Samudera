@@ -688,10 +688,10 @@ const DetailLpj = () => {
                     <div className="mt-6 p-4 border border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 rounded-md">
                         <p className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Bukti Pengembalian Dana</p>
 
-                        {lpjDetail?.pengembalianStatus === 'valid' ? (
-                            <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                        {lpjDetail?.pengembalianStatus === 'valid' || lpjDetail?.pengembalianStatus === 'grandfathered' ? (
+                            <div className={`flex items-center gap-2 ${lpjDetail.pengembalianStatus === 'valid' ? 'text-green-700 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
                                 <FontAwesomeIcon icon={faCheckCircle} />
-                                <span>Tervalidasi sesuai nominal pengembalian</span>
+                                <span>{describePengembalianStatus(lpjDetail.pengembalianStatus).label}</span>
                                 {lpjDetail?.pengembalianBuktiUrl && (
                                     <button
                                         type="button"

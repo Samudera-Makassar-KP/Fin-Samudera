@@ -178,6 +178,30 @@ const ManageUser = () => {
         }
     }
 
+    // Migrasi darurat SATU KALI (insiden 2026-09-07): sendPengembalianReminders
+    // diterapkan retroaktif ke SEMUA LPJ lama yang punya sisaLebih>0, bukan cuma
+    // LPJ baru -- run pertama scheduler langsung mengirim email reminder beruntun
+    // untuk ratusan LPJ lama sekaligus ("bom email") karena baseline-nya
+    // tanggalPengajuan yang sudah lama lewat. Tombol ini menandai LPJ LAMA
+    // (cutoff tanggal tetap di kode functions/index.js, BUKAN "sekarang" --
+    // supaya aman diklik kapan pun tanpa ikut menghapus reminder LPJ baru yang
+    // genuinely belum upload) sebagai selesai TANPA lampiran asli karena bukti
+    // lama sudah tidak realistis dicari. Lihat grandfatherPengembalianLpj.
+    const [isGrandfatheringPengembalian, setIsGrandfatheringPengembalian] = useState(false)
+    const handleGrandfatherPengembalian = async () => {
+        setIsGrandfatheringPengembalian(true)
+        try {
+            const grandfatherPengembalianLpj = httpsCallable(functions, 'grandfatherPengembalianLpj')
+            const result = await grandfatherPengembalianLpj()
+            toast.success(`${result.data?.updated ?? 0} LPJ lama ditandai selesai, reminder berhenti`)
+        } catch (error) {
+            console.error('Error grandfathering pengembalian LPJ:', error)
+            toast.error('Gagal menandai LPJ lama selesai')
+        } finally {
+            setIsGrandfatheringPengembalian(false)
+        }
+    }
+
     // Fungsi untuk menangani input pencarian
     const handleSearch = (event) => {
         setSearchTerm(event.target.value)
@@ -340,6 +364,14 @@ const ManageUser = () => {
                         className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
                     >
                         {isSyncingOwnership ? 'Menyinkronkan...' : 'Sinkronkan Kepemilikan Dokumen'}
+                    </button>
+                    <button
+                        onClick={handleGrandfatherPengembalian}
+                        disabled={isGrandfatheringPengembalian}
+                        title="Tandai selesai LPJ lama (sisaLebih>0, diajukan sebelum fitur validasi pengembalian aktif) supaya reminder email berhenti -- klik SEKARANG untuk stop bom email"
+                        className="px-4 py-2 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60 flex-none"
+                    >
+                        {isGrandfatheringPengembalian ? 'Memproses...' : 'Selesaikan LPJ Lama (Pengembalian)'}
                     </button>
                 </div>
             </div>

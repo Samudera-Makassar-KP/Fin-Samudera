@@ -1558,7 +1558,12 @@ const PENGEMBALIAN_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // 2 hari
 
 // Reminder email berkala (tiap 2 hari, mulai 2 hari sejak LPJ diajukan) untuk LPJ
 // yang punya sisaLebih (BS ada pengembalian ke perusahaan) tapi buktinya belum
-// diupload/belum valid. Berhenti otomatis begitu pengembalianStatus == 'valid'.
+// diupload/belum valid. Berhenti otomatis begitu pengembalianStatus == 'valid'
+// ATAU 'grandfathered' (lihat grandfatherPengembalianLpj di bawah -- insiden
+// 2026-09-07: fitur ini diterapkan retroaktif ke SEMUA LPJ lama yang punya
+// sisaLebih, bukan cuma LPJ baru, jadi run pertama scheduler ini langsung
+// menganggap ratusan LPJ lama "jatuh tempo" sekaligus dan mengirim email
+// beruntun ke user yang sama -- lihat SUMMARY_PENGEMBANGAN.md Bagian R).
 // Terpisah dari sendApprovalReminders() karena beda concern (bukti pengembalian,
 // bukan approval) meski keduanya jalan harian.
 exports.sendPengembalianReminders = onSchedule({
@@ -1578,7 +1583,7 @@ exports.sendPengembalianReminders = onSchedule({
     for (const docSnap of querySnapshot.docs) {
         const data = docSnap.data();
 
-        if (data.pengembalianStatus === "valid") continue;
+        if (data.pengembalianStatus === "valid" || data.pengembalianStatus === "grandfathered") continue;
         if (!data.user?.uid) continue;
 
         const lastReminderAt = data.pengembalianLastReminderAt
@@ -1628,4 +1633,59 @@ exports.sendPengembalianReminders = onSchedule({
     }
 
     console.log("✅ Selesai pengecekan bukti pengembalian LPJ.");
+});
+
+// INSIDEN 2026-09-07: sendPengembalianReminders() di atas menerapkan aturan
+// bukti pengembalian ke SEMUA LPJ lama yang punya sisaLebih>0 (bukan cuma LPJ
+// baru sejak fitur ini live) -- run pertama scheduler langsung menganggap
+// SEMUA LPJ lama "jatuh tempo" sekaligus (baseline = tanggalPengajuan yang
+// sudah lama lewat), mengirim email reminder beruntun ke user yang sama
+// dalam hitungan menit ("bom email"). Mencari bukti pengembalian yang lama
+// terlewat sudah tidak realistis, jadi migrasi ini menandai LPJ LAMA (sampai
+// batas waktu tetap di bawah, BUKAN "sekarang" -- supaya fungsi ini AMAN
+// dijalankan ulang kapan pun tanpa ikut menghapus reminder LPJ baru yang
+// genuinely belum upload) sebagai selesai TANPA lampiran asli, ditandai jelas
+// beda dari validasi OCR sungguhan (status 'grandfathered', bukan 'valid') --
+// lihat describePengembalianStatus di pengembalianStatus.js untuk labelnya.
+const PENGEMBALIAN_GRANDFATHER_CUTOFF = "2026-09-07T23:59:59+08:00";
+
+exports.grandfatherPengembalianLpj = onCall(async (request) => {
+    await requireSuperAdmin(request.auth);
+
+    const cutoff = new Date(PENGEMBALIAN_GRANDFATHER_CUTOFF);
+    const querySnapshot = await db.collection("lpj")
+        .where("sisaLebih", ">", 0)
+        .get();
+
+    const refsToUpdate = [];
+    for (const docSnap of querySnapshot.docs) {
+        const data = docSnap.data();
+        if (data.pengembalianStatus === "valid" || data.pengembalianStatus === "grandfathered") continue;
+
+        const createdAt = new Date(data.createdAt || data.tanggalPengajuan);
+        if (isNaN(createdAt.getTime()) || createdAt > cutoff) continue;
+
+        refsToUpdate.push(docSnap.ref);
+    }
+
+    const chunks = [];
+    for (let i = 0; i < refsToUpdate.length; i += 400) {
+        chunks.push(refsToUpdate.slice(i, i + 400));
+    }
+
+    let updated = 0;
+    for (const chunk of chunks) {
+        const batch = db.batch();
+        chunk.forEach((ref) => {
+            batch.update(ref, {
+                pengembalianStatus: "grandfathered",
+                pengembalianValidationNote: "Ditandai selesai otomatis (migrasi 2026-09-07) -- LPJ diajukan sebelum fitur validasi bukti pengembalian aktif, bukti lama tidak realistis dicari ulang.",
+                pengembalianGrandfatheredAt: new Date().toISOString()
+            });
+        });
+        await batch.commit();
+        updated += chunk.length;
+    }
+
+    return { updated };
 });

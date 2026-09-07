@@ -12,6 +12,10 @@ describe('describePengembalianStatus', () => {
         })
     })
 
+    test('status grandfathered (migrasi LPJ lama) -> tone neutral, bukan success', () => {
+        expect(describePengembalianStatus('grandfathered').tone).toBe('neutral')
+    })
+
     test('status tidak_sesuai -> tone warning', () => {
         expect(describePengembalianStatus('tidak_sesuai').tone).toBe('warning')
     })

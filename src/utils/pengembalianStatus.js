@@ -6,6 +6,8 @@ export const describePengembalianStatus = (status) => {
     switch (status) {
         case 'valid':
             return { label: 'Bukti pengembalian tervalidasi', tone: 'success' }
+        case 'grandfathered':
+            return { label: 'LPJ lama, ditandai selesai (sebelum fitur validasi aktif)', tone: 'neutral' }
         case 'tidak_sesuai':
             return { label: 'Nominal di bukti tidak sesuai, silakan upload ulang', tone: 'warning' }
         case 'gagal_baca':
