@@ -17,7 +17,7 @@ import {
     aggregateBbm,
     listBbmLineItems
 } from '../utils/rekapanAggregation'
-import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares } from '../constants/rekapanSharing'
+import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from '../constants/rekapanSharing'
 
 // Sama seperti BUSINESS_UNITS di FormBs.jsx -- daftar semua Unit Bisnis untuk opsi
 // dropdown Admin/Super Admin ("Semua Unit Bisnis" melihat seluruhnya sekaligus).
@@ -245,6 +245,7 @@ const RekapanUnitBisnis = () => {
     const [showReviewedItems, setShowReviewedItems] = useState(false)
     const [customEditKey, setCustomEditKey] = useState(null)
     const [customEditDraft, setCustomEditDraft] = useState({})
+    const [customEditIncluded, setCustomEditIncluded] = useState({})
     const [savingItemKey, setSavingItemKey] = useState(null)
     const [sharingPage, setSharingPage] = useState(1)
     const SHARING_PAGE_SIZE = 25
@@ -304,18 +305,41 @@ const RekapanUnitBisnis = () => {
 
     const openCustomEditor = (item) => {
         const current = sharingClassification[item.key]
+        const existingShares = current?.customShares
+
+        const included = {}
+        SHARING_UNITS.forEach((u) => {
+            // Kalau baris ini sebelumnya belum punya custom split (baru mau
+            // dibuat), default centang SEMUA unit (sama seperti pool default) --
+            // Admin tinggal uncheck yang tidak relevan. Kalau sudah punya custom
+            // split, sertakan yang persentasenya sudah > 0 saja.
+            included[u.code] = existingShares ? (existingShares[u.name] || 0) > 0 : true
+        })
+        setCustomEditIncluded(included)
+
         const draft = {}
         SHARING_UNITS.forEach((u) => {
-            draft[u.code] = String(current?.customShares?.[u.name] ?? defaultPoolShares[u.name] ?? 0)
+            draft[u.code] = String(existingShares?.[u.name] ?? defaultPoolShares[u.name] ?? 0)
         })
         setCustomEditDraft(draft)
         setCustomEditKey(item.key)
     }
 
+    const toggleCustomInclude = (code) => {
+        setCustomEditIncluded((prev) => {
+            const next = { ...prev, [code]: !prev[code] }
+            const percentages = computeProportionalSplit(next, defaultPoolShares)
+            const draft = {}
+            SHARING_UNITS.forEach((u) => { draft[u.code] = String(percentages[u.code]) })
+            setCustomEditDraft(draft)
+            return next
+        })
+    }
+
     const saveCustomSplit = async (item) => {
         const customShares = {}
         SHARING_UNITS.forEach((u) => {
-            customShares[u.name] = Number(customEditDraft[u.code]) || 0
+            customShares[u.name] = customEditIncluded[u.code] ? (Number(customEditDraft[u.code]) || 0) : 0
         })
         await saveClassification(item.key, { dibagi: true, dikecualikan: false, splitMode: 'custom', customShares })
         setCustomEditKey(null)
@@ -398,20 +422,33 @@ const RekapanUnitBisnis = () => {
                 {isEditingCustom && (
                     <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
                         <td colSpan={7} className="px-3 py-3">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                Centang Unit Bisnis tujuan -- persentase terisi otomatis proporsional (bisa diedit manual kalau perlu).
+                            </p>
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                 {SHARING_UNITS.map((u) => (
-                                    <div key={u.code}>
-                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                    <div key={u.code} className="border dark:border-gray-600 rounded-md p-2">
+                                        <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 mb-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(customEditIncluded[u.code])}
+                                                onChange={() => toggleCustomInclude(u.code)}
+                                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                            />
                                             {u.code}
                                         </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={customEditDraft[u.code] || ''}
-                                            onChange={(e) => setCustomEditDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
-                                            className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                                        />
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                disabled={!customEditIncluded[u.code]}
+                                                value={customEditDraft[u.code] || ''}
+                                                onChange={(e) => setCustomEditDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
+                                                className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            />
+                                            <span className="text-xs text-gray-400">%</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

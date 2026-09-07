@@ -1375,3 +1375,27 @@ Modal pakai `renderClassificationRow` yang sama -- Admin bisa langsung ubah Stat
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-07, diverifikasi teks "Rincian Transaksi" ada di bundle live
 - [ ] Tes manual: klik sel Biaya di tabel BBM Total (per unit), modal muncul dengan transaksi yang benar, ubah status salah satu, konfirmasi tabel di belakang modal ikut update setelah modal ditutup
 - [ ] Tes manual: klik sel di tabel per Plat Nomor, konfirmasi transaksi yang muncul sesuai plat & bulan yang diklik
+
+---
+
+# BAGIAN Y — Split Custom Pakai Checkbox Unit (Bukan Ketik 9 Angka Manual) (2026-09-07)
+
+## 35.1 Permintaan User
+
+Editor "Split Custom" yang ada (9 kotak angka persentase per unit) dianggap merepotkan -- user minta cara pilih unit tujuan lewat semacam dropdown/checkbox, tidak perlu ketik angka manual satu-satu.
+
+## 35.2 Implementasi
+
+`computeProportionalSplit(includedMap, defaultPoolShares)` (baru, `rekapanSharing.js`, fungsi murni): hitung ULANG persentase pool "All Employee" tapi cuma di antara unit yang `includedMap` true, dinormalisasi supaya yang dicentang tetap total 100%. Fallback bagi rata kalau semua unit yang dicentang kebetulan berbobot 0 di pool (headcount kosong).
+
+Editor split custom sekarang: tiap unit dapat CHECKBOX (bukan cuma kotak angka) -- centang untuk sertakan, persentase terisi OTOMATIS proporsional sesuai rasio pool. Kotak angka tetap ada & tetap bisa diedit manual kalau user mau override persentase persis (checkbox cuma mempercepat kasus umum "unit ini ikut, unit itu tidak", bukan menggantikan kontrol manual sepenuhnya). Default saat editor dibuka: baris yang belum pernah punya custom split -> semua unit tercentang (setara pool default, user tinggal uncheck yang tidak relevan); baris yang sudah punya custom split -> unit yang persentasenya >0 saja yang tercentang.
+
+## 35.3 Task Development — Bagian Y
+
+- [x] `rekapanSharing.js`: `computeProportionalSplit()` baru (fungsi murni)
+- [x] `RekapanUnitBisnis.jsx`: state `customEditIncluded`, `toggleCustomInclude()`, checkbox per unit di editor split custom
+- [x] Test baru: 5 test `computeProportionalSplit` (proporsional, exclude, kosong, fallback bagi rata, single unit)
+- [x] `CI=true npm run build` sukses
+- [x] Semua test PASS: 61 frontend
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: buka "Atur Split" di salah satu baris, uncheck beberapa unit, konfirmasi persentase yang tersisa otomatis re-normalisasi ke 100%

@@ -1,4 +1,4 @@
-import { SHARING_UNITS, MJS_UNIT_NAME, computeAllEmployeeShares } from './rekapanSharing'
+import { SHARING_UNITS, MJS_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from './rekapanSharing'
 
 // Angka headcount dari contoh perhitungan user (tabel screenshot) --
 // totalnya 107 orang, dipakai untuk verifikasi computeAllEmployeeShares
@@ -45,6 +45,51 @@ describe('computeAllEmployeeShares', () => {
         const shares = computeAllEmployeeShares({ MJS: Array(10).fill('x') })
         expect(shares[MJS_UNIT_NAME]).toBe(100)
         expect(shares['PT Samudera Agencies Indonesia']).toBe(0)
+    })
+})
+
+describe('computeProportionalSplit', () => {
+    const defaultPoolShares = computeAllEmployeeShares({
+        MKT: Array(11).fill('x'),
+        SAG: Array(12).fill('x'),
+        SP: Array(12).fill('x'),
+        SKI: Array(12).fill('x'),
+        MJS: Array(13).fill('x'),
+        SML: Array(14).fill('x'),
+        KEJS: Array(11).fill('x'),
+        SKEL: Array(11).fill('x'),
+        PPNP: Array(11).fill('x')
+    })
+
+    test('unit yang dicentang displit proporsional sesuai bobot pool, dinormalisasi ke 100%', () => {
+        // MJS(12) & SML(13) dari pool -- proporsi 12:13 dinormalisasi jadi 100%
+        const result = computeProportionalSplit({ MJS: true, SML: true }, defaultPoolShares)
+        expect(result.MJS + result.SML).toBe(100)
+        expect(result.SML).toBeGreaterThan(result.MJS) // SML bobot pool lebih besar
+    })
+
+    test('unit yang TIDAK dicentang selalu 0', () => {
+        const result = computeProportionalSplit({ MJS: true }, defaultPoolShares)
+        expect(result.MJS).toBe(100)
+        SHARING_UNITS.filter((u) => u.code !== 'MJS').forEach((u) => {
+            expect(result[u.code]).toBe(0)
+        })
+    })
+
+    test('tidak ada unit dicentang -> semua 0', () => {
+        const result = computeProportionalSplit({}, defaultPoolShares)
+        SHARING_UNITS.forEach((u) => expect(result[u.code]).toBe(0))
+    })
+
+    test('fallback bagi rata kalau unit yang dicentang bobot pool-nya 0', () => {
+        const result = computeProportionalSplit({ MJS: true, SML: true }, {})
+        expect(result.MJS).toBe(50)
+        expect(result.SML).toBe(50)
+    })
+
+    test('centang 1 unit saja -> unit itu dapat 100%', () => {
+        const result = computeProportionalSplit({ [SHARING_UNITS[0].code]: true }, defaultPoolShares)
+        expect(result[SHARING_UNITS[0].code]).toBe(100)
     })
 })
 

@@ -52,3 +52,27 @@ export function computeAllEmployeeShares(headcountByCode) {
     })
     return shares
 }
+
+// Dipakai editor "Split Custom" (Bagian Y, RekapanUnitBisnis.jsx): Admin
+// centang unit tujuan lewat checkbox (bukan ketik 9 angka manual) -- fungsi
+// ini menghitung ULANG persentase pool "All Employee" TAPI cuma di antara
+// unit yang dicentang (`includedMap`: { [code]: boolean }), dinormalisasi
+// supaya yang dicentang tetap total 100%. Kalau unit yang dicentang kebetulan
+// semua berbobot 0 di pool (headcount kosong), fallback ke bagi rata.
+export function computeProportionalSplit(includedMap, defaultPoolShares) {
+    const includedUnits = SHARING_UNITS.filter((u) => includedMap?.[u.code])
+    const draft = {}
+    SHARING_UNITS.forEach((u) => { draft[u.code] = 0 })
+    if (includedUnits.length === 0) return draft
+
+    const totalWeight = includedUnits.reduce((sum, u) => sum + (defaultPoolShares?.[u.name] || 0), 0)
+    if (totalWeight > 0) {
+        includedUnits.forEach((u) => {
+            draft[u.code] = Math.round(((defaultPoolShares[u.name] || 0) / totalWeight) * 100)
+        })
+    } else {
+        const equalPct = Math.round(100 / includedUnits.length)
+        includedUnits.forEach((u) => { draft[u.code] = equalPct })
+    }
+    return draft
+}
