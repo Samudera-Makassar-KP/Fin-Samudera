@@ -1397,5 +1397,5 @@ Editor split custom sekarang: tiap unit dapat CHECKBOX (bukan cuma kotak angka) 
 - [x] Test baru: 5 test `computeProportionalSplit` (proporsional, exclude, kosong, fallback bagi rata, single unit)
 - [x] `CI=true npm run build` sukses
 - [x] Semua test PASS: 61 frontend
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-07, diverifikasi teks "Centang Unit Bisnis tujuan" ada di bundle live
 - [ ] Tes manual: buka "Atur Split" di salah satu baris, uncheck beberapa unit, konfirmasi persentase yang tersisa otomatis re-normalisasi ke 100%
