@@ -1,7 +1,11 @@
-// Konfigurasi & logic murni untuk sharing biaya BBM dari PT Makassar Jaya
-// Samudera (MJS, "menalangi" BBM lebih dulu) ke unit lain, berbasis persentase
-// jumlah karyawan ("pool All Employee") -- lihat SUMMARY_PENGEMBANGAN.md
-// Bagian T untuk konteks lengkap & contoh perhitungan dari user.
+// Konfigurasi & logic murni untuk sharing biaya BBM -- dari unit yang
+// menalangi lebih dulu (mis. PT Makassar Jaya Samudera/MJS) ke unit lain,
+// berbasis persentase jumlah karyawan ("pool All Employee"). Sejak Bagian U,
+// sharing TIDAK lagi otomatis-blanket untuk semua BBM 1 unit -- Admin/Super
+// Admin menandai MANUAL per baris/transaksi BBM mana yang benar dibagi (lihat
+// src/constants/rekapanBbmSharing.js untuk penentuan per-baris) -- file ini
+// cuma menyediakan angka pool DEFAULT (bisa dipakai apa adanya atau di-override
+// custom per baris). Lihat SUMMARY_PENGEMBANGAN.md Bagian T & U untuk konteks.
 //
 // 9 unit di sini SENGAJA beda dari daftar 10 Unit Bisnis resmi aplikasi
 // (src/constants/businessUnits.js): "Samudera Indonesia" & "Panitia" tidak
@@ -29,6 +33,10 @@ export const PPNP_UNIT_NAME = 'Perusahaan Pelayaran Nusantara Panurjwan'
 // /rekapanHeadcount) -- hitung jumlah orang per unit, lalu persentase pool
 // "All Employee" = jumlah_unit / total_semua_unit, dibulatkan ke persen
 // terdekat (Math.round, cocok dengan hasil contoh perhitungan user).
+//
+// Dipakai sebagai split DEFAULT untuk baris BBM yang ditandai "dibagi" tanpa
+// custom split sendiri -- lihat rekapanBbmSharing.js untuk penentuan per-baris
+// (dibagi/tidak, pool default/custom) yang HANYA bisa diatur Admin/Super Admin.
 export function computeAllEmployeeShares(headcountByCode) {
     const counts = SHARING_UNITS.map((u) => ({
         name: u.name,
@@ -43,34 +51,4 @@ export function computeAllEmployeeShares(headcountByCode) {
         shares[u.name] = Math.round((u.count / total) * 100)
     })
     return shares
-}
-
-// Redistribusi total BBM MJS (per bulan) ke semua unit di SHARING_UNITS sesuai
-// `shares` (persentase 0-100 per nama unit, dari computeAllEmployeeShares).
-// `totals`: { [unitName]: number[12] } hasil aggregateBbm() -- DIUBAH DI TEMPAT
-// (mutate totals langsung, dipanggil dari aggregateBbm sebelum return).
-// Porsi MJS sendiri (`shares[MJS]`, biasanya <100%) MENGGANTIKAN total asli
-// MJS (bukan ditambah) -- total asli itu SENDIRI adalah pool yang dibagi-bagi,
-// jadi menjumlahkannya lagi ke MJS akan menghitung dobel.
-export function applySharingToBbmTotals(totals, shares) {
-    if (!shares || Object.keys(shares).length === 0) return totals
-    const mjsMonths = totals[MJS_UNIT_NAME]
-    if (!mjsMonths) return totals
-
-    const original = mjsMonths.slice()
-
-    SHARING_UNITS.forEach((u) => {
-        const pct = (shares[u.name] || 0) / 100
-        if (u.name === MJS_UNIT_NAME) return
-
-        if (!totals[u.name]) totals[u.name] = Array(12).fill(0)
-        original.forEach((amount, month) => {
-            totals[u.name][month] += amount * pct
-        })
-    })
-
-    const mjsPct = (shares[MJS_UNIT_NAME] || 0) / 100
-    totals[MJS_UNIT_NAME] = original.map((amount) => amount * mjsPct)
-
-    return totals
 }

@@ -1,4 +1,4 @@
-import { SHARING_UNITS, MJS_UNIT_NAME, computeAllEmployeeShares, applySharingToBbmTotals } from './rekapanSharing'
+import { SHARING_UNITS, MJS_UNIT_NAME, computeAllEmployeeShares } from './rekapanSharing'
 
 // Angka headcount dari contoh perhitungan user (tabel screenshot) --
 // totalnya 107 orang, dipakai untuk verifikasi computeAllEmployeeShares
@@ -48,43 +48,3 @@ describe('computeAllEmployeeShares', () => {
     })
 })
 
-describe('applySharingToBbmTotals', () => {
-    test('meredistribusi total MJS ke semua unit sesuai persentase, MJS sendiri jadi porsinya saja', () => {
-        const totals = {
-            [MJS_UNIT_NAME]: [1000000, 2000000, ...Array(10).fill(0)]
-        }
-        const shares = { [MJS_UNIT_NAME]: 20, 'PT Samudera Agencies Indonesia': 80 }
-
-        applySharingToBbmTotals(totals, shares)
-
-        expect(totals[MJS_UNIT_NAME][0]).toBe(200000)
-        expect(totals[MJS_UNIT_NAME][1]).toBe(400000)
-        expect(totals['PT Samudera Agencies Indonesia'][0]).toBe(800000)
-        expect(totals['PT Samudera Agencies Indonesia'][1]).toBe(1600000)
-    })
-
-    test('ditambahkan ke total yang sudah ada (bukan menimpa) untuk unit selain MJS', () => {
-        const totals = {
-            [MJS_UNIT_NAME]: [1000000, ...Array(11).fill(0)],
-            'PT Samudera Agencies Indonesia': [500000, ...Array(11).fill(0)]
-        }
-        const shares = { [MJS_UNIT_NAME]: 50, 'PT Samudera Agencies Indonesia': 50 }
-
-        applySharingToBbmTotals(totals, shares)
-
-        expect(totals['PT Samudera Agencies Indonesia'][0]).toBe(500000 + 500000)
-    })
-
-    test('tidak melakukan apa-apa kalau MJS tidak punya data', () => {
-        const totals = { 'PT Samudera Agencies Indonesia': [100, ...Array(11).fill(0)] }
-        const result = applySharingToBbmTotals(totals, { [MJS_UNIT_NAME]: 50 })
-        expect(result).toBe(totals)
-        expect(totals['PT Samudera Agencies Indonesia'][0]).toBe(100)
-    })
-
-    test('tidak melakukan apa-apa kalau shares kosong/tidak diisi', () => {
-        const totals = { [MJS_UNIT_NAME]: [1000, ...Array(11).fill(0)] }
-        applySharingToBbmTotals(totals, {})
-        expect(totals[MJS_UNIT_NAME][0]).toBe(1000)
-    })
-})

@@ -2,8 +2,6 @@
 // Fungsi murni, tidak menyentuh Firestore -- data mentah diambil di komponen
 // (RekapanUnitBisnis.jsx), lalu diagregasi di sini.
 
-import { MJS_UNIT_NAME, applySharingToBbmTotals } from '../constants/rekapanSharing'
-
 export const MONTH_LABELS = [
     'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
     'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
@@ -44,36 +42,12 @@ const matchesUnitFilter = (unit, units) => !units || units.length === 0 || units
 // Operasional/GA-Umum/LPJ bisa berisi campuran item BBM & non-BBM dalam satu pengajuan).
 const isBbmValue = (value) => typeof value === 'string' && value.startsWith('BBM ')
 
-// Total BBM Rupiah per bulan milik PT Makassar Jaya Samudera SAJA, TANPA filter
-// `units` -- dipakai aggregateBbm() untuk hitung pool sharing yang utuh walau
-// filter unit sedang aktif menyembunyikan dokumen MJS dari tampilan utama.
-const sumMjsBbmUnfiltered = (reimbursementDocs, lpjDocs, year) => {
-    const months = emptyMonths()
-
-    ;(reimbursementDocs || []).forEach((doc) => {
-        if (doc.status !== 'Disetujui' || doc.user?.unit !== MJS_UNIT_NAME) return
-        ;(doc.reimbursements || []).forEach((item) => {
-            if (!isBbmValue(item.jenis)) return
-            const dateParts = resolveReimbursementItemDate(item, doc)
-            if (!dateParts || dateParts.year !== year) return
-            months[dateParts.month] += item.biaya || 0
-        })
-    })
-
-    ;(lpjDocs || []).forEach((doc) => {
-        if (doc.status !== 'Disetujui' || doc.user?.unit !== MJS_UNIT_NAME) return
-        const dateParts = resolveLpjDocDate(doc)
-        if (!dateParts || dateParts.year !== year) return
-        ;(doc.lpj || []).forEach((item) => {
-            if (!isBbmValue(item.namaItem)) return
-            const liter = Number(item.jumlah) || 0
-            const biayaTotal = item.jumlahBiaya ?? (Number(item.biaya) || 0) * liter
-            months[dateParts.month] += biayaTotal
-        })
-    })
-
-    return months
-}
+// Kunci unik per baris/item BBM di dalam dokumen reimbursement/lpj (item tidak
+// punya id sendiri, cuma posisi di array) -- dipakai sebagai doc ID di koleksi
+// Firestore `rekapanBbmSharing` (lihat RekapanUnitBisnis.jsx, panel "Kelola
+// Sharing BBM") supaya Admin bisa menandai SATU baris tertentu "dibagi" atau
+// tidak, tanpa menyentuh dokumen reimbursement/lpj aslinya sama sekali.
+export const buildBbmItemKey = (docType, docId, itemIndex) => `${docType}_${docId}_${itemIndex}`
 
 /**
  * Rekap per kategori (ATK, RTG, RTK, Entertaint, Parkir, Meals Lembur, Meals Meeting, Toll,
@@ -155,83 +129,193 @@ export const formatPlatDisplay = (normalizedKey) => {
  * itu sendiri. Di `reimbursement`, `item.biaya` sudah berupa total Rupiah & `item.liter`
  * sudah berupa liter langsung -- keduanya tidak perlu dihitung ulang.
  *
- * `sharingShares` (opsional): { [unitName]: persen } dari
- * computeAllEmployeeShares() (lihat src/constants/rekapanSharing.js) -- kalau
- * diisi, total BBM PT Makassar Jaya Samudera diredistribusi ke semua unit
- * sharing (termasuk PPNP, bukan Unit Bisnis resmi aplikasi) SEBELUM di-return.
- * `byPlat`/`byJenis` TIDAK ikut diredistribusi (tetap murni data submission asli).
+ * Sharing (Bagian U): sejak ini, TIDAK ADA lagi redistribusi otomatis-blanket
+ * untuk semua BBM 1 unit -- setiap BARIS BBM dicek satu-satu lewat
+ * `sharingClassification` (opsional): { [buildBbmItemKey(...)]: { dibagi:
+ * boolean, splitMode: 'pool'|'custom', customShares?: {[unit]: persen} } },
+ * data dari koleksi Firestore `rekapanBbmSharing` (diisi manual Admin/Super
+ * Admin lewat panel "Kelola Sharing BBM" -- lihat RekapanUnitBisnis.jsx).
+ * Baris yang BELUM diklasifikasi (tidak ada entry, atau `dibagi` bukan true)
+ * defaultnya TETAP 100% ke unit pengaju -- TIDAK ada asumsi "otomatis dibagi"
+ * lagi (beda dari versi pertama Bagian T yang keliru: MJS di-share 100%-nya
+ * secara blanket, padahal kenyataannya cuma sebagian transaksi yang genuinely
+ * dibagi ke unit lain).
+ *
+ * Baris yang `dibagi: true` displit ke `defaultPoolShares` (persentase pool
+ * "All Employee" dari computeAllEmployeeShares(), sama untuk semua baris yang
+ * pakai splitMode 'pool') KECUALI baris itu punya `customShares` sendiri
+ * (splitMode 'custom' -- persentase spesifik cuma untuk baris/plat itu).
+ *
+ * `byPlat`/`byJenis` TIDAK ikut sharing -- selalu murni data submission asli
+ * per unit pengaju, cuma `totals` yang kena redistribusi.
  *
  * @returns {{ totals: object, byJenis: object, byPlat: { [plat: string]: { liter: number[], biaya: number[] } } }}
  */
-export function aggregateBbm(reimbursementDocs, lpjDocs, { year, units, sharingShares } = {}) {
+export function aggregateBbm(reimbursementDocs, lpjDocs, { year, units, sharingClassification, defaultPoolShares } = {}) {
     const totals = {}
     const byPlat = {}
     const byJenis = {}
 
-    const addEntry = (unit, month, jenis, plat, liter, biayaTotal) => {
-        if (!totals[unit]) totals[unit] = emptyMonths()
-        totals[unit][month] += biayaTotal
+    const addToTotals = (unitName, month, amount) => {
+        if (!amount) return
+        if (!totals[unitName]) totals[unitName] = emptyMonths()
+        totals[unitName][month] += amount
+    }
 
-        const jenisLabel = jenis || 'BBM Lainnya'
-        if (!byJenis[jenisLabel]) byJenis[jenisLabel] = {}
-        if (!byJenis[jenisLabel][unit]) byJenis[jenisLabel][unit] = emptyMonths()
-        byJenis[jenisLabel][unit][month] += biayaTotal
+    // includeInDrilldown: false kalau dokumen ini difilter dari tampilan (unit
+    // lain), TAPI baris tetap diproses untuk `totals` supaya unit yang difilter
+    // ke tampilan tetap dapat porsi share-nya kalau baris ini ditandai "dibagi".
+    const processItem = ({ docType, docId, itemIndex, unit, month, jenis, plat, liter, biayaTotal, includeInDrilldown }) => {
+        if (includeInDrilldown) {
+            const jenisLabel = jenis || 'BBM Lainnya'
+            if (!byJenis[jenisLabel]) byJenis[jenisLabel] = {}
+            if (!byJenis[jenisLabel][unit]) byJenis[jenisLabel][unit] = emptyMonths()
+            byJenis[jenisLabel][unit][month] += biayaTotal
 
-        const platKey = formatPlatDisplay(normalizePlatKey(plat)) || 'Tidak diketahui'
-        if (!byPlat[platKey]) byPlat[platKey] = { liter: emptyMonths(), biaya: emptyMonths() }
-        byPlat[platKey].liter[month] += liter
-        byPlat[platKey].biaya[month] += biayaTotal
+            const platKey = formatPlatDisplay(normalizePlatKey(plat)) || 'Tidak diketahui'
+            if (!byPlat[platKey]) byPlat[platKey] = { liter: emptyMonths(), biaya: emptyMonths() }
+            byPlat[platKey].liter[month] += liter
+            byPlat[platKey].biaya[month] += biayaTotal
+        }
+
+        const classification = sharingClassification?.[buildBbmItemKey(docType, docId, itemIndex)]
+        if (classification?.dibagi) {
+            const shares = (classification.splitMode === 'custom' && classification.customShares)
+                ? classification.customShares
+                : defaultPoolShares
+
+            if (shares && Object.keys(shares).length > 0) {
+                Object.entries(shares).forEach(([unitName, pct]) => {
+                    addToTotals(unitName, month, biayaTotal * ((pct || 0) / 100))
+                })
+                return
+            }
+        }
+
+        addToTotals(unit, month, biayaTotal)
     }
 
     ;(reimbursementDocs || []).forEach((doc) => {
         if (doc.status !== 'Disetujui') return
         const unit = doc.user?.unit
-        if (!matchesUnitFilter(unit, units)) return
+        const includeInDrilldown = matchesUnitFilter(unit, units)
 
-        ;(doc.reimbursements || []).forEach((item) => {
+        ;(doc.reimbursements || []).forEach((item, itemIndex) => {
             if (!isBbmValue(item.jenis)) return
             const dateParts = resolveReimbursementItemDate(item, doc)
             if (!dateParts || dateParts.year !== year) return
-            addEntry(unit, dateParts.month, item.jenis, item.plat, item.liter || 0, item.biaya || 0)
+            processItem({
+                docType: 'reimbursement',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                jenis: item.jenis,
+                plat: item.plat,
+                liter: item.liter || 0,
+                biayaTotal: item.biaya || 0,
+                includeInDrilldown
+            })
         })
     })
 
     ;(lpjDocs || []).forEach((doc) => {
         if (doc.status !== 'Disetujui') return
         const unit = doc.user?.unit
-        if (!matchesUnitFilter(unit, units)) return
+        const includeInDrilldown = matchesUnitFilter(unit, units)
 
         const dateParts = resolveLpjDocDate(doc)
         if (!dateParts || dateParts.year !== year) return
 
-        ;(doc.lpj || []).forEach((item) => {
+        ;(doc.lpj || []).forEach((item, itemIndex) => {
             if (!isBbmValue(item.namaItem)) return
             const liter = Number(item.jumlah) || 0
             const biayaTotal = item.jumlahBiaya ?? (Number(item.biaya) || 0) * liter
-            addEntry(unit, dateParts.month, item.namaItem, item.plat, liter, biayaTotal)
+            processItem({
+                docType: 'lpj',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                jenis: item.namaItem,
+                plat: item.plat,
+                liter,
+                biayaTotal,
+                includeInDrilldown
+            })
         })
     })
 
-    if (sharingShares) {
-        // Redistribusi butuh pool BBM MJS yang UTUH, terlepas dari filter `units`
-        // yang sedang aktif (mis. sedang lihat cuma KEJS -- unit itu tetap berhak
-        // lihat porsi share-nya dari MJS, walau dokumen MJS sendiri difilter dari
-        // totals/byPlat/byJenis di atas). Dihitung ulang unfiltered khusus untuk ini.
-        const mjsRawTotals = matchesUnitFilter(MJS_UNIT_NAME, units)
-            ? (totals[MJS_UNIT_NAME] || emptyMonths())
-            : sumMjsBbmUnfiltered(reimbursementDocs, lpjDocs, year)
-
-        const workingTotals = { ...totals, [MJS_UNIT_NAME]: mjsRawTotals }
-        applySharingToBbmTotals(workingTotals, sharingShares)
-
-        Object.keys(workingTotals).forEach((unitName) => {
-            if (matchesUnitFilter(unitName, units)) {
-                totals[unitName] = workingTotals[unitName]
-            } else {
-                delete totals[unitName]
-            }
+    // Baris "dibagi" diproses UNCONDITIONALLY di atas (termasuk dari dokumen
+    // yang difilter dari tampilan) supaya unit hasil share tetap benar --
+    // filter `units` baru diterapkan ke HASIL AKHIR `totals` di sini.
+    if (units && units.length > 0) {
+        Object.keys(totals).forEach((unitName) => {
+            if (!matchesUnitFilter(unitName, units)) delete totals[unitName]
         })
     }
 
     return { totals, byJenis, byPlat }
+}
+
+/**
+ * Daftar MENTAH (bukan agregat) semua baris/item BBM dari reimbursement+lpj
+ * yang Disetujui, TIDAK difilter per unit (Admin perlu lihat semua unit untuk
+ * mengklasifikasi) -- dipakai panel "Kelola Sharing BBM" di RekapanUnitBisnis.jsx
+ * supaya Admin/Super Admin bisa tandai satu-satu baris mana yang genuinely
+ * dibagi ke unit lain. `key` di tiap item = buildBbmItemKey(...), cocok
+ * dengan doc ID di koleksi Firestore `rekapanBbmSharing`.
+ *
+ * @returns {Array<{ key: string, docType: string, docId: string, itemIndex: number, unit: string, month: number, jenis: string, plat: string, biayaTotal: number }>}
+ */
+export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
+    const items = []
+
+    ;(reimbursementDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        const unit = doc.user?.unit
+
+        ;(doc.reimbursements || []).forEach((item, itemIndex) => {
+            if (!isBbmValue(item.jenis)) return
+            const dateParts = resolveReimbursementItemDate(item, doc)
+            if (!dateParts || dateParts.year !== year) return
+            items.push({
+                key: buildBbmItemKey('reimbursement', doc.id, itemIndex),
+                docType: 'reimbursement',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                jenis: item.jenis,
+                plat: formatPlatDisplay(normalizePlatKey(item.plat)) || 'Tidak diketahui',
+                biayaTotal: item.biaya || 0
+            })
+        })
+    })
+
+    ;(lpjDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        const unit = doc.user?.unit
+        const dateParts = resolveLpjDocDate(doc)
+        if (!dateParts || dateParts.year !== year) return
+
+        ;(doc.lpj || []).forEach((item, itemIndex) => {
+            if (!isBbmValue(item.namaItem)) return
+            const liter = Number(item.jumlah) || 0
+            const biayaTotal = item.jumlahBiaya ?? (Number(item.biaya) || 0) * liter
+            items.push({
+                key: buildBbmItemKey('lpj', doc.id, itemIndex),
+                docType: 'lpj',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                jenis: item.namaItem,
+                plat: formatPlatDisplay(normalizePlatKey(item.plat)) || 'Tidak diketahui',
+                biayaTotal
+            })
+        })
+    })
+
+    return items.sort((a, b) => a.month - b.month)
 }

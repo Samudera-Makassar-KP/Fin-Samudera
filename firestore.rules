@@ -423,12 +423,23 @@ service cloud.firestore {
     }
 
     // Roster headcount per unit dipakai untuk hitung persentase sharing biaya
-    // BBM MJS ke unit lain (menu Rekapan, "All Employee" pool) -- lihat
+    // BBM ke unit lain (menu Rekapan, "All Employee" pool) -- lihat
     // src/constants/rekapanSharing.js. Dokumen ID = kode unit (mis. "MJS").
     match /rekapanHeadcount/{unitCode} {
       allow read: if isRekapanRole();
       allow write: if isAdminRole()
         && validStringList(request.resource.data.names, 200);
+    }
+
+    // Klasifikasi per-baris BBM (Bagian U): baris mana yang genuinely "dibagi"
+    // ke unit lain, ditentukan MANUAL satu-satu oleh Admin/Super Admin lewat
+    // panel "Kelola Sharing BBM" -- BUKAN aturan otomatis blanket. Dokumen ID =
+    // buildBbmItemKey() dari rekapanAggregation.js (docType_docId_itemIndex).
+    match /rekapanBbmSharing/{itemKey} {
+      allow read: if isRekapanRole();
+      allow write: if isAdminRole()
+        && request.resource.data.dibagi is bool
+        && request.resource.data.splitMode in ['pool', 'custom'];
     }
 
     match /{document=**} {

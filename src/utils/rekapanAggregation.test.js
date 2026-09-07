@@ -1,5 +1,7 @@
-import { normalizePlatKey, formatPlatDisplay, aggregateBbm } from './rekapanAggregation'
-import { MJS_UNIT_NAME } from '../constants/rekapanSharing'
+import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey } from './rekapanAggregation'
+
+const MJS = 'PT Makassar Jaya Samudera'
+const SAG = 'PT Samudera Agencies Indonesia'
 
 describe('normalizePlatKey', () => {
     test('menyatukan plat yang beda cuma di spasi', () => {
@@ -36,8 +38,17 @@ describe('formatPlatDisplay', () => {
     })
 })
 
-describe('aggregateBbm dengan sharing', () => {
-    const makeReimbursement = (unit, biaya, jenis = 'BBM Pertalite', plat = 'DD 1234 AB') => ({
+describe('buildBbmItemKey', () => {
+    test('menghasilkan key unik per docType+docId+itemIndex', () => {
+        expect(buildBbmItemKey('reimbursement', 'abc', 0)).toBe('reimbursement_abc_0')
+        expect(buildBbmItemKey('lpj', 'abc', 0)).not.toBe(buildBbmItemKey('reimbursement', 'abc', 0))
+        expect(buildBbmItemKey('reimbursement', 'abc', 0)).not.toBe(buildBbmItemKey('reimbursement', 'abc', 1))
+    })
+})
+
+describe('aggregateBbm - default (belum diklasifikasi)', () => {
+    const makeReimbursement = (id, unit, biaya, jenis = 'BBM Pertalite', plat = 'DD 1234 AB') => ({
+        id,
         status: 'Disetujui',
         user: { unit },
         reimbursements: [
@@ -45,59 +56,120 @@ describe('aggregateBbm dengan sharing', () => {
         ]
     })
 
-    test('total MJS diredistribusi ke unit lain sesuai sharingShares', () => {
-        const docs = [makeReimbursement(MJS_UNIT_NAME, 1000000)]
-        const shares = { [MJS_UNIT_NAME]: 50, 'PT Samudera Agencies Indonesia': 50 }
-
-        const result = aggregateBbm(docs, [], { year: 2026, sharingShares: shares })
-
-        expect(result.totals[MJS_UNIT_NAME][2]).toBe(500000)
-        expect(result.totals['PT Samudera Agencies Indonesia'][2]).toBe(500000)
-    })
-
-    test('tanpa sharingShares, total MJS tetap 100% di MJS (perilaku lama tidak berubah)', () => {
-        const docs = [makeReimbursement(MJS_UNIT_NAME, 1000000)]
+    test('baris BBM yang BELUM ada di sharingClassification tetap 100% ke unit pengaju (default aman)', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000)]
         const result = aggregateBbm(docs, [], { year: 2026 })
 
-        expect(result.totals[MJS_UNIT_NAME][2]).toBe(1000000)
-        expect(result.totals['PT Samudera Agencies Indonesia']).toBeUndefined()
+        expect(result.totals[MJS][2]).toBe(1000000)
+        expect(result.totals[SAG]).toBeUndefined()
     })
 
-    test('byJenis memisahkan breakdown per jenis BBM', () => {
-        const docs = [
-            makeReimbursement(MJS_UNIT_NAME, 300000, 'BBM Solar'),
-            makeReimbursement(MJS_UNIT_NAME, 200000, 'BBM Pertalite')
+    test('baris yang classification-nya dibagi:false tetap 100% ke unit pengaju', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000)]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: false } }
+
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(result.totals[MJS][2]).toBe(1000000)
+    })
+
+    test('byJenis & byPlat tidak pernah kena redistribusi, selalu data submission asli', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000)]
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: true, splitMode: 'pool' }
+        }
+        const defaultPoolShares = { [MJS]: 50, [SAG]: 50 }
+
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification, defaultPoolShares })
+
+        expect(result.byJenis['BBM Pertalite'][MJS][2]).toBe(1000000)
+        expect(result.byPlat['DD 1234 AB'].biaya[2]).toBe(1000000)
+    })
+})
+
+describe('aggregateBbm - baris ditandai dibagi (pool default)', () => {
+    const makeReimbursement = (id, unit, biaya) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis: 'BBM Pertalite', biaya, liter: 10, plat: 'DD 1234 AB', tanggal: '2026-03-15' }
         ]
-        const result = aggregateBbm(docs, [], { year: 2026 })
-
-        expect(result.byJenis['BBM Solar'][MJS_UNIT_NAME][2]).toBe(300000)
-        expect(result.byJenis['BBM Pertalite'][MJS_UNIT_NAME][2]).toBe(200000)
     })
 
-    test('plat dengan format spasi berbeda digabung jadi satu baris di byPlat', () => {
-        const docs = [
-            makeReimbursement(MJS_UNIT_NAME, 100000, 'BBM Pertalite', 'DD 1234 AB'),
-            makeReimbursement(MJS_UNIT_NAME, 100000, 'BBM Pertalite', 'DD1234AB')
+    test('baris dibagi:true splitMode pool -> displit sesuai defaultPoolShares', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000)]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: true, splitMode: 'pool' } }
+        const defaultPoolShares = { [MJS]: 20, [SAG]: 80 }
+
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification, defaultPoolShares })
+
+        expect(result.totals[MJS][2]).toBe(200000)
+        expect(result.totals[SAG][2]).toBe(800000)
+    })
+})
+
+describe('aggregateBbm - baris ditandai dibagi (custom split)', () => {
+    const makeReimbursement = (id, unit, biaya) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis: 'BBM Pertalite', biaya, liter: 10, plat: 'DD 1234 AB', tanggal: '2026-03-15' }
         ]
-        const result = aggregateBbm(docs, [], { year: 2026 })
-
-        expect(Object.keys(result.byPlat)).toEqual(['DD 1234 AB'])
-        expect(result.byPlat['DD 1234 AB'].biaya[2]).toBe(200000)
     })
 
-    test('unit yang difilter tetap dapat porsi share dari MJS walau dokumen MJS sendiri disembunyikan', () => {
-        const docs = [makeReimbursement(MJS_UNIT_NAME, 1000000)]
-        const shares = { [MJS_UNIT_NAME]: 50, 'PT Samudera Agencies Indonesia': 50 }
+    test('customShares dipakai, MENGABAIKAN defaultPoolShares', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000)]
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: {
+                dibagi: true,
+                splitMode: 'custom',
+                customShares: { [MJS]: 70, [SAG]: 30 }
+            }
+        }
+        const defaultPoolShares = { [MJS]: 20, [SAG]: 80 } // sengaja beda, harus DIABAIKAN
 
-        // Filter cuma tampilkan PT Samudera Agencies Indonesia -- MJS sendiri tidak ikut
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification, defaultPoolShares })
+
+        expect(result.totals[MJS][2]).toBe(700000)
+        expect(result.totals[SAG][2]).toBe(300000)
+    })
+})
+
+describe('aggregateBbm - filter unit + sharing', () => {
+    const makeReimbursement = (id, unit, biaya) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis: 'BBM Pertalite', biaya, liter: 10, plat: 'DD 1234 AB', tanggal: '2026-03-15' }
+        ]
+    })
+
+    test('unit yang difilter tetap dapat porsi share dari baris dibagi milik unit lain', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000)]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: true, splitMode: 'pool' } }
+        const defaultPoolShares = { [MJS]: 50, [SAG]: 50 }
+
         const result = aggregateBbm(docs, [], {
             year: 2026,
-            units: ['PT Samudera Agencies Indonesia'],
-            sharingShares: shares
+            units: [SAG],
+            sharingClassification: classification,
+            defaultPoolShares
         })
 
-        expect(result.totals['PT Samudera Agencies Indonesia'][2]).toBe(500000)
-        expect(result.totals[MJS_UNIT_NAME]).toBeUndefined()
-        expect(result.byPlat).toEqual({}) // dokumen MJS sendiri tetap tersembunyi dari drill-down plat
+        expect(result.totals[SAG][2]).toBe(500000)
+        expect(result.totals[MJS]).toBeUndefined()
+        expect(result.byPlat).toEqual({}) // dokumen MJS sendiri tetap tersembunyi dari drill-down
+    })
+
+    test('baris yang TIDAK dibagi tidak bocor ke unit lain walau difilter', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000)]
+
+        const result = aggregateBbm(docs, [], { year: 2026, units: [SAG] })
+
+        expect(result.totals[SAG]).toBeUndefined()
+        expect(result.totals[MJS]).toBeUndefined() // MJS difilter dari tampilan & tidak dibagi ke SAG
     })
 })

@@ -1239,7 +1239,50 @@ User minta "micro filter" di Rekapan (BBM MJS terlihat tinggi karena sebenarnya 
 - [x] `CI=true npm run build` sukses (0 warning/error)
 - [x] Semua test PASS: 50 frontend (naik dari 31)
 - [x] Deploy ke produksi — firestore rules (compiled successfully) + hosting, sukses 2026-09-07
-- [ ] Admin/Super Admin isi roster headcount pertama kali lewat panel "Kelola Data Sharing BBM" (WAJIB -- tanpa ini, `sharingShares` kosong dan BBM MJS tampil 100% di MJS seperti sebelumnya, bukan error tapi belum ada manfaatnya)
-- [ ] Tes manual: isi roster sesuai screenshot user, konfirmasi tabel "BBM -- Total Biaya" menunjukkan MJS berkurang & 8 unit lain (termasuk PPNP) bertambah sesuai persentase
-- [ ] Tes manual: filter ke 1 unit non-MJS spesifik, konfirmasi unit itu tetap dapat porsi share BBM MJS walau dokumen MJS sendiri tidak ikut tampil
+- [x] Admin/Super Admin isi roster headcount pertama kali lewat panel "Kelola Data Sharing BBM" — **selesai, dikonfirmasi user**
+- [x] ~~Tes manual: isi roster..., konfirmasi tabel BBM -- Total Biaya menunjukkan MJS berkurang & 8 unit lain bertambah sesuai persentase~~ -- **SUPERSEDED oleh Bagian U**: user melaporkan hasilnya SALAH (blanket 100% MJS ke semua unit ternyata keliru, tidak semua BBM MJS genuinely dibagi) -- lihat Bagian U untuk fix & desain ulang
 - [ ] Tes manual: plat nomor yang diketik beda spasi di form RBS BBM, konfirmasi muncul sebagai 1 baris gabungan di tabel "BBM -- Liter per Plat Nomor"
+
+---
+
+# BAGIAN U — Rekapan BBM: Dari Blanket Sharing ke Kurasi Manual Per-Transaksi (2026-09-07)
+
+## 31.1 Masalah yang Dilaporkan
+
+Setelah Bagian T live & roster diisi, user melaporkan hasilnya **salah**: "ada beberapa yang tidak harus di share ke PPNP ada juga di share" -- desain Bagian T (blanket: 100% BBM milik MJS otomatis diredistribusi via persentase pool ke SEMUA unit lain) keliru secara fundamental. Kenyataannya cuma SEBAGIAN transaksi BBM MJS yang genuinely "ditalangi" untuk unit lain -- sisanya murni pemakaian MJS sendiri, seharusnya TIDAK ikut dibagi.
+
+## 31.2 Keputusan Desain Baru (dikonfirmasi user)
+
+1. **Kurasi manual per-baris**, bukan otomatis-blanket per-unit. Admin/Super Admin membedah SATU PER SATU tiap baris BBM (dari RBS & LPJ manapun, bukan cuma MJS) dan menentukan: dibagi atau tidak.
+2. **Split**: default pakai pool "All Employee" yang sama (dari roster headcount Bagian T), TAPI Admin bisa override custom split per baris/plat kalau kenyataannya beda (mis. 1 plat cuma dipakai 2 unit tertentu, bukan semua).
+3. **Default baris belum direview**: TIDAK dibagi (100% tetap ke unit pengaju) -- aman, tidak ada asumsi sharing yang belum dikonfirmasi Admin.
+4. **Akses**: kurasi HANYA Admin/Super Admin. Validator cuma lihat hasil akhir yang sudah rapi (tidak bisa mengubah apa pun).
+5. **Filter Unit Bisnis jadi checkbox multi-pilih** (bukan dropdown single-select) -- bisa pilih 1, 2, 3, atau semua unit bebas, sama seperti pola filter "Tampilkan Rekapan" yang sudah ada.
+
+## 31.3 Implementasi
+
+**`aggregateBbm()` ditulis ulang total** (`rekapanAggregation.js`) -- dari redistribusi blanket per-unit (MJS) jadi PROSES PER ITEM: tiap baris BBM dicek ke `sharingClassification` (lookup by `buildBbmItemKey(docType, docId, itemIndex)`, key baru berbasis posisi item di array + ID dokumen Firestore -- item tidak punya ID sendiri). Baris tanpa entry atau `dibagi !== true` tetap 100% ke unit pengaju. Baris `dibagi: true` displit ke `customShares` (kalau `splitMode: 'custom'`) atau `defaultPoolShares` (pool "All Employee", `splitMode: 'pool'`). `byPlat`/`byJenis` tetap selalu murni data submission asli, tidak pernah ikut sharing.
+
+**Penanganan filter + sharing** (lebih rumit dari Bagian T karena sekarang per-item, bukan per-unit): SEMUA baris diproses untuk `totals` TANPA memandang filter `units` yang aktif (supaya unit yang difilter tetap dapat porsi share dari baris "dibagi" milik unit lain), filter baru diterapkan di HASIL AKHIR. `byPlat`/`byJenis` tetap dari dokumen yang match filter saja. Diverifikasi test.
+
+**`rekapanBbmSharing` collection Firestore baru** (doc ID = `buildBbmItemKey`): `{ dibagi: boolean, splitMode: 'pool'|'custom', customShares?: {[unit]: persen} }`. `firestore.rules`: read `isRekapanRole()`, write `isAdminRole()` + validasi shape dasar.
+
+**Panel "Kelola Sharing BBM"** (`RekapanUnitBisnis.jsx`, Admin/Super Admin only, terpisah dari panel roster "Kelola Data Sharing BBM" Bagian T): daftar SEMUA baris BBM tahun berjalan (`listBbmLineItems()`, fungsi baru di `rekapanAggregation.js` -- versi mentah/non-agregat dari data yang sama dipakai `aggregateBbm`), filter per unit + toggle "tampilkan yang sudah direview", checkbox "Dibagi?" per baris (langsung tersimpan begitu diklik), tombol "Atur Split" untuk override custom (9 input persentase per unit sharing), paginasi 25 baris/halaman.
+
+**Checkbox multi-select Unit Bisnis**: dropdown single-select + sentinel `ALL_UNITS_VALUE` diganti checkbox dropdown (pola sama seperti "Tampilkan Rekapan") -- kosong = semua unit yang tersedia untuk role user, atau bisa pilih kombinasi bebas.
+
+## 31.4 Task Development — Bagian U
+
+- [x] `rekapanAggregation.js`: `aggregateBbm()` ditulis ulang per-item, `buildBbmItemKey()` & `listBbmLineItems()` baru
+- [x] `rekapanSharing.js`: hapus `applySharingToBbmTotals` (logic blanket lama, sudah tidak relevan)
+- [x] `firestore.rules`: match block `rekapanBbmSharing/{itemKey}`
+- [x] `RekapanUnitBisnis.jsx`: fetch classification, panel "Kelola Sharing BBM" (list+filter+toggle+custom split+paginasi), checkbox multi-select Unit Bisnis menggantikan dropdown single-select
+- [x] Fetch reimbursement/lpj sekarang sertakan `id` dokumen (dibutuhkan `buildBbmItemKey`) -- sebelumnya cuma `d.data()`, sekarang `{ ...d.data(), id: d.id }`
+- [x] Test diupdate total: `rekapanAggregation.test.js` (14 test, model baru), `rekapanSharing.test.js` (4 test, `applySharingToBbmTotals` test dihapus)
+- [x] `CI=true npm run build` sukses (termasuk fix lint palsu: fungsi `useDefaultPoolSplit` di-rename `applyDefaultPoolSplit` karena ESLint react-hooks salah kira nama diawali "use" itu Hook)
+- [x] Semua test PASS: 49 frontend
+- [ ] Deploy ke produksi (firestore rules + hosting)
+- [ ] Admin mulai kurasi baris BBM lewat panel "Kelola Sharing BBM" -- tabel Rekapan BBM akan tampil 100% ke unit pengaju (belum ada yang dibagi) sampai baris-baris relevan ditandai manual
+- [ ] Tes manual: tandai 1 baris BBM MJS sebagai "dibagi" (pool default), konfirmasi tabel "BBM -- Total Biaya" MJS berkurang sejumlah baris itu & unit lain bertambah proporsional -- baris BBM MJS LAIN yang tidak ditandai tetap 100% di MJS
+- [ ] Tes manual: custom split 1 baris (mis. cuma ke 2 unit spesifik), konfirmasi split-nya BEDA dari baris lain yang pakai pool default
+- [ ] Tes manual: checkbox Unit Bisnis pilih 2-3 unit sekaligus, konfirmasi tabel menampilkan gabungan unit yang dipilih saja

@@ -14,7 +14,8 @@ import {
     MONTH_LABELS,
     sumMonths,
     aggregateByCategory,
-    aggregateBbm
+    aggregateBbm,
+    listBbmLineItems
 } from '../utils/rekapanAggregation'
 import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares } from '../constants/rekapanSharing'
 
@@ -32,8 +33,6 @@ const BUSINESS_UNITS = [
     { value: 'Samudera Indonesia', label: 'Samudera Indonesia' },
     { value: 'Panitia', label: 'Panitia' }
 ]
-
-const ALL_UNITS_VALUE = '__ALL__'
 
 // Urutan tampil kategori yang diketahui (sesuai jenisOptions form RBS Umum/Operasional
 // & LPJ Umum/Marketing yang sudah diseragamkan). Kategori tak dikenal (data lampau)
@@ -67,7 +66,8 @@ const RekapanUnitBisnis = () => {
     const [ownUnits, setOwnUnits] = useState([])
 
     const [unitOptions, setUnitOptions] = useState([])
-    const [selectedUnit, setSelectedUnit] = useState(null)
+    const [selectedUnitOptions, setSelectedUnitOptions] = useState([])
+    const [isUnitFilterOpen, setIsUnitFilterOpen] = useState(false)
     const [selectedYear, setSelectedYear] = useState(YEAR_OPTIONS[0])
 
     const [isDataLoading, setIsDataLoading] = useState(true)
@@ -138,16 +138,20 @@ const RekapanUnitBisnis = () => {
 
     const isAdmin = role === 'Admin' || role === 'Super Admin'
 
-    // 2. Susun opsi dropdown Unit Bisnis sesuai role
+    // 2. Susun opsi checkbox Unit Bisnis sesuai role -- Admin/Super Admin bisa
+    // pilih kombinasi bebas (1, beberapa, atau semua) dari 10 Unit Bisnis,
+    // Validator dibatasi ke unit yang ditugaskan ke akun mereka saja.
+    // Kosong (default) berarti tampilkan SEMUA opsi yang tersedia, sama seperti
+    // pola filter "Tampilkan Rekapan" yang sudah ada.
     useEffect(() => {
         if (!isRoleLoaded) return
 
         const options = isAdmin
-            ? [{ value: ALL_UNITS_VALUE, label: 'Semua Unit Bisnis' }, ...BUSINESS_UNITS]
+            ? BUSINESS_UNITS
             : ownUnits.map((u) => ({ value: u, label: u }))
 
         setUnitOptions(options)
-        setSelectedUnit(options[0] || null)
+        setSelectedUnitOptions([])
     }, [isRoleLoaded, role, ownUnits, isAdmin])
 
     // 3. Fetch data reimbursement & lpj yang sudah Disetujui (sekali saja, filter
@@ -161,8 +165,8 @@ const RekapanUnitBisnis = () => {
                     getDocs(query(collection(db, 'lpj'), where('status', '==', 'Disetujui')))
                 ])
 
-                setReimbursementDocs(reimbursementSnap.docs.map((d) => d.data()))
-                setLpjDocs(lpjSnap.docs.map((d) => d.data()))
+                setReimbursementDocs(reimbursementSnap.docs.map((d) => ({ ...d.data(), id: d.id })))
+                setLpjDocs(lpjSnap.docs.map((d) => ({ ...d.data(), id: d.id })))
             } catch (error) {
                 console.error('Gagal mengambil data rekapan:', error)
             } finally {
@@ -202,7 +206,116 @@ const RekapanUnitBisnis = () => {
         fetchHeadcount()
     }, [fetchHeadcount])
 
-    const sharingShares = useMemo(() => computeAllEmployeeShares(headcountByCode), [headcountByCode])
+    const defaultPoolShares = useMemo(() => computeAllEmployeeShares(headcountByCode), [headcountByCode])
+
+    // 5. Klasifikasi per-baris BBM (/rekapanBbmSharing, Bagian U) -- baris mana
+    // yang genuinely "dibagi" ke unit lain, ditentukan Admin/Super Admin satu
+    // per satu lewat panel "Kelola Sharing BBM" (bukan asumsi blanket seperti
+    // versi pertama Bagian T yang keliru). Baris tanpa entry di sini TETAP
+    // 100% ke unit pengaju (default aman, lihat aggregateBbm).
+    const [sharingClassification, setSharingClassification] = useState({})
+    const [isClassificationLoading, setIsClassificationLoading] = useState(true)
+
+    const fetchClassification = useCallback(async () => {
+        setIsClassificationLoading(true)
+        try {
+            const snapshot = await getDocs(collection(db, 'rekapanBbmSharing'))
+            const result = {}
+            snapshot.docs.forEach((d) => {
+                result[d.id] = d.data()
+            })
+            setSharingClassification(result)
+        } catch (error) {
+            console.error('Gagal mengambil data klasifikasi sharing BBM:', error)
+        } finally {
+            setIsClassificationLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        fetchClassification()
+    }, [fetchClassification])
+
+    // Panel kurasi "Kelola Sharing BBM" (Admin/Super Admin only) -- daftar
+    // SEMUA baris BBM tahun berjalan (tidak terpengaruh filter Unit Bisnis di
+    // atas, Admin perlu lihat semua unit untuk klasifikasi), Validator tidak
+    // pernah melihat panel ini sama sekali (cuma lihat hasil akhir di tabel).
+    const [isManagingSharing, setIsManagingSharing] = useState(false)
+    const [sharingUnitFilter, setSharingUnitFilter] = useState('')
+    const [showReviewedItems, setShowReviewedItems] = useState(false)
+    const [customEditKey, setCustomEditKey] = useState(null)
+    const [customEditDraft, setCustomEditDraft] = useState({})
+    const [savingItemKey, setSavingItemKey] = useState(null)
+    const [sharingPage, setSharingPage] = useState(1)
+    const SHARING_PAGE_SIZE = 25
+
+    const allBbmLineItems = useMemo(() => {
+        return listBbmLineItems(reimbursementDocs, lpjDocs, { year: selectedYear.value })
+    }, [reimbursementDocs, lpjDocs, selectedYear])
+
+    const visibleBbmLineItems = useMemo(() => {
+        return allBbmLineItems.filter((item) => {
+            if (sharingUnitFilter && item.unit !== sharingUnitFilter) return false
+            const isReviewed = Boolean(sharingClassification[item.key])
+            if (!showReviewedItems && isReviewed) return false
+            return true
+        })
+    }, [allBbmLineItems, sharingUnitFilter, showReviewedItems, sharingClassification])
+
+    const pagedBbmLineItems = useMemo(() => {
+        const start = (sharingPage - 1) * SHARING_PAGE_SIZE
+        return visibleBbmLineItems.slice(start, start + SHARING_PAGE_SIZE)
+    }, [visibleBbmLineItems, sharingPage])
+
+    const totalSharingPages = Math.max(1, Math.ceil(visibleBbmLineItems.length / SHARING_PAGE_SIZE))
+
+    const saveClassification = async (key, data) => {
+        setSavingItemKey(key)
+        try {
+            await setDoc(doc(db, 'rekapanBbmSharing', key), data)
+            setSharingClassification((prev) => ({ ...prev, [key]: data }))
+        } catch (error) {
+            console.error('Gagal menyimpan klasifikasi sharing BBM:', error)
+            toast.error('Gagal menyimpan klasifikasi baris ini')
+        } finally {
+            setSavingItemKey(null)
+        }
+    }
+
+    const toggleItemDibagi = (item) => {
+        const current = sharingClassification[item.key]
+        const nextDibagi = !current?.dibagi
+        saveClassification(item.key, {
+            dibagi: nextDibagi,
+            splitMode: current?.splitMode || 'pool',
+            customShares: current?.customShares || null
+        })
+    }
+
+    const openCustomEditor = (item) => {
+        const current = sharingClassification[item.key]
+        const draft = {}
+        SHARING_UNITS.forEach((u) => {
+            draft[u.code] = String(current?.customShares?.[u.name] ?? defaultPoolShares[u.name] ?? 0)
+        })
+        setCustomEditDraft(draft)
+        setCustomEditKey(item.key)
+    }
+
+    const saveCustomSplit = async (item) => {
+        const customShares = {}
+        SHARING_UNITS.forEach((u) => {
+            customShares[u.name] = Number(customEditDraft[u.code]) || 0
+        })
+        await saveClassification(item.key, { dibagi: true, splitMode: 'custom', customShares })
+        setCustomEditKey(null)
+    }
+
+    const applyDefaultPoolSplit = (item) => {
+        const current = sharingClassification[item.key]
+        saveClassification(item.key, { dibagi: true, splitMode: 'pool', customShares: current?.customShares || null })
+        setCustomEditKey(null)
+    }
 
     const startEditHeadcount = () => {
         const draft = {}
@@ -241,33 +354,53 @@ const RekapanUnitBisnis = () => {
         }
     }
 
-    const unitsFilter = useMemo(() => {
-        if (!selectedUnit) return []
-        if (selectedUnit.value === ALL_UNITS_VALUE) return []
-        return [selectedUnit.value]
-    }, [selectedUnit])
+    const isUnitFilterChecked = useCallback((value) => {
+        return selectedUnitOptions.some((opt) => opt.value === value)
+    }, [selectedUnitOptions])
 
-    const displayUnits = useMemo(() => {
-        if (!selectedUnit) return []
-        if (selectedUnit.value === ALL_UNITS_VALUE) return BUSINESS_UNITS.map((u) => u.value)
-        return [selectedUnit.value]
-    }, [selectedUnit])
+    const toggleUnitFilterOption = useCallback((option) => {
+        setSelectedUnitOptions((prev) => {
+            const exists = prev.some((opt) => opt.value === option.value)
+            return exists ? prev.filter((opt) => opt.value !== option.value) : [...prev, option]
+        })
+    }, [])
+
+    const unitFilterLabel = selectedUnitOptions.length === 0
+        ? 'Semua Unit Bisnis'
+        : selectedUnitOptions.length === 1
+            ? selectedUnitOptions[0].label
+            : `${selectedUnitOptions.length} Unit Bisnis dipilih`
+
+    // Kosong (default) berarti tampilkan SEMUA unit yang tersedia untuk role user
+    // ini (unitOptions) -- sama seperti perilaku "Semua Unit Bisnis" sebelumnya,
+    // sekarang bisa juga pilih kombinasi bebas 1/2/3/dst lewat checkbox.
+    const unitsFilter = useMemo(() => {
+        if (selectedUnitOptions.length > 0) return selectedUnitOptions.map((o) => o.value)
+        return unitOptions.map((o) => o.value)
+    }, [selectedUnitOptions, unitOptions])
+
+    const displayUnits = unitsFilter
 
     // PPNP bukan Unit Bisnis resmi aplikasi (lihat rekapanSharing.js) -- cuma
     // relevan sebagai baris tambahan di tabel BBM -- Total Biaya, dan cuma
-    // muncul saat lihat "Semua Unit Bisnis" (kalau difilter ke 1 unit spesifik,
-    // PPNP tidak mungkin jadi pilihan dropdown-nya).
+    // muncul saat Admin/Super Admin melihat SEMUA Unit Bisnis tanpa filter
+    // (kalau difilter ke unit tertentu, PPNP tidak mungkin jadi pilihan checkbox-nya).
     const bbmSharingExtraUnits = useMemo(() => {
-        return selectedUnit?.value === ALL_UNITS_VALUE ? [PPNP_UNIT_NAME] : []
-    }, [selectedUnit])
+        return isAdmin && selectedUnitOptions.length === 0 ? [PPNP_UNIT_NAME] : []
+    }, [isAdmin, selectedUnitOptions])
 
     const categoryData = useMemo(() => {
         return aggregateByCategory(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter })
     }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter])
 
     const bbmData = useMemo(() => {
-        return aggregateBbm(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter, sharingShares })
-    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter, sharingShares])
+        return aggregateBbm(reimbursementDocs, lpjDocs, {
+            year: selectedYear.value,
+            units: unitsFilter,
+            sharingClassification,
+            defaultPoolShares
+        })
+    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter, sharingClassification, defaultPoolShares])
 
     const orderedCategories = useMemo(() => {
         const found = Object.keys(categoryData)
@@ -486,16 +619,62 @@ const RekapanUnitBisnis = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Unit Bisnis</label>
-                        <Select
-                            options={unitOptions}
-                            value={selectedUnit}
-                            onChange={setSelectedUnit}
-                            placeholder="Pilih Unit Bisnis"
-                            styles={customStyles}
-                            isSearchable={false}
-                            menuPortalTarget={document.body}
-                            menuPosition="absolute"
-                        />
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setIsUnitFilterOpen((prev) => !prev)}
+                                className="w-full h-10 px-3 flex items-center justify-between border rounded-md text-sm text-left bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100"
+                            >
+                                <span className="truncate">{unitFilterLabel}</span>
+                                <svg
+                                    className={`w-4 h-4 flex-shrink-0 ml-2 transition-transform ${isUnitFilterOpen ? 'rotate-180' : ''}`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {isUnitFilterOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsUnitFilterOpen(false)} />
+                                    <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg py-1">
+                                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                                            <button
+                                                type="button"
+                                                className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                                                onClick={() => setSelectedUnitOptions(unitOptions)}
+                                            >
+                                                Pilih Semua
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="text-xs text-gray-500 dark:text-gray-400 hover:underline"
+                                                onClick={() => setSelectedUnitOptions([])}
+                                            >
+                                                Kosongkan
+                                            </button>
+                                        </div>
+                                        {unitOptions.map((opt) => (
+                                            <label
+                                                key={opt.value}
+                                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isUnitFilterChecked(opt.value)}
+                                                    onChange={() => toggleUnitFilterOption(opt)}
+                                                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                />
+                                                <span>{opt.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                     <div>
                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Tahun</label>
@@ -576,7 +755,7 @@ const RekapanUnitBisnis = () => {
                     <Skeleton height={220} />
                     <Skeleton height={220} />
                 </div>
-            ) : !selectedUnit ? (
+            ) : unitOptions.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-gray-500 dark:text-gray-400">
                     Belum ada Unit Bisnis yang ditugaskan ke akun Anda.
                 </div>
@@ -614,8 +793,9 @@ const RekapanUnitBisnis = () => {
                                         Kelola Data Sharing BBM
                                     </p>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        Daftar nama per Unit Bisnis, dipakai hitung persentase pool "All Employee"
-                                        untuk bagi biaya BBM {getUnitLabel('PT Makassar Jaya Samudera')} ke unit lain.
+                                        Daftar nama per Unit Bisnis, dasar hitung persentase pool "All Employee" --
+                                        dipakai sebagai split DEFAULT untuk baris BBM yang ditandai "dibagi" di panel
+                                        "Kelola Sharing BBM" di bawah (kecuali baris itu diberi split custom sendiri).
                                         Total headcount saat ini: {SHARING_UNITS.reduce((sum, u) => sum + (headcountByCode[u.code]?.length || 0), 0)} orang.
                                     </p>
                                 </div>
@@ -667,6 +847,197 @@ const RekapanUnitBisnis = () => {
                                             {isSavingHeadcount ? 'Menyimpan...' : 'Simpan'}
                                         </button>
                                     </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {isAdmin && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mt-4">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">
+                                        Kelola Sharing BBM
+                                    </p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Tandai satu-satu baris BBM mana yang genuinely dibagi ke unit lain (mis. BBM
+                                        yang ditalangi dulu oleh 1 unit). Baris yang belum ditandai tetap 100% ke
+                                        unit pengaju -- tidak ada yang otomatis dibagi.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsManagingSharing((prev) => !prev)}
+                                    disabled={isClassificationLoading}
+                                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                                >
+                                    {isManagingSharing ? 'Tutup' : 'Kelola'}
+                                </button>
+                            </div>
+
+                            {isManagingSharing && (
+                                <div className="mt-4">
+                                    <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
+                                        <select
+                                            value={sharingUnitFilter}
+                                            onChange={(e) => { setSharingUnitFilter(e.target.value); setSharingPage(1) }}
+                                            className="border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                        >
+                                            <option value="">Semua Unit Bisnis</option>
+                                            {BUSINESS_UNITS.map((u) => (
+                                                <option key={u.value} value={u.value}>{u.label}</option>
+                                            ))}
+                                        </select>
+                                        <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                                            <input
+                                                type="checkbox"
+                                                checked={showReviewedItems}
+                                                onChange={(e) => { setShowReviewedItems(e.target.checked); setSharingPage(1) }}
+                                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                            />
+                                            Tampilkan yang sudah direview juga
+                                        </label>
+                                        <span className="text-gray-400">
+                                            {visibleBbmLineItems.length} baris
+                                        </span>
+                                    </div>
+
+                                    <div className="overflow-x-auto border dark:border-gray-600 rounded-md">
+                                        <table className="w-full text-sm border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-100 dark:bg-gray-700">
+                                                    <th className="px-3 py-2 text-left">Bulan</th>
+                                                    <th className="px-3 py-2 text-left">Unit Pengaju</th>
+                                                    <th className="px-3 py-2 text-left">Plat</th>
+                                                    <th className="px-3 py-2 text-left">Jenis</th>
+                                                    <th className="px-3 py-2 text-right">Biaya</th>
+                                                    <th className="px-3 py-2 text-center">Dibagi?</th>
+                                                    <th className="px-3 py-2 text-left">Split</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {pagedBbmLineItems.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={7} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                            Tidak ada baris BBM untuk filter ini.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {pagedBbmLineItems.map((item) => {
+                                                    const classification = sharingClassification[item.key]
+                                                    const isDibagi = Boolean(classification?.dibagi)
+                                                    const isEditingCustom = customEditKey === item.key
+                                                    return (
+                                                        <React.Fragment key={item.key}>
+                                                            <tr className="border-t dark:border-gray-700">
+                                                                <td className="px-3 py-2">{MONTH_LABELS[item.month]}</td>
+                                                                <td className="px-3 py-2 whitespace-nowrap">{getUnitLabel(item.unit)}</td>
+                                                                <td className="px-3 py-2">{item.plat}</td>
+                                                                <td className="px-3 py-2">{item.jenis}</td>
+                                                                <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
+                                                                <td className="px-3 py-2 text-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isDibagi}
+                                                                        disabled={savingItemKey === item.key}
+                                                                        onChange={() => toggleItemDibagi(item)}
+                                                                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2">
+                                                                    {isDibagi && (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-gray-500 dark:text-gray-400">
+                                                                                {classification?.splitMode === 'custom' ? 'Custom' : 'Pool Default'}
+                                                                            </span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openCustomEditor(item)}
+                                                                                className="text-red-600 dark:text-red-400 hover:underline"
+                                                                            >
+                                                                                Atur Split
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                            {isEditingCustom && (
+                                                                <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                                                                    <td colSpan={7} className="px-3 py-3">
+                                                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                                                                            {SHARING_UNITS.map((u) => (
+                                                                                <div key={u.code}>
+                                                                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                                                        {u.code}
+                                                                                    </label>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        min="0"
+                                                                                        max="100"
+                                                                                        value={customEditDraft[u.code] || ''}
+                                                                                        onChange={(e) => setCustomEditDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
+                                                                                        className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                                                                    />
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                        <div className="flex justify-end gap-2 mt-3">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => applyDefaultPoolSplit(item)}
+                                                                                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline"
+                                                                            >
+                                                                                Pakai Pool Default
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setCustomEditKey(null)}
+                                                                                className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline"
+                                                                            >
+                                                                                Batal
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => saveCustomSplit(item)}
+                                                                                disabled={savingItemKey === item.key}
+                                                                                className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+                                                                            >
+                                                                                Simpan Split Custom
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </React.Fragment>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {totalSharingPages > 1 && (
+                                        <div className="flex items-center justify-center gap-3 mt-3 text-sm">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSharingPage((p) => Math.max(1, p - 1))}
+                                                disabled={sharingPage === 1}
+                                                className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
+                                            >
+                                                Sebelumnya
+                                            </button>
+                                            <span className="text-gray-600 dark:text-gray-300">
+                                                Halaman {sharingPage} / {totalSharingPages}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSharingPage((p) => Math.min(totalSharingPages, p + 1))}
+                                                disabled={sharingPage === totalSharingPages}
+                                                className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
+                                            >
+                                                Berikutnya
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
