@@ -34,6 +34,23 @@ service cloud.firestore {
         && get(userPath(request.auth.uid)).data.role in ['Reviewer', 'Validator', 'Admin', 'Super Admin'];
     }
 
+    // Admin/Super Admin -- dipakai untuk kelola data referensi (mis. roster
+    // headcount sharing BBM di /rekapanHeadcount) yang HANYA boleh diubah admin,
+    // tapi tetap boleh dibaca role yang lebih luas (isElevatedRole minus Reviewer).
+    function isAdminRole() {
+      return signedIn()
+        && hasUserDoc(request.auth.uid)
+        && get(userPath(request.auth.uid)).data.role in ['Admin', 'Super Admin'];
+    }
+
+    // Validator/Admin/Super Admin -- role yang punya akses ke menu Rekapan
+    // (RekapanUnitBisnis.jsx, Reviewer TIDAK termasuk, lihat Bagian A).
+    function isRekapanRole() {
+      return signedIn()
+        && hasUserDoc(request.auth.uid)
+        && get(userPath(request.auth.uid)).data.role in ['Validator', 'Admin', 'Super Admin'];
+    }
+
     function validString(value, maxLength) {
       return value is string && value.size() > 0 && value.size() <= maxLength;
     }
@@ -403,6 +420,15 @@ service cloud.firestore {
     match /alerts/{alertId} {
       allow read: if signedIn();
       allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Roster headcount per unit dipakai untuk hitung persentase sharing biaya
+    // BBM MJS ke unit lain (menu Rekapan, "All Employee" pool) -- lihat
+    // src/constants/rekapanSharing.js. Dokumen ID = kode unit (mis. "MJS").
+    match /rekapanHeadcount/{unitCode} {
+      allow read: if isRekapanRole();
+      allow write: if isAdminRole()
+        && validStringList(request.resource.data.names, 200);
     }
 
     match /{document=**} {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
 import Select from 'react-select'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
@@ -16,6 +16,7 @@ import {
     aggregateByCategory,
     aggregateBbm
 } from '../utils/rekapanAggregation'
+import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares } from '../constants/rekapanSharing'
 
 // Sama seperti BUSINESS_UNITS di FormBs.jsx -- daftar semua Unit Bisnis untuk opsi
 // dropdown Admin/Super Admin ("Semua Unit Bisnis" melihat seluruhnya sekaligus).
@@ -135,18 +136,19 @@ const RekapanUnitBisnis = () => {
         fetchUserRole()
     }, [])
 
+    const isAdmin = role === 'Admin' || role === 'Super Admin'
+
     // 2. Susun opsi dropdown Unit Bisnis sesuai role
     useEffect(() => {
         if (!isRoleLoaded) return
 
-        const isAdmin = role === 'Admin' || role === 'Super Admin'
         const options = isAdmin
             ? [{ value: ALL_UNITS_VALUE, label: 'Semua Unit Bisnis' }, ...BUSINESS_UNITS]
             : ownUnits.map((u) => ({ value: u, label: u }))
 
         setUnitOptions(options)
         setSelectedUnit(options[0] || null)
-    }, [isRoleLoaded, role, ownUnits])
+    }, [isRoleLoaded, role, ownUnits, isAdmin])
 
     // 3. Fetch data reimbursement & lpj yang sudah Disetujui (sekali saja, filter
     // unit/tahun dilakukan di client -- pola sama seperti ReportExport.jsx)
@@ -171,6 +173,74 @@ const RekapanUnitBisnis = () => {
         fetchData()
     }, [])
 
+    // 4. Roster headcount per unit (/rekapanHeadcount) -- dasar hitung persentase
+    // sharing BBM MJS (pool "All Employee"). Bisa diedit Admin/Super Admin lewat
+    // panel "Kelola Data Sharing BBM" di bawah tabel BBM -- Total Biaya.
+    const [headcountByCode, setHeadcountByCode] = useState({})
+    const [isHeadcountLoading, setIsHeadcountLoading] = useState(true)
+    const [isEditingHeadcount, setIsEditingHeadcount] = useState(false)
+    const [headcountDraft, setHeadcountDraft] = useState({})
+    const [isSavingHeadcount, setIsSavingHeadcount] = useState(false)
+
+    const fetchHeadcount = useCallback(async () => {
+        setIsHeadcountLoading(true)
+        try {
+            const snapshot = await getDocs(collection(db, 'rekapanHeadcount'))
+            const result = {}
+            snapshot.docs.forEach((d) => {
+                result[d.id] = Array.isArray(d.data()?.names) ? d.data().names : []
+            })
+            setHeadcountByCode(result)
+        } catch (error) {
+            console.error('Gagal mengambil data roster sharing BBM:', error)
+        } finally {
+            setIsHeadcountLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        fetchHeadcount()
+    }, [fetchHeadcount])
+
+    const sharingShares = useMemo(() => computeAllEmployeeShares(headcountByCode), [headcountByCode])
+
+    const startEditHeadcount = () => {
+        const draft = {}
+        SHARING_UNITS.forEach((u) => {
+            draft[u.code] = (headcountByCode[u.code] || []).join('\n')
+        })
+        setHeadcountDraft(draft)
+        setIsEditingHeadcount(true)
+    }
+
+    const cancelEditHeadcount = () => {
+        setIsEditingHeadcount(false)
+        setHeadcountDraft({})
+    }
+
+    const saveHeadcount = async () => {
+        setIsSavingHeadcount(true)
+        try {
+            await Promise.all(
+                SHARING_UNITS.map((u) => {
+                    const names = (headcountDraft[u.code] || '')
+                        .split('\n')
+                        .map((n) => n.trim())
+                        .filter(Boolean)
+                    return setDoc(doc(db, 'rekapanHeadcount', u.code), { names })
+                })
+            )
+            toast.success('Data roster sharing BBM disimpan')
+            setIsEditingHeadcount(false)
+            await fetchHeadcount()
+        } catch (error) {
+            console.error('Gagal menyimpan roster sharing BBM:', error)
+            toast.error('Gagal menyimpan data roster')
+        } finally {
+            setIsSavingHeadcount(false)
+        }
+    }
+
     const unitsFilter = useMemo(() => {
         if (!selectedUnit) return []
         if (selectedUnit.value === ALL_UNITS_VALUE) return []
@@ -183,13 +253,21 @@ const RekapanUnitBisnis = () => {
         return [selectedUnit.value]
     }, [selectedUnit])
 
+    // PPNP bukan Unit Bisnis resmi aplikasi (lihat rekapanSharing.js) -- cuma
+    // relevan sebagai baris tambahan di tabel BBM -- Total Biaya, dan cuma
+    // muncul saat lihat "Semua Unit Bisnis" (kalau difilter ke 1 unit spesifik,
+    // PPNP tidak mungkin jadi pilihan dropdown-nya).
+    const bbmSharingExtraUnits = useMemo(() => {
+        return selectedUnit?.value === ALL_UNITS_VALUE ? [PPNP_UNIT_NAME] : []
+    }, [selectedUnit])
+
     const categoryData = useMemo(() => {
         return aggregateByCategory(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter })
     }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter])
 
     const bbmData = useMemo(() => {
-        return aggregateBbm(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter })
-    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter])
+        return aggregateBbm(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter, sharingShares })
+    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter, sharingShares])
 
     const orderedCategories = useMemo(() => {
         const found = Object.keys(categoryData)
@@ -203,11 +281,14 @@ const RekapanUnitBisnis = () => {
     const [tableFilter, setTableFilter] = useState([])
     const [isTableFilterOpen, setIsTableFilterOpen] = useState(false)
 
+    const orderedBbmJenis = useMemo(() => Object.keys(bbmData.byJenis || {}).sort(), [bbmData])
+
     const tableFilterOptions = useMemo(() => [
         { value: BBM_TOTAL_KEY, label: 'BBM -- Total Biaya' },
         { value: BBM_LITER_KEY, label: 'BBM -- Liter per Plat Nomor' },
+        ...orderedBbmJenis.map((jenis) => ({ value: jenis, label: jenis })),
         ...orderedCategories.map((c) => ({ value: c, label: c }))
-    ], [orderedCategories])
+    ], [orderedCategories, orderedBbmJenis])
 
     const isTableVisible = useCallback((key) => {
         return tableFilter.length === 0 || tableFilter.some((opt) => opt.value === key)
@@ -260,8 +341,11 @@ const RekapanUnitBisnis = () => {
         })
     }
 
-    const renderCategoryTable = (title, rowsData) => {
-        // rowsData: { [unit]: number[12] }
+    const renderCategoryTable = (title, rowsData, extraUnits = []) => {
+        // rowsData: { [unit]: number[12] }. extraUnits: unit "virtual" tambahan
+        // (mis. PPNP, bukan Unit Bisnis resmi aplikasi) yang cuma relevan untuk
+        // tabel ini -- ditambahkan setelah displayUnits, bukan menggantikannya.
+        const rowUnits = [...displayUnits, ...extraUnits]
         return (
             <div key={title} className="mb-6">
                 <div className="flex justify-end mb-2">
@@ -296,7 +380,7 @@ const RekapanUnitBisnis = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {displayUnits.map((unit, idx) => {
+                                {rowUnits.map((unit, idx) => {
                                     const months = rowsData[unit] || Array(12).fill(0)
                                     return (
                                         <tr key={unit} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}>
@@ -498,8 +582,11 @@ const RekapanUnitBisnis = () => {
                 </div>
             ) : (
                 <>
-                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals)}
+                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals, bbmSharingExtraUnits)}
                     {isTableVisible(BBM_LITER_KEY) && renderBbmLiterTable()}
+                    {orderedBbmJenis
+                        .filter((jenis) => isTableVisible(jenis))
+                        .map((jenis) => renderCategoryTable(jenis, bbmData.byJenis[jenis]))}
                     {orderedCategories
                         .filter((category) => isTableVisible(category))
                         .map((category) => renderCategoryTable(category, categoryData[category]))}
@@ -516,6 +603,72 @@ const RekapanUnitBisnis = () => {
                     {orderedCategories.length === 0 && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-gray-500 dark:text-gray-400">
                             Belum ada data pengajuan Disetujui untuk filter ini.
+                        </div>
+                    )}
+
+                    {isAdmin && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mt-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">
+                                        Kelola Data Sharing BBM
+                                    </p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Daftar nama per Unit Bisnis, dipakai hitung persentase pool "All Employee"
+                                        untuk bagi biaya BBM {getUnitLabel('PT Makassar Jaya Samudera')} ke unit lain.
+                                        Total headcount saat ini: {SHARING_UNITS.reduce((sum, u) => sum + (headcountByCode[u.code]?.length || 0), 0)} orang.
+                                    </p>
+                                </div>
+                                {!isEditingHeadcount && (
+                                    <button
+                                        type="button"
+                                        onClick={startEditHeadcount}
+                                        disabled={isHeadcountLoading}
+                                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                                    >
+                                        Edit Roster
+                                    </button>
+                                )}
+                            </div>
+
+                            {isEditingHeadcount && (
+                                <div className="mt-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {SHARING_UNITS.map((u) => (
+                                            <div key={u.code}>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    {u.name} <span className="text-gray-400">({u.code})</span>
+                                                </label>
+                                                <textarea
+                                                    rows={6}
+                                                    value={headcountDraft[u.code] || ''}
+                                                    onChange={(e) => setHeadcountDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
+                                                    placeholder="1 nama per baris"
+                                                    className="w-full text-sm border dark:border-gray-600 rounded-md p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex justify-end gap-2 mt-4">
+                                        <button
+                                            type="button"
+                                            onClick={cancelEditHeadcount}
+                                            disabled={isSavingHeadcount}
+                                            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:underline disabled:opacity-50"
+                                        >
+                                            Batal
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={saveHeadcount}
+                                            disabled={isSavingHeadcount}
+                                            className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+                                        >
+                                            {isSavingHeadcount ? 'Menyimpan...' : 'Simpan'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </>

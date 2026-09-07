@@ -1198,3 +1198,48 @@ Disarankan sejak Bagian 13 (13.5), disebut ulang di 15.10 & 21.6, tidak pernah d
 - [ ] Tes manual: upload/hapus gambar pengumuman sebagai Super Admin (harus tetap berhasil), coba sebagai role lain (harus ditolak)
 - [ ] Tes manual: klik "Export PNG" di halaman Rekapan, pastikan file PNG ke-download dengan tampilan tabel yang benar (termasuk dark mode)
 - [ ] Tes manual: submit RBS/LPJ/BS baru, pastikan nomor dokumen BS untuk PT Makassar Jaya Samudera/Samudera Makassar Logistik/Kendari Jaya Samudera TETAP pakai kode lama (019/035/083), tidak berubah jadi MJS/SML/KEJS
+
+---
+
+# BAGIAN T — Rekapan: Normalisasi Plat, Breakdown per Jenis BBM, Sharing MJS ke Unit Lain (2026-09-07)
+
+## 30.1 Konteks & Proses Klarifikasi
+
+User minta "micro filter" di Rekapan (BBM MJS terlihat tinggi karena sebenarnya di-share/ditalangi ke semua unit) sambil melampirkan PDF budget kompleks (puluhan kategori biaya per unit dengan skema alokasi headcount) dan link Google Sheets untuk perhitungan sharing. Karena scope-nya berpotensi sangat besar (bisa jadi "bangun ulang Rekapan jadi sistem budgeting") dan ada beberapa hal yang TIDAK bisa saya tebak sendiri, sesi ini diawali dengan klarifikasi (bukan langsung eksekusi):
+
+1. Google Sheets link tidak bisa diakses (401 Unauthorized, WebFetch tidak punya kredensial Google) -- user kirim screenshot tabel headcount sebagai gantinya.
+2. **Scope dipersempit ke "Rekapan dulu"** (bukan section "Budgeting" penuh mengikuti PDF -- itu ditunda, beda task, jauh lebih besar: puluhan kategori biaya manual yang sebagian besar TIDAK berasal dari data RBS/BS/LPJ aplikasi).
+3. **Metodologi sharing dikonfirmasi**: persentase headcount berbasis "pool" (ada 7 varian: All Employee/All Office/Exc. Kendari/dst, masing-masing exclude unit tertentu dari basis penyebut) -- diverifikasi angkanya cocok persis dengan tabel screenshot user. BBM MJS pakai pool **"All Employee"** (basis SEMUA nama di roster, termasuk 3 nama tambahan Arkam/Fajar/Juswandi).
+4. **Bentuk data**: roster headcount dibuat **config yang bisa diedit Admin/Super Admin** (bukan hardcode) -- supaya tidak jadi masalah "basi" berulang seperti `UNIT_CODES` di Bagian S.
+5. **PPNP** (salah satu dari 9 kode di tabel user) ternyata **"Perusahaan Pelayaran Nusantara Panurjwan"** -- unit yang SAMA SEKALI BELUM terdaftar di aplikasi. Diklarifikasi lagi: PPNP **cuma untuk keperluan Rekapan/sharing** (dapat porsi share BBM sebagai baris tambahan di tabel), **TIDAK** jadi Unit Bisnis penuh (tidak bisa dipilih di form RBS/BS/LPJ, tidak ada penomoran dokumen sendiri, tidak ada assignment karyawan) -- onboarding unit beneran itu scope terpisah & jauh lebih besar.
+
+## 30.2 Implementasi
+
+**Normalisasi plat nomor** (`normalizePlatKey`, `formatPlatDisplay` di `rekapanAggregation.js`): plat yang cuma beda spasi/kapitalisasi ("DD 1234 AB" vs "DD1234AB" vs "dd  1234   ab") disatukan jadi 1 baris di breakdown per-plat, ditampilkan diformat ulang "DD 1234 AB" kalau cocok pola plat Indonesia umum.
+
+**Breakdown per jenis BBM** (`byJenis` baru di `aggregateBbm()`): total BBM sekarang juga dipecah per jenis (Pertalite/Pertamax/Pertamax Turbo/Solar/Dexlite) selain per unit -- muncul sebagai tabel terpisah di Rekapan, bisa di-filter lewat dropdown "Tampilkan Rekapan" yang sudah ada. Breakdown ini TIDAK ikut sharing redistribution (tetap data submission asli) -- keputusan pragmatis, tabel "BBM -- Total Biaya" sudah cukup untuk gambaran hasil sharing.
+
+**Sharing MJS -> unit lain** (`src/constants/rekapanSharing.js`, baru):
+- `SHARING_UNITS`: 9 unit (MKT/SAG/SP/SKI/MJS/SML/KEJS/SKEL/PPNP) -- SENGAJA daftar terpisah dari `businessUnits.js` (10 Unit Bisnis resmi), karena "Samudera Indonesia"/"Panitia" tidak ikut pool ini & PPNP bukan Unit Bisnis resmi sama sekali.
+- `computeAllEmployeeShares(headcountByCode)`: persentase = jumlah_orang_unit / total_semua_orang, dibulatkan -- diverifikasi test-nya menghasilkan angka PERSIS SAMA dengan contoh perhitungan user (10/11/11/11/12/13/10/10/10 dari total 107 orang).
+- `applySharingToBbmTotals(totals, shares)`: total BBM asli MJS (100% ke MJS) diganti jadi cuma porsi MJS sendiri (~12%), sisanya ditambahkan proporsional ke 8 unit lain (termasuk PPNP sebagai baris baru).
+- **Penanganan filter unit**: kalau user sedang filter tampilan ke 1 unit spesifik (bukan "Semua Unit Bisnis") yang BUKAN MJS, dokumen BBM MJS sendiri tetap tersembunyi dari tampilan (byPlat/byJenis), TAPI pool BBM MJS untuk perhitungan share dihitung ulang unfiltered secara terpisah (`sumMjsBbmUnfiltered`) supaya unit yang di-filter itu tetap dapat porsi share-nya dengan benar -- diverifikasi lewat test.
+
+**Roster headcount editable** (`rekapanHeadcount` collection Firestore baru, doc ID = kode unit):
+- `firestore.rules`: `isAdminRole()` (Admin/Super Admin) untuk write, `isRekapanRole()` (Validator/Admin/Super Admin, sama seperti akses halaman Rekapan) untuk read.
+- `RekapanUnitBisnis.jsx`: panel "Kelola Data Sharing BBM" (Admin/Super Admin only) di bawah semua tabel -- textarea per unit (1 nama per baris), simpan ke Firestore, langsung mempengaruhi persentase sharing begitu disimpan.
+
+## 30.3 Task Development — Bagian T
+
+- [x] `src/utils/rekapanAggregation.js`: `normalizePlatKey`, `formatPlatDisplay`, `byJenis` breakdown, integrasi `sharingShares` + `sumMjsBbmUnfiltered`
+- [x] `src/constants/rekapanSharing.js` (baru): `SHARING_UNITS`, `computeAllEmployeeShares`, `applySharingToBbmTotals`
+- [x] `firestore.rules`: `isAdminRole()`, `isRekapanRole()`, match block `rekapanHeadcount/{unitCode}`
+- [x] `RekapanUnitBisnis.jsx`: fetch/edit roster headcount, sharing terintegrasi ke tabel BBM Total, tabel breakdown per jenis BBM, baris PPNP muncul saat "Semua Unit Bisnis"
+- [x] Test baru: `rekapanSharing.test.js` (8 test, termasuk verifikasi angka PERSIS sama dengan contoh user), `rekapanAggregation.test.js` (11 test, termasuk kasus filter+sharing)
+- [x] `CI=true npm run build` sukses (0 warning/error)
+- [x] Semua test PASS: 50 frontend (naik dari 31)
+- [ ] Deploy ke produksi (firestore rules + hosting)
+- [ ] Admin/Super Admin isi roster headcount pertama kali lewat panel "Kelola Data Sharing BBM" (WAJIB -- tanpa ini, `sharingShares` kosong dan BBM MJS tampil 100% di MJS seperti sebelumnya, bukan error tapi belum ada manfaatnya)
+- [ ] Tes manual: isi roster sesuai screenshot user, konfirmasi tabel "BBM -- Total Biaya" menunjukkan MJS berkurang & 8 unit lain (termasuk PPNP) bertambah sesuai persentase
+- [ ] Tes manual: filter ke 1 unit non-MJS spesifik, konfirmasi unit itu tetap dapat porsi share BBM MJS walau dokumen MJS sendiri tidak ikut tampil
+- [ ] Tes manual: plat nomor yang diketik beda spasi di form RBS BBM, konfirmasi muncul sebagai 1 baris gabungan di tabel "BBM -- Liter per Plat Nomor"
