@@ -1238,7 +1238,7 @@ User minta "micro filter" di Rekapan (BBM MJS terlihat tinggi karena sebenarnya 
 - [x] Test baru: `rekapanSharing.test.js` (8 test, termasuk verifikasi angka PERSIS sama dengan contoh user), `rekapanAggregation.test.js` (11 test, termasuk kasus filter+sharing)
 - [x] `CI=true npm run build` sukses (0 warning/error)
 - [x] Semua test PASS: 50 frontend (naik dari 31)
-- [ ] Deploy ke produksi (firestore rules + hosting)
+- [x] Deploy ke produksi — firestore rules (compiled successfully) + hosting, sukses 2026-09-07
 - [ ] Admin/Super Admin isi roster headcount pertama kali lewat panel "Kelola Data Sharing BBM" (WAJIB -- tanpa ini, `sharingShares` kosong dan BBM MJS tampil 100% di MJS seperti sebelumnya, bukan error tapi belum ada manfaatnya)
 - [ ] Tes manual: isi roster sesuai screenshot user, konfirmasi tabel "BBM -- Total Biaya" menunjukkan MJS berkurang & 8 unit lain (termasuk PPNP) bertambah sesuai persentase
 - [ ] Tes manual: filter ke 1 unit non-MJS spesifik, konfirmasi unit itu tetap dapat porsi share BBM MJS walau dokumen MJS sendiri tidak ikut tampil
