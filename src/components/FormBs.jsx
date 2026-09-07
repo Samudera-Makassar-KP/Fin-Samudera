@@ -8,6 +8,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 import { useTheme } from '../context/ThemeContext'
+import { BS_UNIT_CODES } from '../constants/businessUnits'
 
 const FormBs = () => {
     const { theme } = useTheme()
@@ -365,19 +366,6 @@ const FormBs = () => {
         }
     };
 
-    const BUSINESS_UNIT_CODES = useMemo(() => ({
-        'PT Makassar Jaya Samudera': '019',
-        'PT Samudera Makassar Logistik': '035',
-        'PT Kendari Jaya Samudera': '083',
-        'PT Samudera Kendari Logistik': 'SKEL',
-        'PT Samudera Agencies Indonesia': 'SAI',
-        'PT SILKargo Indonesia': 'SKI',
-        'PT PAD Samudera Perdana': 'SP',
-        'PT Masaji Kargosentra Tama': 'MKT',
-        'Samudera Indonesia': 'SMDR',
-        'Panitia': 'PNTA',
-    }), []);
-
     const handleUnitChange = async (selectedOption) => {
         setSelectedUnit(selectedOption);
 
@@ -392,7 +380,7 @@ const FormBs = () => {
             const year = today.getFullYear().toString().slice(-2);
             const tanggalKode = `${year}${month}`;
 
-            const kodeUnitBisnis = BUSINESS_UNIT_CODES[selectedOption.value];
+            const kodeUnitBisnis = BS_UNIT_CODES[selectedOption.value];
 
             if (!kodeUnitBisnis) {
                 throw new Error(`No code found for business unit: ${selectedOption.value}`);
@@ -433,7 +421,7 @@ const FormBs = () => {
             const year = today.getFullYear().toString().slice(-2);
             const tanggalKode = `${year}${month}`;
 
-            const kodeUnitBisnis = BUSINESS_UNIT_CODES[currentUnit];
+            const kodeUnitBisnis = BS_UNIT_CODES[currentUnit];
 
             if (!kodeUnitBisnis) {
                 throw new Error(`No code found for business unit: ${currentUnit}`);
@@ -449,7 +437,7 @@ const FormBs = () => {
             toast.error('Error: ' + error.message);
             return null;
         }
-    }, [alreadyFetchBS, isUserDataLoaded, selectedUnit, userData.unit, BUSINESS_UNIT_CODES]);
+    }, [alreadyFetchBS, isUserDataLoaded, selectedUnit, userData.unit]);
 
     useEffect(() => {
         const fetchNomorBS = async () => {
@@ -557,7 +545,7 @@ const FormBs = () => {
             }
 
             const displayId = bonSementara[0]?.nomorBS
-            const kodeUnitBisnis = BUSINESS_UNIT_CODES[selectedUnit.value]
+            const kodeUnitBisnis = BS_UNIT_CODES[selectedUnit.value]
 
             const parseRupiah = (value) => {
                 return Number(value.replace(/[^,\d]/g, '').replace(',', '.')) || 0

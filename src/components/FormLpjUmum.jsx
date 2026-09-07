@@ -13,6 +13,8 @@ import { uploadPdfFile } from '../utils/uploadPdfFile'
 import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES, getUploadableAttachments, isValidAttachmentFile, mergeAttachmentsToPdf } from '../utils/attachmentUpload'
 import { PENGEMBALIAN_ACCEPT, PENGEMBALIAN_MAX_SIZE_BYTES, describePengembalianStatus, isValidPengembalianFile, uploadAndValidatePengembalian } from '../utils/pengembalianUpload'
 import { useTheme } from '../context/ThemeContext'
+import { getUnitCode } from '../constants/businessUnits'
+import { BBM_PRICE_PER_LITER } from '../constants/bbmPrice'
 
 const FormLpjUmum = () => {
     const { theme } = useTheme()
@@ -355,22 +357,6 @@ const FormLpjUmum = () => {
         setLpj(updatedLpj)
     }
 
-    const UNIT_CODES = {
-        'PT Makassar Jaya Samudera': 'MJS',
-        'PT Samudera Makassar Logistik': 'SML',
-        'PT Kendari Jaya Samudera': 'KEJS',
-        'PT Samudera Kendari Logistik': 'SKEL',
-        'PT Samudera Agencies Indonesia': 'SAI',
-        'PT SILKargo Indonesia': 'SKI',
-        'PT PAD Samudera Perdana': 'SP',
-        'PT Masaji Kargosentra Tama': 'MKT',
-        'Samudera Indonesia': 'SMDR',
-        'Panitia': 'PNTA',
-    }
-
-    const getUnitCode = (unitName) => {
-        return UNIT_CODES[unitName] || unitName
-    }
 
     // Sama seperti jenisOptions di FormRbsUmum.jsx -- disamakan supaya item LPJ Umum bisa
     // direkap per kategori (menu Rekapan), bukan lagi teks bebas yang tidak bisa dikelompokkan.
@@ -390,13 +376,6 @@ const FormLpjUmum = () => {
         { value: 'Lainnya', label: 'Lainnya' }
     ], [])
 
-    // Patokan harga BBM per liter wilayah Sulawesi Selatan (berlaku 1 September 2026, Pertamina Patra Niaga)
-    const BBM_PRICE_PER_LITER = {
-        'BBM Pertalite': 10000,
-        'BBM Pertamax': 16300,
-        'BBM Pertamax Turbo': 19600,
-        'BBM Solar': 6800
-    }
 
     // Di LPJ, "Biaya" itu harga satuan & "Jumlah" itu kuantitas -- untuk item BBM,
     // itu persis sama dengan harga/liter x liter, jadi tidak perlu field Liter terpisah,

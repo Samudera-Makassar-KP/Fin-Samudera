@@ -11,6 +11,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { uploadPdfFile } from '../utils/uploadPdfFile'
 import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES, isValidAttachmentFile, mergeAttachmentsToPdf } from '../utils/attachmentUpload'
 import { useTheme } from '../context/ThemeContext'
+import { getUnitCode } from '../constants/businessUnits'
+import { BBM_PRICE_PER_LITER } from '../constants/bbmPrice'
 
 const RbsBbmForm = () => {
     const navigate = useNavigate();
@@ -204,15 +206,6 @@ const RbsBbmForm = () => {
         { value: 'Lainnya', label: 'Lainnya' }
     ]
 
-    // Patokan harga BBM per liter wilayah Sulawesi Selatan (berlaku 1 September 2026, Pertamina Patra Niaga)
-    const BBM_PRICE_PER_LITER = {
-        'BBM Pertalite': 10000,
-        'BBM Pertamax': 16300,
-        'BBM Pertamax Turbo': 19600,
-        'BBM Solar': 6800,
-        'BBM Dexlite': 23700
-    }
-
     const parseRupiahValue = (value) => {
         if (!value) return 0
         return Number(String(value).replace(/[^0-9,]/g, '').replace(',', '.')) || 0
@@ -403,23 +396,6 @@ const RbsBbmForm = () => {
         const updatedReimbursements = [...reimbursements]
         updatedReimbursements[index].jenisLain = value
         setReimbursements(updatedReimbursements)
-    }
-
-    const UNIT_CODES = {
-        'PT Makassar Jaya Samudera': 'MJS',
-        'PT Samudera Makassar Logistik': 'SML',
-        'PT Kendari Jaya Samudera': 'KEJS',
-        'PT Samudera Kendari Logistik': 'SKEL',
-        'PT Samudera Agencies Indonesia': 'SAI',
-        'PT SILKargo Indonesia': 'SKI',
-        'PT PAD Samudera Perdana': 'SP',
-        'PT Masaji Kargosentra Tama': 'MKT',
-        'Samudera Indonesia': 'SMDR',
-        'Panitia': 'PNTA',
-    }
-
-    const getUnitCode = (unitName) => {
-        return UNIT_CODES[unitName] || unitName
     }
 
     // PENTING: nomor dokumen HARUS didapat dari counter atomik (runTransaction), bukan
