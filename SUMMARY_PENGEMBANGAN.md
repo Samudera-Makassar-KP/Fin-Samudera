@@ -1310,5 +1310,5 @@ Status per baris BBM di panel "Kelola Sharing BBM" diperluas dari 2 jadi **3 pil
 - [x] Test baru: 4 test kasus dikecualikan (termasuk prioritas di atas dibagi, dan baris lain di dokumen sama tetap normal)
 - [x] `CI=true npm run build` sukses
 - [x] Semua test PASS: 53 frontend
-- [ ] Deploy ke produksi (hosting saja, firestore rules tidak berubah)
+- [x] Deploy ke produksi (hosting saja, firestore rules tidak berubah) — sukses 2026-09-07, diverifikasi teks "Kecualikan dari Rekapan" ada di bundle live
 - [ ] Admin coba tandai baris BBM Solar plat "CDE" milik MKT jadi "Kecualikan dari Rekapan", konfirmasi tidak lagi muncul di tabel BBM Total maupun breakdown per jenis/plat
