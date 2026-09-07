@@ -1338,6 +1338,6 @@ Sebagian transaksi BBM LAMA (sebelum field `plat` terpisah ada) diisi bebas di f
 - [x] Test baru: 3 test kasus kanonisasi jenis (baku vs bebas, totals tidak ikut terdampak)
 - [x] `CI=true npm run build` sukses
 - [x] Semua test PASS: 56 frontend
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-07, diverifikasi teks "BBM Lainnya"/"Liter (L)"/"Biaya (Rp)" ada di bundle live
 - [ ] Cek dropdown "Tampilkan Rekapan" sekarang cuma berisi jenis baku + "BBM Lainnya" (tidak ada lagi entri per-tanggal)
 - [ ] Cek tabel "BBM -- Liter per Plat Nomor" menampilkan baris Liter & Biaya terpisah per plat
