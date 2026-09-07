@@ -1121,9 +1121,9 @@ Beberapa jam setelah Bagian O (fitur validasi bukti pengembalian LPJ) live, user
 
 ## 28.4 WAJIB Dilakukan Segera Setelah Deploy Ini
 
-- [ ] **Super Admin klik tombol "Selesaikan LPJ Lama (Pengembalian)" di halaman Manage Users SEKARANG** -- ini yang menghentikan siklus reminder untuk LPJ lama (kalau tidak diklik, LPJ yang sudah dapat reminder pagi ini akan dapat reminder lagi 2 hari kemudian, dan seterusnya tiap 2 hari tanpa henti).
-- [ ] Setelah diklik, cek toast konfirmasi jumlah LPJ yang di-update masuk akal (bandingkan dengan estimasi jumlah LPJ ber-`sisaLebih>0` yang pernah dibuat).
-- [ ] Pastikan tidak ada reminder susulan 2 hari lagi (2026-09-09) untuk LPJ-LPJ yang sama.
+- [x] **Super Admin klik tombol "Selesaikan LPJ Lama (Pengembalian)" di halaman Manage Users** — **dikonfirmasi berhasil 2026-09-07**, bom email berhenti.
+- [x] Toast konfirmasi jumlah LPJ yang di-update muncul normal.
+- [ ] Pastikan tidak ada reminder susulan 2 hari lagi (2026-09-09) untuk LPJ-LPJ yang sama (belum bisa diverifikasi sekarang, baru bisa dicek pada tanggal itu).
 
 ## 28.5 Pelajaran untuk Fitur Retroaktif Berikutnya
 
@@ -1138,4 +1138,4 @@ Sebelum deploy fitur yang scan/proses SELURUH data existing (bukan cuma data bar
 - [x] `node -c` + isolated `require()` test functions sukses
 - [x] `CI=true npm run build` sukses, semua test (27 frontend + 19 functions) PASS
 - [x] Deploy darurat: functions (`grandfatherPengembalianLpj` -- `Successful create operation`) + hosting, sukses 2026-09-07
-- [ ] **Super Admin klik "Selesaikan LPJ Lama (Pengembalian)" — WAJIB SEGERA, lihat 28.4**
+- [x] Super Admin klik "Selesaikan LPJ Lama (Pengembalian)" — **selesai & dikonfirmasi berhasil, lihat 28.4**
