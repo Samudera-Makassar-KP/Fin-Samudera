@@ -1193,8 +1193,8 @@ Disarankan sejak Bagian 13 (13.5), disebut ulang di 15.10 & 21.6, tidak pernah d
 - [x] `firebase deploy --only functions --dry-run` sukses (juga konfirmasi warning "firebase-functions outdated" hilang setelah update)
 - [x] `CI=true npm run build` sukses (0 warning/error)
 - [x] Semua test PASS: 31 frontend + 19 functions
-- [ ] Deploy ke produksi (storage rules + functions + hosting)
-- [ ] Super Admin klik "Sinkronkan Role Token" di Manage Users setelah deploy (WAJIB, supaya `announcements/` yang sekarang Super Admin-only tidak memblokir Super Admin yang tokennya masih lama)
+- [x] Deploy ke produksi — storage rules (`isSuperAdminRole()` compiled successfully), functions (`backfillCustomClaims` — `Successful create operation`), hosting — semua sukses 2026-09-07
+- [ ] **Super Admin klik "Sinkronkan Role Token" di Manage Users — WAJIB SEGERA**, supaya `announcements/` yang sekarang Super Admin-only tidak memblokir Super Admin yang tokennya masih lama (belum punya custom claim `role`)
 - [ ] Tes manual: upload/hapus gambar pengumuman sebagai Super Admin (harus tetap berhasil), coba sebagai role lain (harus ditolak)
 - [ ] Tes manual: klik "Export PNG" di halaman Rekapan, pastikan file PNG ke-download dengan tampilan tabel yang benar (termasuk dark mode)
 - [ ] Tes manual: submit RBS/LPJ/BS baru, pastikan nomor dokumen BS untuk PT Makassar Jaya Samudera/Samudera Makassar Logistik/Kendari Jaya Samudera TETAP pakai kode lama (019/035/083), tidak berubah jadi MJS/SML/KEJS
