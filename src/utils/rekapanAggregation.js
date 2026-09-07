@@ -2,6 +2,8 @@
 // Fungsi murni, tidak menyentuh Firestore -- data mentah diambil di komponen
 // (RekapanUnitBisnis.jsx), lalu diagregasi di sini.
 
+import { BBM_PRICE_PER_LITER } from '../constants/bbmPrice'
+
 export const MONTH_LABELS = [
     'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
     'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
@@ -41,6 +43,18 @@ const matchesUnitFilter = (unit, units) => !units || units.length === 0 || units
 // rekap khusus BBM (`aggregateBbm`), TERLEPAS dari `kategori` di level dokumen (dokumen
 // Operasional/GA-Umum/LPJ bisa berisi campuran item BBM & non-BBM dalam satu pengajuan).
 const isBbmValue = (value) => typeof value === 'string' && value.startsWith('BBM ')
+
+// Sebagian transaksi LAMA diisi bebas di field jenis/namaItem (mis. "BBM 1273
+// XBO 04/07/26" -- plat + tanggal diketik manual sebagai teks, bukan lewat
+// field `plat` yang baru ada belakangan) -- tetap valid sebagai BBM
+// (isBbmValue di atas), TAPI kalau dipakai apa adanya sebagai kunci breakdown
+// `byJenis`, tiap transaksi jadi kategori sendiri-sendiri (banjir di dropdown
+// filter "Tampilkan Rekapan"). Dikanonisasi ke salah satu jenis BBM baku
+// (BBM_PRICE_PER_LITER) kalau cocok, selain itu digabung jadi "BBM Lainnya".
+const canonicalJenisLabel = (jenis) => {
+    if (jenis && Object.prototype.hasOwnProperty.call(BBM_PRICE_PER_LITER, jenis)) return jenis
+    return 'BBM Lainnya'
+}
 
 // Kunci unik per baris/item BBM di dalam dokumen reimbursement/lpj (item tidak
 // punya id sendiri, cuma posisi di array) -- dipakai sebagai doc ID di koleksi
@@ -184,7 +198,7 @@ export function aggregateBbm(reimbursementDocs, lpjDocs, { year, units, sharingC
         if (classification?.dikecualikan) return
 
         if (includeInDrilldown) {
-            const jenisLabel = jenis || 'BBM Lainnya'
+            const jenisLabel = canonicalJenisLabel(jenis)
             if (!byJenis[jenisLabel]) byJenis[jenisLabel] = {}
             if (!byJenis[jenisLabel][unit]) byJenis[jenisLabel][unit] = emptyMonths()
             byJenis[jenisLabel][unit][month] += biayaTotal

@@ -1312,3 +1312,32 @@ Status per baris BBM di panel "Kelola Sharing BBM" diperluas dari 2 jadi **3 pil
 - [x] Semua test PASS: 53 frontend
 - [x] Deploy ke produksi (hosting saja, firestore rules tidak berubah) — sukses 2026-09-07, diverifikasi teks "Kecualikan dari Rekapan" ada di bundle live
 - [ ] Admin coba tandai baris BBM Solar plat "CDE" milik MKT jadi "Kecualikan dari Rekapan", konfirmasi tidak lagi muncul di tabel BBM Total maupun breakdown per jenis/plat
+
+---
+
+# BAGIAN W — Fix Dropdown Filter Banjir & Tabel Plat Tampilkan Liter+Biaya (2026-09-07)
+
+## 33.1 Masalah yang Dilaporkan
+
+Screenshot dropdown "Tampilkan Rekapan" penuh entri aneh: "BBM 1273 XBO 04/07/26", "BBM 1273 XBO 12/07/26", "BBM & OPS", "BBM & TERPAL", dst -- tiap transaksi jadi kategori "jenis" sendiri-sendiri. User juga minta tabel per-plat menampilkan Liter DAN Biaya sekaligus (total per bulan), bukan cuma Liter.
+
+## 33.2 Root Cause
+
+Sebagian transaksi BBM LAMA (sebelum field `plat` terpisah ada) diisi bebas di field jenis/namaItem -- user manual mengetik plat+tanggal di situ (mis. "BBM 1273 XBO 04/07/26") alih-alih memilih dari `jenisOptions` baku (Pertalite/Pertamax/dst). `byJenis` breakdown (Bagian O) memakai nilai jenis APA ADANYA sebagai kunci bucket -- tiap teks unik (beda tanggal = beda teks) jadi bucket terpisah, membanjiri dropdown filter yang otomatis menarik semua kunci `byJenis`.
+
+## 33.3 Perbaikan
+
+`canonicalJenisLabel()` (baru, `rekapanAggregation.js`): jenis yang cocok dengan salah satu key `BBM_PRICE_PER_LITER` (Pertalite/Pertamax/Pertamax Turbo/Solar/Dexlite) dipakai apa adanya; SEMUA yang lain (termasuk teks bebas manapun) digabung jadi satu bucket **"BBM Lainnya"**. `totals`/`byPlat` TIDAK terpengaruh (transaksi itu tetap dihitung sebagai BBM seperti biasa, cuma breakdown per-jenisnya yang dirapikan) -- dropdown "Tampilkan Rekapan" otomatis ikut rapi karena optionnya ditarik dari `Object.keys(bbmData.byJenis)`.
+
+`renderBbmLiterTable` (`RekapanUnitBisnis.jsx`): setiap plat sekarang 2 baris (rowSpan pada kolom Plat Nomor) -- baris "Liter (L)" dan baris "Biaya (Rp)", masing-masing dengan total per bulan & total keseluruhan. Sebelumnya cuma baris Liter.
+
+## 33.4 Task Development — Bagian W
+
+- [x] `rekapanAggregation.js`: `canonicalJenisLabel()` baru, dipakai di `byJenis` bucketing (bukan `aggregateByCategory`/`totals`/`byPlat`, itu tetap seperti semula)
+- [x] `RekapanUnitBisnis.jsx`: `renderBbmLiterTable` 2 baris per plat (Liter + Biaya), kolom "Satuan" baru, colSpan header disesuaikan
+- [x] Test baru: 3 test kasus kanonisasi jenis (baku vs bebas, totals tidak ikut terdampak)
+- [x] `CI=true npm run build` sukses
+- [x] Semua test PASS: 56 frontend
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Cek dropdown "Tampilkan Rekapan" sekarang cuma berisi jenis baku + "BBM Lainnya" (tidak ada lagi entri per-tanggal)
+- [ ] Cek tabel "BBM -- Liter per Plat Nomor" menampilkan baris Liter & Biaya terpisah per plat

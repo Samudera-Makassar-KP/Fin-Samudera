@@ -236,3 +236,41 @@ describe('aggregateBbm - baris dikecualikan (Bagian V)', () => {
         expect(result.byPlat['FGH'].biaya[2]).toBe(200000)
     })
 })
+
+describe('aggregateBbm - byJenis dikanonisasi (data lama diisi bebas)', () => {
+    const MKT = 'PT Masaji Kargosentra Tama'
+    const makeReimbursement = (id, unit, biaya, jenis, plat) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis, biaya, liter: 10, plat, tanggal: '2026-03-15' }
+        ]
+    })
+
+    test('jenis baku (ada di BBM_PRICE_PER_LITER) dipakai apa adanya sebagai bucket', () => {
+        const docs = [makeReimbursement('doc1', MKT, 100000, 'BBM Solar', 'CDE')]
+        const result = aggregateBbm(docs, [], { year: 2026 })
+
+        expect(Object.keys(result.byJenis)).toEqual(['BBM Solar'])
+    })
+
+    test('jenis bebas/tidak baku (mis. "BBM 1273 XBO 04/07/26") digabung jadi 1 bucket "BBM Lainnya", TIDAK jadi bucket sendiri-sendiri', () => {
+        const docs = [
+            makeReimbursement('doc1', MKT, 100000, 'BBM 1273 XBO 04/07/26', '1273 XBO'),
+            makeReimbursement('doc2', MKT, 200000, 'BBM 1273 XBO 12/07/26', '1273 XBO'),
+            makeReimbursement('doc3', MKT, 300000, 'BBM & OPS', 'FGH')
+        ]
+        const result = aggregateBbm(docs, [], { year: 2026 })
+
+        expect(Object.keys(result.byJenis)).toEqual(['BBM Lainnya'])
+        expect(result.byJenis['BBM Lainnya'][MKT][2]).toBe(600000)
+    })
+
+    test('bucket "BBM Lainnya" tetap kena totals seperti jenis biasa (cuma byJenis yang digabung)', () => {
+        const docs = [makeReimbursement('doc1', MKT, 100000, 'BBM 1273 XBO 04/07/26', '1273 XBO')]
+        const result = aggregateBbm(docs, [], { year: 2026 })
+
+        expect(result.totals[MKT][2]).toBe(100000)
+    })
+})

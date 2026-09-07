@@ -571,39 +571,59 @@ const RekapanUnitBisnis = () => {
                     <table className="w-full text-sm border-collapse">
                         <thead>
                             <tr style={{ backgroundColor: '#ED1C24' }}>
-                                <th colSpan={14} className="py-2 px-4 text-white text-left font-semibold">
+                                <th colSpan={15} className="py-2 px-4 text-white text-left font-semibold">
                                     {title}
                                 </th>
                             </tr>
                             <tr style={{ backgroundColor: '#ED1C24' }}>
                                 <th className="py-2 px-4 text-white text-left font-medium min-w-[160px]">Plat Nomor</th>
+                                <th className="py-2 px-2 text-white text-left font-medium">Satuan</th>
                                 {MONTH_LABELS.map((m) => (
                                     <th key={m} className="py-2 px-2 text-white text-center font-medium">{m}</th>
                                 ))}
-                                <th className="py-2 px-3 text-white text-center font-medium">Total (L)</th>
+                                <th className="py-2 px-3 text-white text-center font-medium">Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             {plats.length === 0 && (
                                 <tr>
-                                    <td colSpan={14} className="py-4 px-4 text-center text-gray-500 dark:text-gray-400">
+                                    <td colSpan={15} className="py-4 px-4 text-center text-gray-500 dark:text-gray-400">
                                         Tidak ada data BBM untuk filter ini.
                                     </td>
                                 </tr>
                             )}
-                            {plats.map((plat, idx) => (
-                                <tr key={plat} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}>
-                                    <td className="py-2 px-4 text-gray-800 dark:text-gray-100 whitespace-nowrap">{plat}</td>
-                                    {bbmData.byPlat[plat].liter.map((val, i) => (
-                                        <td key={i} className="py-2 px-2 text-right text-gray-700 dark:text-gray-200">
-                                            {val ? val.toLocaleString('id-ID') : '-'}
-                                        </td>
-                                    ))}
-                                    <td className="py-2 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
-                                        {sumMonths(bbmData.byPlat[plat].liter).toLocaleString('id-ID')}
-                                    </td>
-                                </tr>
-                            ))}
+                            {plats.map((plat, idx) => {
+                                const rowBg = idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'
+                                return (
+                                    <React.Fragment key={plat}>
+                                        <tr className={rowBg}>
+                                            <td rowSpan={2} className="py-2 px-4 text-gray-800 dark:text-gray-100 whitespace-nowrap align-top border-b dark:border-gray-600">
+                                                {plat}
+                                            </td>
+                                            <td className="py-1 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">Liter (L)</td>
+                                            {bbmData.byPlat[plat].liter.map((val, i) => (
+                                                <td key={i} className="py-1 px-2 text-right text-gray-700 dark:text-gray-200">
+                                                    {val ? val.toLocaleString('id-ID') : '-'}
+                                                </td>
+                                            ))}
+                                            <td className="py-1 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
+                                                {sumMonths(bbmData.byPlat[plat].liter).toLocaleString('id-ID')}
+                                            </td>
+                                        </tr>
+                                        <tr className={`${rowBg} border-b dark:border-gray-600`}>
+                                            <td className="py-1 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">Biaya (Rp)</td>
+                                            {bbmData.byPlat[plat].biaya.map((val, i) => (
+                                                <td key={i} className="py-1 px-2 text-right text-gray-700 dark:text-gray-200">
+                                                    {val ? val.toLocaleString('id-ID') : '-'}
+                                                </td>
+                                            ))}
+                                            <td className="py-1 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
+                                                {sumMonths(bbmData.byPlat[plat].biaya).toLocaleString('id-ID')}
+                                            </td>
+                                        </tr>
+                                    </React.Fragment>
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>
