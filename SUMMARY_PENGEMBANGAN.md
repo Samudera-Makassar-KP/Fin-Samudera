@@ -1417,5 +1417,5 @@ Kedua dropdown checkbox custom (bukan `react-select`, jadi tidak otomatis dapat 
 - [x] `RekapanUnitBisnis.jsx`: state `unitSearchText`/`tableSearchText`, input pencarian di kedua dropdown checkbox, filter opsi + pesan "Tidak ditemukan", reset teks saat dropdown ditutup/dibuka
 - [x] `CI=true npm run build` sukses (dijalankan lewat PowerShell -- Bash tool sempat bermasalah di sesi ini, coreutils dasar seperti `grep`/`tail` tidak ketemu di PATH)
 - [x] Semua test PASS: 61 frontend (tidak ada logic baru yang perlu ditest, murni UI filter teks)
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-08, diverifikasi teks "Ketik untuk cari" ada di bundle live
 - [ ] Tes manual: buka dropdown "Tampilkan Rekapan", ketik sebagian nama kategori/jenis BBM, konfirmasi daftar checkbox ikut terfilter & "Pilih Semua" tetap pilih semua opsi (bukan cuma yang kefilter)
