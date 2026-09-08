@@ -68,6 +68,7 @@ const RekapanUnitBisnis = () => {
     const [unitOptions, setUnitOptions] = useState([])
     const [selectedUnitOptions, setSelectedUnitOptions] = useState([])
     const [isUnitFilterOpen, setIsUnitFilterOpen] = useState(false)
+    const [unitSearchText, setUnitSearchText] = useState('')
     const [selectedYear, setSelectedYear] = useState(YEAR_OPTIONS[0])
 
     const [isDataLoading, setIsDataLoading] = useState(true)
@@ -579,6 +580,7 @@ const RekapanUnitBisnis = () => {
     // Kosong (default) berarti tampilkan semua, sama seperti perilaku sebelum ada filter ini.
     const [tableFilter, setTableFilter] = useState([])
     const [isTableFilterOpen, setIsTableFilterOpen] = useState(false)
+    const [tableSearchText, setTableSearchText] = useState('')
 
     const orderedBbmJenis = useMemo(() => Object.keys(bbmData.byJenis || {}).sort(), [bbmData])
 
@@ -826,7 +828,7 @@ const RekapanUnitBisnis = () => {
                         <div className="relative">
                             <button
                                 type="button"
-                                onClick={() => setIsUnitFilterOpen((prev) => !prev)}
+                                onClick={() => { setIsUnitFilterOpen((prev) => !prev); setUnitSearchText('') }}
                                 className="w-full h-10 px-3 flex items-center justify-between border rounded-md text-sm text-left bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100"
                             >
                                 <span className="truncate">{unitFilterLabel}</span>
@@ -843,8 +845,19 @@ const RekapanUnitBisnis = () => {
 
                             {isUnitFilterOpen && (
                                 <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setIsUnitFilterOpen(false)} />
-                                    <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg py-1">
+                                    <div className="fixed inset-0 z-40" onClick={() => { setIsUnitFilterOpen(false); setUnitSearchText('') }} />
+                                    <div className="absolute z-50 mt-1 w-full max-h-80 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg py-1">
+                                        <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                value={unitSearchText}
+                                                onChange={(e) => setUnitSearchText(e.target.value)}
+                                                placeholder="Ketik untuk cari Unit Bisnis..."
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                            />
+                                        </div>
                                         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-700">
                                             <button
                                                 type="button"
@@ -861,20 +874,25 @@ const RekapanUnitBisnis = () => {
                                                 Kosongkan
                                             </button>
                                         </div>
-                                        {unitOptions.map((opt) => (
-                                            <label
-                                                key={opt.value}
-                                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isUnitFilterChecked(opt.value)}
-                                                    onChange={() => toggleUnitFilterOption(opt)}
-                                                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                                                />
-                                                <span>{opt.label}</span>
-                                            </label>
-                                        ))}
+                                        {unitOptions
+                                            .filter((opt) => opt.label.toLowerCase().includes(unitSearchText.toLowerCase()))
+                                            .map((opt) => (
+                                                <label
+                                                    key={opt.value}
+                                                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isUnitFilterChecked(opt.value)}
+                                                        onChange={() => toggleUnitFilterOption(opt)}
+                                                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                    />
+                                                    <span>{opt.label}</span>
+                                                </label>
+                                            ))}
+                                        {unitOptions.filter((opt) => opt.label.toLowerCase().includes(unitSearchText.toLowerCase())).length === 0 && (
+                                            <div className="px-3 py-3 text-sm text-gray-400 text-center">Tidak ditemukan</div>
+                                        )}
                                     </div>
                                 </>
                             )}
@@ -897,7 +915,7 @@ const RekapanUnitBisnis = () => {
                         <div className="relative">
                             <button
                                 type="button"
-                                onClick={() => setIsTableFilterOpen((prev) => !prev)}
+                                onClick={() => { setIsTableFilterOpen((prev) => !prev); setTableSearchText('') }}
                                 className="w-full h-10 px-3 flex items-center justify-between border rounded-md text-sm text-left bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100"
                             >
                                 <span className="truncate">{tableFilterLabel}</span>
@@ -914,8 +932,19 @@ const RekapanUnitBisnis = () => {
 
                             {isTableFilterOpen && (
                                 <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setIsTableFilterOpen(false)} />
-                                    <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg py-1">
+                                    <div className="fixed inset-0 z-40" onClick={() => { setIsTableFilterOpen(false); setTableSearchText('') }} />
+                                    <div className="absolute z-50 mt-1 w-full max-h-80 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg py-1">
+                                        <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                value={tableSearchText}
+                                                onChange={(e) => setTableSearchText(e.target.value)}
+                                                placeholder="Ketik untuk cari rekapan..."
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                            />
+                                        </div>
                                         <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-700">
                                             <button
                                                 type="button"
@@ -932,20 +961,25 @@ const RekapanUnitBisnis = () => {
                                                 Kosongkan
                                             </button>
                                         </div>
-                                        {tableFilterOptions.map((opt) => (
-                                            <label
-                                                key={opt.value}
-                                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isTableFilterChecked(opt.value)}
-                                                    onChange={() => toggleTableFilterOption(opt)}
-                                                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                                                />
-                                                <span>{opt.label}</span>
-                                            </label>
-                                        ))}
+                                        {tableFilterOptions
+                                            .filter((opt) => opt.label.toLowerCase().includes(tableSearchText.toLowerCase()))
+                                            .map((opt) => (
+                                                <label
+                                                    key={opt.value}
+                                                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isTableFilterChecked(opt.value)}
+                                                        onChange={() => toggleTableFilterOption(opt)}
+                                                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                    />
+                                                    <span>{opt.label}</span>
+                                                </label>
+                                            ))}
+                                        {tableFilterOptions.filter((opt) => opt.label.toLowerCase().includes(tableSearchText.toLowerCase())).length === 0 && (
+                                            <div className="px-3 py-3 text-sm text-gray-400 text-center">Tidak ditemukan</div>
+                                        )}
                                     </div>
                                 </>
                             )}

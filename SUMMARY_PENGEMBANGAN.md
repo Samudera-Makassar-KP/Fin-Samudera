@@ -1399,3 +1399,23 @@ Editor split custom sekarang: tiap unit dapat CHECKBOX (bukan cuma kotak angka) 
 - [x] Semua test PASS: 61 frontend
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-07, diverifikasi teks "Centang Unit Bisnis tujuan" ada di bundle live
 - [ ] Tes manual: buka "Atur Split" di salah satu baris, uncheck beberapa unit, konfirmasi persentase yang tersisa otomatis re-normalisasi ke 100%
+
+---
+
+# BAGIAN Z — Dropdown Unit Bisnis & Tampilkan Rekapan Bisa Diketik/Dicari (2026-09-08)
+
+## 36.1 Permintaan User
+
+Dropdown checkbox "Tampilkan Rekapan" (dan sekalian "Unit Bisnis", pola UI-nya sama persis) cuma bisa di-scroll, tidak bisa diketik untuk cari opsi tertentu -- makin berguna sekarang karena daftar kategori (ATK/RTG/RTK/dst + breakdown jenis BBM) bisa lumayan panjang.
+
+## 36.2 Implementasi
+
+Kedua dropdown checkbox custom (bukan `react-select`, jadi tidak otomatis dapat fitur cari) ditambah **kotak input teks** di paling atas panel, di atas "Pilih Semua"/"Kosongkan": mengetik di situ memfilter daftar checkbox di bawahnya (cocok substring, case-insensitive, terhadap label). "Pilih Semua"/"Kosongkan" tetap berlaku ke SELURUH opsi (bukan cuma yang lagi kefilter tampil) supaya perilakunya tidak membingungkan. Muncul pesan "Tidak ditemukan" kalau pencarian tidak cocok apa pun. Teks pencarian direset otomatis tiap dropdown ditutup/dibuka ulang (baik lewat tombol toggle maupun klik di luar area dropdown).
+
+## 36.3 Task Development — Bagian Z
+
+- [x] `RekapanUnitBisnis.jsx`: state `unitSearchText`/`tableSearchText`, input pencarian di kedua dropdown checkbox, filter opsi + pesan "Tidak ditemukan", reset teks saat dropdown ditutup/dibuka
+- [x] `CI=true npm run build` sukses (dijalankan lewat PowerShell -- Bash tool sempat bermasalah di sesi ini, coreutils dasar seperti `grep`/`tail` tidak ketemu di PATH)
+- [x] Semua test PASS: 61 frontend (tidak ada logic baru yang perlu ditest, murni UI filter teks)
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: buka dropdown "Tampilkan Rekapan", ketik sebagian nama kategori/jenis BBM, konfirmasi daftar checkbox ikut terfilter & "Pilih Semua" tetap pilih semua opsi (bukan cuma yang kefilter)
