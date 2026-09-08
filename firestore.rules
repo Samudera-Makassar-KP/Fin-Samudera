@@ -442,6 +442,21 @@ service cloud.firestore {
         && request.resource.data.splitMode in ['pool', 'custom'];
     }
 
+    // Pengelompokan kategori Rekapan non-BBM (Bagian AA): label mentah mana yang
+    // dianggap sama (mis. "Meeting"/"Biaya Meeting"/"Cemilan kue ruang meeting")
+    // ditentukan MANUAL oleh Admin/Super Admin lewat panel "Kelola Kategori" --
+    // lihat canonicalizeCategoryLabel di src/constants/rekapanCategoryGroups.js.
+    // Dokumen ID = auto-generated. `delete` dipisah dari `create`/`update` karena
+    // request.resource tidak tersedia saat delete (validasi field cuma relevan
+    // untuk create/update).
+    match /rekapanCategoryGroups/{groupId} {
+      allow read: if isRekapanRole();
+      allow create, update: if isAdminRole()
+        && validString(request.resource.data.label, 100)
+        && validStringList(request.resource.data.members, 50);
+      allow delete: if isAdminRole();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1,4 +1,4 @@
-import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey } from './rekapanAggregation'
+import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels } from './rekapanAggregation'
 
 const MJS = 'PT Makassar Jaya Samudera'
 const SAG = 'PT Samudera Agencies Indonesia'
@@ -272,5 +272,100 @@ describe('aggregateBbm - byJenis dikanonisasi (data lama diisi bebas)', () => {
         const result = aggregateBbm(docs, [], { year: 2026 })
 
         expect(result.totals[MKT][2]).toBe(100000)
+    })
+})
+
+describe('aggregateByCategory - categoryGroups (Bagian AA)', () => {
+    const makeReimbursement = (id, unit, biaya, jenis) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis, biaya, tanggal: '2026-03-15' }
+        ]
+    })
+
+    const makeLpj = (id, unit, jumlahBiaya, namaItem) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        tanggalPengajuan: '2026-04-10',
+        lpj: [{ namaItem, jumlahBiaya }]
+    })
+
+    const MEETING_GROUP = {
+        label: 'Meeting',
+        members: ['Meals Meeting', 'Meeting', 'Biaya Meeting']
+    }
+
+    test('tanpa categoryGroups, tiap label mentah tetap jadi kategori sendiri (perilaku lama)', () => {
+        const docs = [
+            makeReimbursement('doc1', MJS, 100000, 'Meals Meeting'),
+            makeReimbursement('doc2', MJS, 200000, 'Biaya Meeting')
+        ]
+        const result = aggregateByCategory(docs, [], { year: 2026 })
+
+        expect(Object.keys(result).sort()).toEqual(['Biaya Meeting', 'Meals Meeting'])
+    })
+
+    test('dengan categoryGroups, label anggota grup digabung jadi 1 kategori & angkanya dijumlah per unit', () => {
+        const docs = [
+            makeReimbursement('doc1', MJS, 100000, 'Meals Meeting'),
+            makeReimbursement('doc2', MJS, 200000, 'Biaya Meeting')
+        ]
+        const result = aggregateByCategory(docs, [], { year: 2026, categoryGroups: [MEETING_GROUP] })
+
+        expect(Object.keys(result)).toEqual(['Meeting'])
+        expect(result.Meeting[MJS][2]).toBe(300000)
+    })
+
+    test('label baru yang mengandung anggota grup (substring) otomatis ikut tergabung', () => {
+        const docs = [makeReimbursement('doc1', MJS, 150000, 'Cemilan kue ruang meeting')]
+        const result = aggregateByCategory(docs, [], { year: 2026, categoryGroups: [MEETING_GROUP] })
+
+        expect(Object.keys(result)).toEqual(['Meeting'])
+        expect(result.Meeting[MJS][2]).toBe(150000)
+    })
+
+    test('grup berlaku juga untuk item.namaItem dari LPJ, digabung dengan reimbursement di kategori sama', () => {
+        const reimbursementDocs = [makeReimbursement('doc1', MJS, 100000, 'Meeting')]
+        const lpjDocs = [makeLpj('doc2', MJS, 250000, 'Biaya Meeting')]
+        const result = aggregateByCategory(reimbursementDocs, lpjDocs, { year: 2026, categoryGroups: [MEETING_GROUP] })
+
+        expect(Object.keys(result)).toEqual(['Meeting'])
+        expect(result.Meeting[MJS][2]).toBe(100000)
+        expect(result.Meeting[MJS][3]).toBe(250000)
+    })
+
+    test('kategori yang tidak cocok grup mana pun tetap tampil sebagai kategori sendiri', () => {
+        const docs = [
+            makeReimbursement('doc1', MJS, 100000, 'Meeting'),
+            makeReimbursement('doc2', MJS, 50000, 'ATK')
+        ]
+        const result = aggregateByCategory(docs, [], { year: 2026, categoryGroups: [MEETING_GROUP] })
+
+        expect(Object.keys(result).sort()).toEqual(['ATK', 'Meeting'])
+    })
+})
+
+describe('listCategoryRawLabels', () => {
+    test('mengumpulkan label unik dari reimbursement & lpj, item BBM & yang Disetujui saja', () => {
+        const reimbursementDocs = [
+            { id: 'r1', status: 'Disetujui', reimbursements: [{ jenis: 'Meeting' }, { jenis: 'BBM Pertalite' }] },
+            { id: 'r2', status: 'Disetujui', reimbursements: [{ jenis: 'Meeting' }, { jenis: 'ATK' }] },
+            { id: 'r3', status: 'Diproses', reimbursements: [{ jenis: 'Harus Diabaikan' }] }
+        ]
+        const lpjDocs = [
+            { id: 'l1', status: 'Disetujui', lpj: [{ namaItem: 'Biaya Meeting' }, { namaItem: 'BBM Solar' }] }
+        ]
+
+        const result = listCategoryRawLabels(reimbursementDocs, lpjDocs)
+
+        expect(result).toEqual(['ATK', 'Biaya Meeting', 'Meeting'])
+    })
+
+    test('kosong kalau tidak ada dokumen', () => {
+        expect(listCategoryRawLabels([], [])).toEqual([])
+        expect(listCategoryRawLabels(undefined, undefined)).toEqual([])
     })
 })

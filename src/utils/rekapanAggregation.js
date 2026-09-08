@@ -3,6 +3,7 @@
 // (RekapanUnitBisnis.jsx), lalu diagregasi di sini.
 
 import { BBM_PRICE_PER_LITER } from '../constants/bbmPrice'
+import { canonicalizeCategoryLabel } from '../constants/rekapanCategoryGroups'
 
 export const MONTH_LABELS = [
     'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
@@ -70,9 +71,18 @@ export const buildBbmItemKey = (docType, docId, itemIndex) => `${docType}_${docI
  * Parkir digabung lintas RBS Operasional & RBS Umum/LPJ (bukan dipisah per asal form) --
  * lihat catatan asumsi di rencana pengembangan.
  *
+ * `categoryGroups` (opsional, Bagian AA): array `{ label, members }[]` dari koleksi
+ * Firestore `rekapanCategoryGroups` -- label mentah (`item.jenis`/`item.namaItem`)
+ * yang mengandung salah satu `members` grup dikanonisasi jadi `group.label` sebelum
+ * dipakai sebagai key kategori, supaya beberapa variasi teks (mis. "Meeting",
+ * "Biaya Meeting", "Cemilan kue ruang meeting") menyatu jadi SATU baris/tabel per
+ * Unit Bisnis, bukan tabel terpisah per variasi. Lihat canonicalizeCategoryLabel di
+ * src/constants/rekapanCategoryGroups.js. Tanpa `categoryGroups`, perilaku sama
+ * seperti sebelumnya (tiap label mentah jadi kategori sendiri).
+ *
  * @returns {{ [kategori: string]: { [unit: string]: number[] } }}
  */
-export function aggregateByCategory(reimbursementDocs, lpjDocs, { year, units } = {}) {
+export function aggregateByCategory(reimbursementDocs, lpjDocs, { year, units, categoryGroups } = {}) {
     const result = {}
 
     const addToResult = (category, unit, month, amount) => {
@@ -91,7 +101,7 @@ export function aggregateByCategory(reimbursementDocs, lpjDocs, { year, units } 
             if (isBbmValue(item.jenis)) return
             const dateParts = resolveReimbursementItemDate(item, doc)
             if (!dateParts || dateParts.year !== year) return
-            addToResult(item.jenis, unit, dateParts.month, item.biaya || 0)
+            addToResult(canonicalizeCategoryLabel(item.jenis, categoryGroups), unit, dateParts.month, item.biaya || 0)
         })
     })
 
@@ -106,11 +116,43 @@ export function aggregateByCategory(reimbursementDocs, lpjDocs, { year, units } 
         ;(doc.lpj || []).forEach((item) => {
             if (isBbmValue(item.namaItem)) return
             const jumlahBiaya = item.jumlahBiaya ?? (Number(item.biaya) || 0) * (Number(item.jumlah) || 0)
-            addToResult(item.namaItem, unit, dateParts.month, jumlahBiaya)
+            addToResult(canonicalizeCategoryLabel(item.namaItem, categoryGroups), unit, dateParts.month, jumlahBiaya)
         })
     })
 
     return result
+}
+
+/**
+ * Daftar MENTAH (bukan dikanonisasi) semua label kategori non-BBM (`item.jenis`/
+ * `item.namaItem`) yang pernah dipakai di `reimbursement`/`lpj` yang Disetujui --
+ * unik & terurut abjad, TIDAK difilter tahun/unit (Admin perlu lihat semua variasi
+ * yang pernah ada untuk membuat grup). Dipakai panel "Kelola Kategori" di
+ * RekapanUnitBisnis.jsx sebagai daftar pilihan checkbox saat membuat/menambah
+ * anggota grup (lihat canonicalizeCategoryLabel).
+ *
+ * @returns {string[]}
+ */
+export function listCategoryRawLabels(reimbursementDocs, lpjDocs) {
+    const labels = new Set()
+
+    ;(reimbursementDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        ;(doc.reimbursements || []).forEach((item) => {
+            if (isBbmValue(item.jenis) || !item.jenis) return
+            labels.add(item.jenis)
+        })
+    })
+
+    ;(lpjDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        ;(doc.lpj || []).forEach((item) => {
+            if (isBbmValue(item.namaItem) || !item.namaItem) return
+            labels.add(item.namaItem)
+        })
+    })
+
+    return Array.from(labels).sort((a, b) => a.localeCompare(b))
 }
 
 // Nomor plat yang sama sering diketik beda-beda (spasi lebih/kurang) di

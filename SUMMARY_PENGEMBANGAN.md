@@ -1419,3 +1419,35 @@ Kedua dropdown checkbox custom (bukan `react-select`, jadi tidak otomatis dapat 
 - [x] Semua test PASS: 61 frontend (tidak ada logic baru yang perlu ditest, murni UI filter teks)
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-08, diverifikasi teks "Ketik untuk cari" ada di bundle live
 - [ ] Tes manual: buka dropdown "Tampilkan Rekapan", ketik sebagian nama kategori/jenis BBM, konfirmasi daftar checkbox ikut terfilter & "Pilih Semua" tetap pilih semua opsi (bukan cuma yang kefilter)
+
+---
+
+# BAGIAN AA — Kelola Kategori: Gabungkan Label Rekapan yang Mirip (2026-09-08)
+
+## 37.1 Permintaan User
+
+Screenshot dropdown "Tampilkan Rekapan" menunjukkan hasil ketik "meeting" memunculkan 5 opsi terpisah: "Meals Meeting", "Meeting", "Biaya Meeting", "Cemilan kue ruang meeting", "Kue Kick off meeting hari ke 3" — padahal user menganggap semuanya sama, mau dianggap 1 kategori "Meeting" per Unit Bisnis, bukan 5 tabel/baris terpisah. Diminta berlaku umum (bukan cuma Meeting) untuk semua kategori yang datanya diambil dari field bebas teks (item/keterangan/jenis) di RBS Umum, RBS Operasional, LPJ Umum, LPJ Marketing.
+
+## 37.2 Root Cause
+
+`aggregateByCategory()` (`src/utils/rekapanAggregation.js`) memakai `item.jenis`/`item.namaItem` MENTAH langsung sebagai key kategori — field ini bebas teks di form (bukan dropdown baku untuk semua kasus lama), jadi tiap variasi kalimat yang sebenarnya sama maksudnya jadi kategori/tabel Rekapan sendiri-sendiri. Ini persis masalah yang sama dengan jenis BBM bebas teks yang sudah dibereskan di Bagian W lewat `canonicalJenisLabel` (BBM 1273 XBO dst -> "BBM Lainnya") — kali ini digeneralisasi untuk SEMUA kategori non-BBM, dengan pengelompokan yang bisa diatur manual oleh Admin (bukan aturan baku hardcode, karena variasi kalimatnya jauh lebih beragam & tidak terbatas dari BBM).
+
+## 37.3 Implementasi
+
+- **`src/constants/rekapanCategoryGroups.js`** (baru) — `canonicalizeCategoryLabel(rawLabel, groups)`: kalau `rawLabel` MENGANDUNG (substring, case-insensitive) salah satu `members` dari sebuah grup, dikembalikan `group.label` sebagai gantinya. Item baru yang keterangannya mengandung kata dari member grup otomatis ikut tergabung TANPA perlu Admin approve ulang tiap kali muncul variasi baru (keputusan user, trade-off: Admin tanggung jawab pilih member yang cukup spesifik supaya tidak salah gabung kategori yang beda konteks).
+- **`rekapanAggregation.js`**: `aggregateByCategory()` sekarang menerima param opsional `categoryGroups`, dipakai untuk mengkanonisasi `item.jenis`/`item.namaItem` SEBELUM dipakai sebagai key kategori — beberapa label mentah otomatis menyatu jadi 1 baris per Unit Bisnis per bulan (dijumlah, bukan cuma disembunyikan/difilter tampilannya). Fungsi baru `listCategoryRawLabels()`: daftar semua label mentah unik (non-BBM, status Disetujui) dari `reimbursement`+`lpj`, dipakai mengisi checkbox di panel Kelola Kategori.
+- **`RekapanUnitBisnis.jsx`**: panel baru "Kelola Kategori" (Admin/Super Admin only, sama pola dengan "Kelola Sharing BBM"): daftar grup yang sudah ada (chip per anggota, bisa dikeluarkan satu-satu, bisa hapus grup), + daftar checkbox semua label mentah (dengan search box) untuk bikin grup baru — ketik nama grup yang SUDAH ADA untuk menambah anggota ke grup itu (bukan bikin grup duplikat), ketik nama baru untuk bikin grup baru. Begitu grup dibuat/diupdate, dropdown "Tampilkan Rekapan" & tabel Rekapan langsung ikut update (categoryData di-canonicalize lewat `categoryGroups` dari state yang sama).
+- **Firestore**: koleksi baru `rekapanCategoryGroups/{groupId}` (`{ label, members[] }`), rules: `read` untuk `isRekapanRole()` (Validator/Admin/Super Admin), `create`/`update`/`delete` cuma `isAdminRole()` (Admin/Super Admin).
+- **Cakupan**: hanya kategori NON-BBM (`aggregateByCategory`) — kategori BBM (`aggregateBbm`) sudah punya canonicalization sendiri sejak Bagian W (`canonicalJenisLabel`, dikunci ke daftar baku `BBM_PRICE_PER_LITER`), tidak disentuh di bagian ini.
+
+## 37.4 Task Development — Bagian AA
+
+- [x] `src/constants/rekapanCategoryGroups.js` (baru) + `canonicalizeCategoryLabel`
+- [x] `rekapanAggregation.js`: param `categoryGroups` di `aggregateByCategory`, fungsi baru `listCategoryRawLabels`
+- [x] `firestore.rules`: koleksi `rekapanCategoryGroups` (read: Validator/Admin/Super Admin, write: Admin/Super Admin)
+- [x] `RekapanUnitBisnis.jsx`: panel "Kelola Kategori" (buat/tambah grup, keluarkan anggota, hapus grup), `categoryData` pakai `categoryGroups` dari state
+- [x] Test baru: `rekapanCategoryGroups.test.js` (6 test) + tambahan di `rekapanAggregation.test.js` untuk `aggregateByCategory`/`listCategoryRawLabels` (7 test) — total 74 test frontend, semua PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules)
+- [ ] Tes manual: Super Admin buka panel "Kelola Kategori", centang "Meals Meeting" + "Biaya Meeting" + "Cemilan kue ruang meeting", ketik nama grup "Meeting", klik "Gabungkan" — konfirmasi tabel Rekapan langsung menampilkan 1 baris "Meeting" per Unit Bisnis dengan angka gabungan, dropdown "Tampilkan Rekapan" cuma menyisakan 1 opsi "Meeting" (bukan 3 opsi terpisah lagi)
+- [ ] Tes manual: submit RBS/LPJ baru dengan keterangan yang mengandung kata "meeting" (belum pernah ada persis sebelumnya) — konfirmasi otomatis masuk kategori "Meeting" tanpa perlu Admin atur ulang

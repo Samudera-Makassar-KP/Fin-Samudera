@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 import Select from 'react-select'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
@@ -15,7 +15,8 @@ import {
     sumMonths,
     aggregateByCategory,
     aggregateBbm,
-    listBbmLineItems
+    listBbmLineItems,
+    listCategoryRawLabels
 } from '../utils/rekapanAggregation'
 import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from '../constants/rekapanSharing'
 
@@ -236,6 +237,106 @@ const RekapanUnitBisnis = () => {
     useEffect(() => {
         fetchClassification()
     }, [fetchClassification])
+
+    // 6. Pengelompokan kategori Rekapan non-BBM (/rekapanCategoryGroups, Bagian AA)
+    // -- beberapa label mentah (item.jenis/item.namaItem) yang sebenarnya sama
+    // (mis. "Meeting"/"Biaya Meeting"/"Cemilan kue ruang meeting") digabung jadi
+    // 1 kategori tampilan, ditentukan Admin/Super Admin lewat panel "Kelola
+    // Kategori". Lihat canonicalizeCategoryLabel di rekapanCategoryGroups.js.
+    const [categoryGroups, setCategoryGroups] = useState([])
+    const [isCategoryGroupsLoading, setIsCategoryGroupsLoading] = useState(true)
+
+    const fetchCategoryGroups = useCallback(async () => {
+        setIsCategoryGroupsLoading(true)
+        try {
+            const snapshot = await getDocs(collection(db, 'rekapanCategoryGroups'))
+            setCategoryGroups(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })))
+        } catch (error) {
+            console.error('Gagal mengambil data pengelompokan kategori:', error)
+        } finally {
+            setIsCategoryGroupsLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        fetchCategoryGroups()
+    }, [fetchCategoryGroups])
+
+    // Panel "Kelola Kategori" (Admin/Super Admin only)
+    const [isManagingCategories, setIsManagingCategories] = useState(false)
+    const [categorySearchText, setCategorySearchText] = useState('')
+    const [newGroupLabel, setNewGroupLabel] = useState('')
+    const [newGroupSelected, setNewGroupSelected] = useState({})
+    const [isSavingGroup, setIsSavingGroup] = useState(false)
+
+    const rawCategoryLabels = useMemo(() => {
+        return listCategoryRawLabels(reimbursementDocs, lpjDocs)
+    }, [reimbursementDocs, lpjDocs])
+
+    const saveCategoryGroup = async (groupId, data) => {
+        await setDoc(doc(db, 'rekapanCategoryGroups', groupId), data)
+    }
+
+    // Kalau nama grup yang diketik cocok (case-insensitive) dengan grup yang
+    // sudah ada, label yang dicentang DITAMBAHKAN ke grup itu (bukan bikin grup
+    // duplikat) -- supaya Admin bisa merapikan variasi baru yang muncul belakangan
+    // tanpa perlu UI "tambah anggota" terpisah.
+    const createOrExtendCategoryGroup = async () => {
+        const label = newGroupLabel.trim()
+        const members = Object.keys(newGroupSelected).filter((k) => newGroupSelected[k])
+        if (!label || members.length === 0) {
+            toast.error('Pilih minimal 1 kategori dan isi nama grup')
+            return
+        }
+
+        setIsSavingGroup(true)
+        try {
+            const existing = categoryGroups.find((g) => g.label.toLowerCase() === label.toLowerCase())
+            if (existing) {
+                const mergedMembers = Array.from(new Set([...(existing.members || []), ...members]))
+                await saveCategoryGroup(existing.id, { label: existing.label, members: mergedMembers })
+                setCategoryGroups((prev) => prev.map((g) => (g.id === existing.id ? { ...g, members: mergedMembers } : g)))
+                toast.success(`Ditambahkan ke grup "${existing.label}"`)
+            } else {
+                const ref = doc(collection(db, 'rekapanCategoryGroups'))
+                const data = { label, members }
+                await saveCategoryGroup(ref.id, data)
+                setCategoryGroups((prev) => [...prev, { id: ref.id, ...data }])
+                toast.success('Grup kategori dibuat')
+            }
+            setNewGroupLabel('')
+            setNewGroupSelected({})
+        } catch (error) {
+            console.error('Gagal menyimpan grup kategori:', error)
+            toast.error('Gagal menyimpan grup kategori')
+        } finally {
+            setIsSavingGroup(false)
+        }
+    }
+
+    const removeMemberFromGroup = async (groupId, member) => {
+        const group = categoryGroups.find((g) => g.id === groupId)
+        if (!group) return
+        const members = (group.members || []).filter((m) => m !== member)
+        try {
+            await saveCategoryGroup(groupId, { label: group.label, members })
+            setCategoryGroups((prev) => prev.map((g) => (g.id === groupId ? { ...g, members } : g)))
+        } catch (error) {
+            console.error('Gagal memperbarui anggota grup kategori:', error)
+            toast.error('Gagal memperbarui anggota grup')
+        }
+    }
+
+    const deleteCategoryGroup = async (groupId) => {
+        try {
+            await deleteDoc(doc(db, 'rekapanCategoryGroups', groupId))
+            setCategoryGroups((prev) => prev.filter((g) => g.id !== groupId))
+            toast.success('Grup kategori dihapus')
+        } catch (error) {
+            console.error('Gagal menghapus grup kategori:', error)
+            toast.error('Gagal menghapus grup kategori')
+        }
+    }
 
     // Panel kurasi "Kelola Sharing BBM" (Admin/Super Admin only) -- daftar
     // SEMUA baris BBM tahun berjalan (tidak terpengaruh filter Unit Bisnis di
@@ -557,8 +658,8 @@ const RekapanUnitBisnis = () => {
     }, [isAdmin, selectedUnitOptions])
 
     const categoryData = useMemo(() => {
-        return aggregateByCategory(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter })
-    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter])
+        return aggregateByCategory(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter, categoryGroups })
+    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter, categoryGroups])
 
     const bbmData = useMemo(() => {
         return aggregateBbm(reimbursementDocs, lpjDocs, {
@@ -1190,6 +1291,137 @@ const RekapanUnitBisnis = () => {
                                             </button>
                                         </div>
                                     )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {isAdmin && (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mt-4">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">
+                                        Kelola Kategori
+                                    </p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Gabungkan beberapa label kategori/keterangan yang sebenarnya sama (mis.
+                                        "Meeting", "Biaya Meeting", "Cemilan kue ruang meeting") jadi{' '}
+                                        <strong>1 kategori Rekapan</strong>. Pengajuan baru yang keterangannya
+                                        mengandung salah satu anggota grup otomatis ikut tergabung, tidak perlu
+                                        diatur ulang setiap kali muncul variasi baru.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsManagingCategories((prev) => !prev)}
+                                    disabled={isCategoryGroupsLoading}
+                                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                                >
+                                    {isManagingCategories ? 'Tutup' : 'Kelola'}
+                                </button>
+                            </div>
+
+                            {isManagingCategories && (
+                                <div className="mt-4 space-y-6">
+                                    {categoryGroups.length > 0 && (
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Grup yang sudah dibuat
+                                            </p>
+                                            <div className="space-y-3">
+                                                {categoryGroups.map((group) => (
+                                                    <div key={group.id} className="border dark:border-gray-600 rounded-md p-3">
+                                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{group.label}</p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => deleteCategoryGroup(group.id)}
+                                                                className="text-xs text-red-600 hover:underline flex-none"
+                                                            >
+                                                                Hapus Grup
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {(group.members || []).map((member) => (
+                                                                <span
+                                                                    key={member}
+                                                                    className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-2 py-1 rounded-full"
+                                                                >
+                                                                    {member}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeMemberFromGroup(group.id, member)}
+                                                                        className="text-gray-400 hover:text-red-600"
+                                                                        title="Keluarkan dari grup"
+                                                                    >
+                                                                        &times;
+                                                                    </button>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Buat/tambah grup -- centang label yang sebenarnya sama, lalu beri nama
+                                            gabungan (ketik nama grup yang sudah ada untuk menambah anggota ke grup itu)
+                                        </p>
+                                        <input
+                                            type="text"
+                                            value={categorySearchText}
+                                            onChange={(e) => setCategorySearchText(e.target.value)}
+                                            placeholder="Ketik untuk cari label..."
+                                            className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 mb-2"
+                                        />
+                                        <div className="max-h-56 overflow-y-auto border dark:border-gray-600 rounded-md divide-y dark:divide-gray-100 dark:divide-gray-700">
+                                            {rawCategoryLabels
+                                                .filter((label) => label.toLowerCase().includes(categorySearchText.toLowerCase()))
+                                                .map((label) => {
+                                                    const currentGroup = categoryGroups.find((g) => (g.members || []).includes(label))
+                                                    return (
+                                                        <label
+                                                            key={label}
+                                                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={Boolean(newGroupSelected[label])}
+                                                                onChange={(e) => setNewGroupSelected((prev) => ({ ...prev, [label]: e.target.checked }))}
+                                                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                            />
+                                                            <span className="flex-1">{label}</span>
+                                                            {currentGroup && (
+                                                                <span className="text-xs text-gray-400">sudah di grup "{currentGroup.label}"</span>
+                                                            )}
+                                                        </label>
+                                                    )
+                                                })}
+                                            {rawCategoryLabels.filter((label) => label.toLowerCase().includes(categorySearchText.toLowerCase())).length === 0 && (
+                                                <p className="px-3 py-3 text-sm text-gray-400 text-center">Tidak ditemukan</p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-3">
+                                            <input
+                                                type="text"
+                                                value={newGroupLabel}
+                                                onChange={(e) => setNewGroupLabel(e.target.value)}
+                                                placeholder="Nama kategori gabungan, mis. Meeting"
+                                                className="flex-1 text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={createOrExtendCategoryGroup}
+                                                disabled={isSavingGroup}
+                                                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50 flex-none"
+                                            >
+                                                {isSavingGroup ? 'Menyimpan...' : 'Gabungkan'}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
