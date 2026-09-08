@@ -1448,6 +1448,6 @@ Screenshot dropdown "Tampilkan Rekapan" menunjukkan hasil ketik "meeting" memunc
 - [x] `RekapanUnitBisnis.jsx`: panel "Kelola Kategori" (buat/tambah grup, keluarkan anggota, hapus grup), `categoryData` pakai `categoryGroups` dari state
 - [x] Test baru: `rekapanCategoryGroups.test.js` (6 test) + tambahan di `rekapanAggregation.test.js` untuk `aggregateByCategory`/`listCategoryRawLabels` (7 test) — total 74 test frontend, semua PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules)
+- [x] Deploy ke produksi (hosting + firestore rules) — sukses 2026-09-08, diverifikasi teks "Kelola Kategori" ada di bundle live
 - [ ] Tes manual: Super Admin buka panel "Kelola Kategori", centang "Meals Meeting" + "Biaya Meeting" + "Cemilan kue ruang meeting", ketik nama grup "Meeting", klik "Gabungkan" — konfirmasi tabel Rekapan langsung menampilkan 1 baris "Meeting" per Unit Bisnis dengan angka gabungan, dropdown "Tampilkan Rekapan" cuma menyisakan 1 opsi "Meeting" (bukan 3 opsi terpisah lagi)
 - [ ] Tes manual: submit RBS/LPJ baru dengan keterangan yang mengandung kata "meeting" (belum pernah ada persis sebelumnya) — konfirmasi otomatis masuk kategori "Meeting" tanpa perlu Admin atur ulang
