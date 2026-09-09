@@ -489,9 +489,22 @@ describe('listCategoryLineItems', () => {
         expect(result[0].category).toBe('RTK')
     })
 
-    test('array categories kosong/tidak diisi -> selalu kosong', () => {
+    test('categories di-OMIT (bukan array kosong) -> semua kategori non-BBM disertakan (Bagian AE)', () => {
+        const docs = [{
+            id: 'r1',
+            status: 'Disetujui',
+            user: { unit: MJS },
+            reimbursements: [
+                { jenis: 'RTK', biaya: 100000, tanggal: '2026-01-10' },
+                { jenis: 'ATK', biaya: 50000, tanggal: '2026-01-10' }
+            ]
+        }]
+        const result = listCategoryLineItems(docs, [], { year: 2026 })
+        expect(result.map((i) => i.category).sort()).toEqual(['ATK', 'RTK'])
+    })
+
+    test('array categories kosong EKSPLISIT -> selalu kosong (beda dari di-omit)', () => {
         const docs = [{ id: 'r1', status: 'Disetujui', user: { unit: MJS }, reimbursements: [{ jenis: 'RTK', biaya: 100000, tanggal: '2026-01-10' }] }]
-        expect(listCategoryLineItems(docs, [], { year: 2026 })).toEqual([])
         expect(listCategoryLineItems(docs, [], { year: 2026, categories: [] })).toEqual([])
     })
 

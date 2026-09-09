@@ -56,14 +56,6 @@ const CATEGORY_ORDER = [
 const BBM_TOTAL_KEY = '__BBM_TOTAL__'
 const BBM_LITER_KEY = '__BBM_LITER__'
 
-// Kategori non-BBM yang JUGA didukung mekanisme "dibagi ke unit lain" (Bagian AC)
-// -- sebelumnya cuma BBM yang bisa displit per-baris ke unit lain, sekarang RTK &
-// RTG juga bisa (permintaan user: sering ada RTK/RTG yang ditalangi 1 unit dulu
-// lalu genuinely jadi beban bareng, sama seperti kasus BBM). Kategori lain (ATK,
-// Meeting, Entertaint, dst) TIDAK termasuk -- tetap selalu 100% ke unit pengaju,
-// tidak ada UI klasifikasi untuk itu.
-const SHAREABLE_CATEGORIES = ['RTK', 'RTG']
-
 const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => ({ value: y, label: String(y) }))
 
@@ -367,11 +359,13 @@ const RekapanUnitBisnis = () => {
         }
     }
 
-    // Panel kurasi "Kelola Sharing" (Admin/Super Admin only, Bagian AC diperluas
-    // dari BBM-only ke BBM + RTK + RTG) -- daftar SEMUA baris BBM/RTK/RTG tahun
-    // berjalan (tidak terpengaruh filter Unit Bisnis di atas, Admin perlu lihat
-    // semua unit untuk klasifikasi), Validator tidak pernah melihat panel ini
-    // sama sekali (cuma lihat hasil akhir di tabel).
+    // Panel kurasi "Kelola Sharing" (Admin/Super Admin only, Bagian AC awalnya
+    // BBM-only lalu diperluas ke RTK/RTG, Bagian AE menghilangkan batasannya
+    // sama sekali -- SEMUA kategori sekarang bisa displit per-baris ke unit
+    // lain, bukan cuma daftar tetap) -- daftar SEMUA baris tahun berjalan
+    // (tidak terpengaruh filter Unit Bisnis di atas, Admin perlu lihat semua
+    // unit untuk klasifikasi), Validator tidak pernah melihat panel ini sama
+    // sekali (cuma lihat hasil akhir di tabel).
     const [isManagingSharing, setIsManagingSharing] = useState(false)
     const [sharingCategoryFilter, setSharingCategoryFilter] = useState('')
     const [sharingUnitFilter, setSharingUnitFilter] = useState('')
@@ -383,23 +377,27 @@ const RekapanUnitBisnis = () => {
     const [sharingPage, setSharingPage] = useState(1)
     const SHARING_PAGE_SIZE = 25
 
-    // allBbmLineItems dipakai TERPISAH juga oleh drillDownItems (modal BBM saja,
-    // lihat di bawah) -- makanya tetap dipertahankan sendiri, bukan langsung
-    // digabung dari awal, supaya drill-down BBM tidak ikut kebawa item RTK/RTG.
+    // allBbmLineItems & allCategoryLineItems dipertahankan TERPISAH (bukan 1
+    // fungsi) karena sumber & bentuk data mentahnya beda (BBM dari isBbmValue
+    // prefix, kategori lain dari canonicalizeCategoryLabel) -- keduanya dipakai
+    // baik oleh panel "Kelola Sharing" (digabung lewat allShareableLineItems)
+    // MAUPUN drill-down per kategori (Bagian AE, lihat drillDownItems) supaya
+    // klik sel tabel APAPUN kategorinya membuka rincian transaksi yang sama.
     const allBbmLineItems = useMemo(() => {
         return listBbmLineItems(reimbursementDocs, lpjDocs, { year: selectedYear.value })
     }, [reimbursementDocs, lpjDocs, selectedYear])
 
+    // `categories` SENGAJA di-OMIT (bukan array) supaya SEMUA kategori non-BBM
+    // ikut tersedia untuk sharing & drill-down, bukan cuma RTK/RTG seperti versi
+    // sebelumnya -- lihat listCategoryLineItems di rekapanAggregation.js.
     const allCategoryLineItems = useMemo(() => {
         return listCategoryLineItems(reimbursementDocs, lpjDocs, {
             year: selectedYear.value,
-            categoryGroups,
-            categories: SHAREABLE_CATEGORIES
+            categoryGroups
         })
     }, [reimbursementDocs, lpjDocs, selectedYear, categoryGroups])
 
-    // Gabungan BBM + RTK/RTG -- dasar panel "Kelola Sharing" (bukan dipakai
-    // drill-down, yang tetap BBM-only lewat allBbmLineItems di atas).
+    // Gabungan BBM + semua kategori lain -- dasar panel "Kelola Sharing".
     const allShareableLineItems = useMemo(() => {
         return [...allBbmLineItems, ...allCategoryLineItems].sort((a, b) => a.month - b.month)
     }, [allBbmLineItems, allCategoryLineItems])
@@ -502,28 +500,33 @@ const RekapanUnitBisnis = () => {
         setCustomEditKey(null)
     }
 
-    // Drill-down (Bagian X): klik sel Biaya/Liter di tabel "BBM -- Total Biaya"
-    // (per unit) atau "BBM -- Liter per Plat Nomor" (per plat) -> modal berisi
+    // Drill-down (Bagian X, digeneralisasi ke SEMUA kategori di Bagian AE): klik
+    // sel Biaya/Liter di tabel kategori APAPUN (BBM Total, BBM per Plat, ATK,
+    // RTG, Meeting, kategori custom hasil "Kelola Kategori", dst) -> modal berisi
     // transaksi MENTAH di balik angka itu (bulan yang sama), supaya Admin bisa
-    // langsung tandai Dibagi/Kecualikan tanpa cari-cari di panel "Kelola Sharing
-    // BBM". type 'unit': item yang DISUBMIT unit itu (bukan porsi share masuk
-    // dari unit lain -- itu pecahan dari item unit lain, tidak bisa "dikeluarkan"
-    // sendiri di sini). type 'plat': byPlat selalu data mentah, jadi akurat penuh.
-    const [drillDown, setDrillDown] = useState(null) // { type: 'unit'|'plat', value, month, label }
+    // langsung tandai Dibagi/Kecualikan tanpa cari-cari di panel "Kelola Sharing".
+    // `category` menentukan sumber datanya: 'BBM' -> allBbmLineItems (juga
+    // dipakai type 'plat', karena byPlat selalu murni data BBM), kategori lain
+    // -> allCategoryLineItems difilter category yang sama. type 'unit': item
+    // yang DISUBMIT unit itu (bukan porsi share masuk dari unit lain -- itu
+    // pecahan dari item unit lain, tidak bisa "dikeluarkan" sendiri di sini).
+    const [drillDown, setDrillDown] = useState(null) // { type: 'unit'|'plat', value, month, label, category }
 
-    const openDrillDown = (type, value, month, label) => {
-        setDrillDown({ type, value, month, label })
+    const openDrillDown = (type, value, month, label, category) => {
+        setDrillDown({ type, value, month, label, category })
     }
 
     const closeDrillDown = () => setDrillDown(null)
 
     const drillDownItems = useMemo(() => {
         if (!drillDown) return []
-        return allBbmLineItems.filter((item) => {
+        const isBbm = !drillDown.category || drillDown.category === 'BBM'
+        const sourceItems = isBbm ? allBbmLineItems : allCategoryLineItems.filter((item) => item.category === drillDown.category)
+        return sourceItems.filter((item) => {
             if (item.month !== drillDown.month) return false
             return drillDown.type === 'plat' ? item.plat === drillDown.value : item.unit === drillDown.value
         })
-    }, [drillDown, allBbmLineItems])
+    }, [drillDown, allBbmLineItems, allCategoryLineItems])
 
     // Baris klasifikasi (dropdown status + "Atur Split") -- dipakai SAMA baik
     // di panel "Kelola Sharing" maupun modal drill-down, supaya kontrolnya
@@ -820,7 +823,11 @@ const RekapanUnitBisnis = () => {
         })
     }
 
-    const renderCategoryTable = (title, rowsData, extraUnits = [], enableDrillDown = false) => {
+    // Bagian AE: drill-down berlaku untuk SEMUA tabel kategori (bukan cuma BBM
+    // Total Biaya lagi) -- `categoryKey` default ke `title` (title === nama
+    // kategori untuk tabel non-BBM), override eksplisit untuk "BBM -- Total
+    // Biaya" (titlenya bukan nama kategori asli "BBM").
+    const renderCategoryTable = (title, rowsData, extraUnits = [], categoryKey = title) => {
         // rowsData: { [unit]: number[12] }. extraUnits: unit "virtual" tambahan
         // (mis. PPNP, bukan Unit Bisnis resmi aplikasi) yang cuma relevan untuk
         // tabel ini -- ditambahkan setelah displayUnits, bukan menggantikannya.
@@ -862,7 +869,7 @@ const RekapanUnitBisnis = () => {
                             <tbody>
                                 {rowUnits.map((unit, idx) => {
                                     const months = rowsData[unit] || Array(12).fill(0)
-                                    const canDrillDown = enableDrillDown && isAdmin
+                                    const canDrillDown = isAdmin
                                     return (
                                         <tr key={unit} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}>
                                             <td className="py-2 px-4 text-gray-800 dark:text-gray-100 whitespace-nowrap">{getUnitLabel(unit)}</td>
@@ -871,7 +878,7 @@ const RekapanUnitBisnis = () => {
                                                 return (
                                                     <td
                                                         key={i}
-                                                        onClick={canDrillDown && val ? () => openDrillDown('unit', unit, i, getUnitLabel(unit)) : undefined}
+                                                        onClick={canDrillDown && val ? () => openDrillDown('unit', unit, i, getUnitLabel(unit), categoryKey) : undefined}
                                                         title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
                                                         className={`py-2 px-2 text-right text-gray-700 dark:text-gray-200 ${canDrillDown && val ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 hover:underline' : ''}`}
                                                     >
@@ -955,7 +962,7 @@ const RekapanUnitBisnis = () => {
                                                 return (
                                                     <td
                                                         key={i}
-                                                        onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
+                                                        onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat, 'BBM') : undefined}
                                                         title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
                                                         className={cellCls(val)}
                                                     >
@@ -974,7 +981,7 @@ const RekapanUnitBisnis = () => {
                                                 return (
                                                     <td
                                                         key={i}
-                                                        onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
+                                                        onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat, 'BBM') : undefined}
                                                         title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
                                                         className={cellCls(val)}
                                                     >
@@ -1237,7 +1244,7 @@ const RekapanUnitBisnis = () => {
                 </div>
             ) : (
                 <>
-                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals, bbmSharingExtraUnits, true)}
+                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals, bbmSharingExtraUnits, 'BBM')}
                     {isTableVisible(BBM_LITER_KEY) && renderBbmLiterTable()}
                     {orderedCategories
                         .filter((category) => isTableVisible(category))
@@ -1282,9 +1289,9 @@ const RekapanUnitBisnis = () => {
                                     disabled={isClassificationLoading}
                                     className="text-left border dark:border-gray-600 rounded-md p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50 transition-colors"
                                 >
-                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Kelola Sharing (BBM, RTK, RTG)</p>
+                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Kelola Sharing</p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Tandai baris yang dibagi ke unit lain atau dikecualikan dari Rekapan.
+                                        Tandai baris kategori apa pun yang dibagi ke unit lain atau dikecualikan dari Rekapan.
                                     </p>
                                 </button>
                                 <button
@@ -1378,12 +1385,13 @@ const RekapanUnitBisnis = () => {
                             <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
                                 <div>
                                     <p className="font-semibold text-gray-800 dark:text-gray-100">
-                                        Kelola Sharing (BBM, RTK, RTG)
+                                        Kelola Sharing
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        Tandai satu-satu baris BBM/RTK/RTG: <strong>Dibagi</strong> ke unit lain (mis.
-                                        biaya yang ditalangi dulu oleh 1 unit), atau <strong>Kecualikan</strong> kalau
-                                        di luar scope Biaya GA. Baris yang belum ditandai tetap 100% ke unit pengaju.
+                                        Tandai satu-satu baris kategori apa pun: <strong>Dibagi</strong> ke unit lain
+                                        (mis. biaya yang ditalangi dulu oleh 1 unit), atau <strong>Kecualikan</strong>
+                                        kalau di luar scope Biaya GA. Baris yang belum ditandai tetap 100% ke unit
+                                        pengaju.
                                     </p>
                                 </div>
                                 <button
@@ -1403,7 +1411,7 @@ const RekapanUnitBisnis = () => {
                                     >
                                         <option value="">Semua Kategori</option>
                                         <option value="BBM">BBM</option>
-                                        {SHAREABLE_CATEGORIES.map((c) => (
+                                        {orderedCategories.map((c) => (
                                             <option key={c} value={c}>{c}</option>
                                         ))}
                                     </select>
@@ -1626,12 +1634,12 @@ const RekapanUnitBisnis = () => {
                             <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
                                 <div>
                                     <p className="font-semibold text-gray-800 dark:text-gray-100">
-                                        Rincian Transaksi -- {drillDown.label} -- {MONTH_LABELS[drillDown.month]}
+                                        Rincian Transaksi -- {drillDown.category || 'BBM'} -- {drillDown.label} -- {MONTH_LABELS[drillDown.month]}
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
                                         {drillDown.type === 'unit'
-                                            ? 'Transaksi BBM yang disubmit unit ini (belum termasuk porsi share masuk dari unit lain).'
-                                            : 'Semua transaksi BBM plat ini pada bulan tersebut.'}
+                                            ? 'Transaksi yang disubmit unit ini (belum termasuk porsi share masuk dari unit lain).'
+                                            : 'Semua transaksi plat ini pada bulan tersebut.'}
                                     </p>
                                 </div>
                                 <button

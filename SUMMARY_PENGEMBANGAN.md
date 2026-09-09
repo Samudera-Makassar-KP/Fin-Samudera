@@ -1551,3 +1551,40 @@ Dua permintaan dari screenshot dropdown "Tampilkan Rekapan" (menampilkan "BBM --
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Pengaturan Rekapan" ada di bundle live
 - [ ] Tes manual: dropdown "Tampilkan Rekapan" tidak lagi menampilkan "BBM Pertalite"/"BBM Pertamax"/dst, cuma "BBM -- Total Biaya" & "BBM -- Liter per Plat Nomor" + kategori non-BBM
 - [ ] Tes manual: klik masing-masing dari 3 tombol di kartu "Pengaturan Rekapan" -- konfirmasi modal terbuka dengan benar, bisa ditutup lewat &times;/klik overlay/Batal, dan menyimpan data tetap berfungsi seperti sebelumnya (headcount, klasifikasi sharing, grup kategori)
+
+---
+
+# BAGIAN AE — Drill-Down & Sharing Berlaku Universal untuk Semua Kategori (2026-09-09)
+
+## 41.1 Permintaan User
+
+User membuat grup kategori baru lewat "Kelola Kategori" (contoh: "BBM RANDIS", gabungan beberapa label RTG/ATK/dll yang terkait biaya kendaraan dinas) dan komplain 2 hal:
+1. Klik sel angka di tabel "BBM RANDIS" (kategori hasil gabungan) tidak membuka rincian transaksi, padahal klik sel di tabel "BBM -- Total Biaya" bisa -- "harusnya semuanya fungsinya sama... apapun pilihan rekapannya".
+2. Tidak menemukan pilihan checkbox Unit Bisnis untuk "Dibagi ke unit lain" pada kategori itu -- karena panel "Kelola Sharing" sebelumnya (Bagian AC) memang DIBATASI cuma untuk BBM + RTK + RTG (hardcode), kategori custom seperti "BBM RANDIS" tidak pernah masuk daftar sama sekali.
+
+## 41.2 Root Cause
+
+- Drill-down (klik sel -> modal rincian transaksi) sebelumnya HANYA di-enable untuk tabel "BBM -- Total Biaya" lewat parameter `enableDrillDown` yang di-hardcode `true` di 1 lokasi saja -- tabel kategori lain (`renderCategoryTable(category, categoryData[category])`) tidak pernah diberi kemampuan itu.
+- Panel "Kelola Sharing" (daftar baris untuk ditandai Dibagi/Dikecualikan) sebelumnya membaca `SHAREABLE_CATEGORIES = ['RTK', 'RTG']` yang di-hardcode di kode -- kategori APAPUN di luar 2 itu (termasuk grup buatan Admin sendiri lewat "Kelola Kategori") tidak pernah bisa diklasifikasi sharing-nya sama sekali.
+
+## 41.3 Implementasi
+
+- **`rekapanAggregation.js`**: `listCategoryLineItems` -- param `categories` sekarang OPSIONAL secara semantik baru: di-OMIT (bukan `undefined` dicek pakai `Array.isArray`) berarti SEMUA kategori non-BBM disertakan, array eksplisit (termasuk `[]`) tetap memfilter seperti sebelumnya. Backward compatible dengan pemanggilan lama yang masih memberi `categories` eksplisit.
+- **`RekapanUnitBisnis.jsx`**:
+  - `SHAREABLE_CATEGORIES` (konstanta hardcode) **dihapus sepenuhnya**. `allCategoryLineItems` sekarang memanggil `listCategoryLineItems` TANPA param `categories` -- otomatis mencakup SEMUA kategori non-BBM yang ada di data, termasuk grup custom hasil "Kelola Kategori".
+  - `renderCategoryTable(title, rowsData, extraUnits, categoryKey = title)`: parameter ke-4 diubah dari boolean `enableDrillDown` jadi `categoryKey` (nama kategori asli, default ke `title` -- cocok untuk semua tabel kategori biasa, di-override eksplisit `'BBM'` khusus untuk tabel "BBM -- Total Biaya" yang title-nya bukan nama kategori). Drill-down sekarang **selalu aktif** (untuk Admin/Super Admin) di SEMUA tabel kategori, bukan cuma BBM.
+  - `openDrillDown(type, value, month, label, category)`: parameter `category` baru, dipakai `drillDownItems` untuk memilih sumber data yang benar -- `category === 'BBM'` (atau tidak diisi) ambil dari `allBbmLineItems`, kategori lain ambil dari `allCategoryLineItems` difilter `item.category === category`. Modal drill-down menampilkan nama kategori di judul (`Rincian Transaksi -- {kategori} -- {unit} -- {bulan}`) supaya jelas kategori mana yang sedang dilihat.
+  - Panel/modal "Kelola Sharing BBM, RTK, RTG" diganti nama jadi **"Kelola Sharing"** (tanpa daftar tetap di judul) -- dropdown filter Kategori di dalamnya sekarang generate otomatis dari `orderedCategories` (kategori yang benar-benar ada di data tahun berjalan) + "BBM", bukan daftar hardcode.
+
+## 41.4 Task Development — Bagian AE
+
+- [x] `rekapanAggregation.js`: `listCategoryLineItems` -- `categories` di-omit = semua kategori, array eksplisit (termasuk kosong) tetap memfilter seperti semula
+- [x] `RekapanUnitBisnis.jsx`: hapus `SHAREABLE_CATEGORIES`, `allCategoryLineItems` mencakup semua kategori non-BBM
+- [x] `renderCategoryTable`: drill-down aktif untuk SEMUA tabel kategori (parameter `categoryKey` menggantikan `enableDrillDown`)
+- [x] `openDrillDown`/`drillDownItems`: generik lintas kategori (BBM tetap dari `allBbmLineItems`, kategori lain dari `allCategoryLineItems` terfilter)
+- [x] Panel "Kelola Sharing" & filter Kategori di dalamnya jadi dinamis (bukan daftar hardcode BBM/RTK/RTG)
+- [x] Test baru/diupdate: `listCategoryLineItems` (2 test disesuaikan untuk semantik baru) -- total 85 test frontend, semua PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: buat/pastikan ada grup kategori custom (mis. "BBM RANDIS") di "Kelola Kategori", klik sel angka di tabelnya -- konfirmasi modal rincian transaksi terbuka sama seperti tabel BBM/kategori lain
+- [ ] Tes manual: di modal "Kelola Sharing" (atau langsung dari drill-down kategori custom itu), pilih "Dibagi ke unit lain" -- konfirmasi checkbox Unit Bisnis muncul & bisa disimpan, tabel Rekapan kategori itu ikut menampilkan porsi share ke unit yang dipilih

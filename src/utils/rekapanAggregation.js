@@ -448,12 +448,15 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
  * disertakan supaya bentuk objeknya kompatibel dengan `renderClassificationRow`
  * yang dipakai bareng dengan item BBM.
  *
+ * `categories` (opsional): array label kategori yang mau disertakan (item di
+ * luar itu dibuang). Kalau di-OMIT (undefined) -- BUKAN array kosong -- semua
+ * kategori non-BBM disertakan (Bagian AE: Admin bisa mengelola sharing untuk
+ * kategori APAPUN, tidak dibatasi daftar tetap). Array kosong eksplisit
+ * (`categories: []`) tetap berarti "tidak ada kategori yang cocok" -> kosong.
+ *
  * @returns {Array<{ key: string, docType: string, docId: string, itemIndex: number, unit: string, month: number, category: string, jenis: string, plat: null, biayaTotal: number }>}
  */
 export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, categoryGroups, categories } = {}) {
-    const wantedCategories = categories || []
-    if (wantedCategories.length === 0) return []
-
     const items = []
 
     ;(reimbursementDocs || []).forEach((doc) => {
@@ -463,7 +466,7 @@ export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, catego
         ;(doc.reimbursements || []).forEach((item, itemIndex) => {
             if (isBbmValue(item.jenis) || !item.jenis) return
             const category = canonicalizeCategoryLabel(item.jenis, categoryGroups)
-            if (!wantedCategories.includes(category)) return
+            if (Array.isArray(categories) && !categories.includes(category)) return
             const dateParts = resolveReimbursementItemDate(item, doc)
             if (!dateParts || dateParts.year !== year) return
             items.push({
@@ -490,7 +493,7 @@ export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, catego
         ;(doc.lpj || []).forEach((item, itemIndex) => {
             if (isBbmValue(item.namaItem) || !item.namaItem) return
             const category = canonicalizeCategoryLabel(item.namaItem, categoryGroups)
-            if (!wantedCategories.includes(category)) return
+            if (Array.isArray(categories) && !categories.includes(category)) return
             const jumlahBiaya = item.jumlahBiaya ?? (Number(item.biaya) || 0) * (Number(item.jumlah) || 0)
             items.push({
                 key: buildBbmItemKey('lpj', doc.id, itemIndex),
