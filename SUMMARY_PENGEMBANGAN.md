@@ -1548,6 +1548,6 @@ Dua permintaan dari screenshot dropdown "Tampilkan Rekapan" (menampilkan "BBM --
 - [x] Ringkas 3 kartu "Kelola" jadi 1 kartu "Pengaturan Rekapan" (grid 3 tombol aksi)
 - [x] Pindahkan isi ketiga panel (headcount, sharing, kategori) jadi modal terpisah (pola sama dengan modal drill-down)
 - [x] `CI=true npm run build` sukses, 84 test frontend tetap PASS (murni perubahan render/layout, tidak menyentuh util agregasi)
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Pengaturan Rekapan" ada di bundle live
 - [ ] Tes manual: dropdown "Tampilkan Rekapan" tidak lagi menampilkan "BBM Pertalite"/"BBM Pertamax"/dst, cuma "BBM -- Total Biaya" & "BBM -- Liter per Plat Nomor" + kategori non-BBM
 - [ ] Tes manual: klik masing-masing dari 3 tombol di kartu "Pengaturan Rekapan" -- konfirmasi modal terbuka dengan benar, bisa ditutup lewat &times;/klik overlay/Batal, dan menyimpan data tetap berfungsi seperti sebelumnya (headcount, klasifikasi sharing, grup kategori)
