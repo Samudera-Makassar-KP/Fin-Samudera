@@ -929,6 +929,43 @@ const RekapanUnitBisnis = () => {
                                     </React.Fragment>
                                 )
                             })}
+                            {plats.length > 0 && (() => {
+                                const literPerMonth = visibleMonthIndexes.map((i) =>
+                                    plats.reduce((sum, plat) => sum + (bbmData.byPlat[plat].liter[i] || 0), 0)
+                                )
+                                const biayaPerMonth = visibleMonthIndexes.map((i) =>
+                                    plats.reduce((sum, plat) => sum + (bbmData.byPlat[plat].biaya[i] || 0), 0)
+                                )
+                                return (
+                                    <React.Fragment>
+                                        <tr className="bg-gray-200 dark:bg-gray-600 font-semibold">
+                                            <td rowSpan={2} className="py-2 px-4 text-gray-900 dark:text-gray-50 whitespace-nowrap align-top border-b dark:border-gray-500">
+                                                Grand Total
+                                            </td>
+                                            <td className="py-1 px-2 text-gray-700 dark:text-gray-200 whitespace-nowrap">Liter (L)</td>
+                                            {literPerMonth.map((val, idx) => (
+                                                <td key={idx} className="py-1 px-2 text-right text-gray-900 dark:text-gray-50">
+                                                    {val ? val.toLocaleString('id-ID') : '-'}
+                                                </td>
+                                            ))}
+                                            <td className="py-1 px-3 text-right text-gray-900 dark:text-gray-50">
+                                                {sumMonths(literPerMonth).toLocaleString('id-ID')}
+                                            </td>
+                                        </tr>
+                                        <tr className="bg-gray-200 dark:bg-gray-600 font-semibold border-b-2 border-gray-400 dark:border-gray-500">
+                                            <td className="py-1 px-2 text-gray-700 dark:text-gray-200 whitespace-nowrap">Biaya (Rp)</td>
+                                            {biayaPerMonth.map((val, idx) => (
+                                                <td key={idx} className="py-1 px-2 text-right text-gray-900 dark:text-gray-50">
+                                                    {val ? val.toLocaleString('id-ID') : '-'}
+                                                </td>
+                                            ))}
+                                            <td className="py-1 px-3 text-right text-gray-900 dark:text-gray-50">
+                                                {sumMonths(biayaPerMonth).toLocaleString('id-ID')}
+                                            </td>
+                                        </tr>
+                                    </React.Fragment>
+                                )
+                            })()}
                         </tbody>
                     </table>
                 </div>

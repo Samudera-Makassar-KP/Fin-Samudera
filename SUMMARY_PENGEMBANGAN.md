@@ -1467,6 +1467,11 @@ Semua tabel Rekapan (BBM & kategori lain) selalu menampilkan 12 kolom bulan (Jan
 - Drill-down modal (klik sel tabel BBM) tetap pakai index bulan asli (bukan posisi kolom setelah difilter), jadi tetap akurat menampilkan bulan yang benar berapa pun filter yang aktif.
 - Nama file export PNG ikut menambahkan nama bulan kalau filter aktif (mis. `Rekapan_BBM_Total_Biaya_2026_Maret.png`).
 - Grid filter di atas tabel diperlebar dari 3 jadi 4 kolom (`lg:grid-cols-4`) untuk menampung dropdown baru ini.
+- **Konfirmasi cakupan (2026-09-09):** filter Bulan berlaku untuk SEMUA tabel Rekapan, bukan cuma BBM — `renderCategoryTable` (dipakai untuk "BBM -- Total Biaya", breakdown per jenis BBM, DAN semua kategori non-BBM seperti ATK/RTG/Meeting/Entertaint dst.) dan `renderBbmLiterTable` sama-sama pakai `visibleMonthIndexes` yang sama satu sumber (1 dropdown "Bulan" mengontrol semuanya sekaligus).
+
+## 38.2.1 Tambahan: Baris "Grand Total" di Tabel BBM per Plat (2026-09-09)
+
+Permintaan lanjutan: tabel "BBM -- Liter per Plat Nomor" sebelumnya cuma punya Total PER PLAT (baris terpisah tiap plat), tidak ada baris rekap keseluruhan lintas semua plat. Ditambahkan baris **"Grand Total"** di baris paling bawah tabel (background abu gelap supaya beda dari baris plat biasa) -- 2 baris (Liter & Biaya) menjumlahkan SEMUA plat per bulan yang sedang tampil (ikut `visibleMonthIndexes`, sama seperti baris plat), + kolom Total di paling kanan = total liter/Rupiah keseluruhan.
 
 ## 38.3 Task Development — Bagian AB
 
@@ -1475,4 +1480,8 @@ Semua tabel Rekapan (BBM & kategori lain) selalu menampilkan 12 kolom bulan (Jan
 - [x] Nama file export PNG menyertakan nama bulan saat filter aktif
 - [x] `CI=true npm run build` sukses, 74 test frontend tetap PASS (murni perubahan render, tidak menyentuh util agregasi)
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Semua Bulan" ada di bundle live
-- [ ] Tes manual: pilih "Bulan: Maret" di dropdown baru, konfirmasi semua tabel (termasuk "BBM -- Liter per Plat Nomor") cuma menampilkan 1 kolom Maret + Total yang sama, lalu export PNG dan cek nama filenya menyertakan "Maret"
+- [x] Baris "Grand Total" (Liter & Biaya lintas semua plat) di tabel "BBM -- Liter per Plat Nomor", ikut `visibleMonthIndexes`
+- [x] `CI=true npm run build` + 74 test frontend PASS lagi setelah tambahan Grand Total
+- [ ] Deploy ke produksi (hosting saja) untuk tambahan Grand Total
+- [ ] Tes manual: pilih "Bulan: Maret" di dropdown baru, konfirmasi SEMUA tabel (BBM maupun non-BBM seperti ATK/Meeting) cuma menampilkan 1 kolom Maret + Total yang sama, lalu export PNG dan cek nama filenya menyertakan "Maret"
+- [ ] Tes manual: cek tabel "BBM -- Liter per Plat Nomor" -- baris "Grand Total" paling bawah menjumlahkan liter & biaya SEMUA plat dengan benar (bandingkan manual dengan jumlah Total per plat di atasnya)
