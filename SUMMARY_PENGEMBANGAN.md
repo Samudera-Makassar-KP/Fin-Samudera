@@ -1588,3 +1588,26 @@ User membuat grup kategori baru lewat "Kelola Kategori" (contoh: "BBM RANDIS", g
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Tandai baris kategori apa pun" ada di bundle live
 - [ ] Tes manual: buat/pastikan ada grup kategori custom (mis. "BBM RANDIS") di "Kelola Kategori", klik sel angka di tabelnya -- konfirmasi modal rincian transaksi terbuka sama seperti tabel BBM/kategori lain
 - [ ] Tes manual: di modal "Kelola Sharing" (atau langsung dari drill-down kategori custom itu), pilih "Dibagi ke unit lain" -- konfirmasi checkbox Unit Bisnis muncul & bisa disimpan, tabel Rekapan kategori itu ikut menampilkan porsi share ke unit yang dipilih
+
+---
+
+# BAGIAN AF — Hapus Tabel "BBM -- Total Biaya" (2026-09-09)
+
+## 42.1 Permintaan User & Peringatan yang Disampaikan
+
+User minta tabel "BBM -- Total Biaya" dihapus karena merasa sudah tergantikan oleh grup kategori custom "BBM RANDIS" yang dibuat sendiri lewat "Kelola Kategori". **Peringatan yang disampaikan ke user sebelum eksekusi:** "BBM -- Total Biaya" dihitung dari pengajuan lewat FORM BBM RESMI (RBS BBM/Operasional/Umum, LPJ -- item dengan prefix "BBM " di field jenis/namaItem, diproses `aggregateBbm`), sedangkan grup "Kelola Kategori" (termasuk "BBM RANDIS") HANYA BISA berisi item NON-BBM (`listCategoryRawLabels`/`aggregateByCategory` secara eksplisit mengecualikan item yang prefix-nya "BBM ") -- keduanya sumber data yang BEDA dan TIDAK saling tumpang tindih secara struktur kode. User tetap memilih hapus setelah peringatan ini disampaikan secara eksplisit.
+
+## 42.2 Implementasi
+
+- `RekapanUnitBisnis.jsx`: hapus render call `renderCategoryTable('BBM -- Total Biaya', bbmData.totals, ...)` dan entry `BBM_TOTAL_KEY` dari `tableFilterOptions` -- tabel & opsi dropdownnya tidak lagi tampil sama sekali.
+- `bbmSharingExtraUnits` (baris tambahan PPNP, sebelumnya cuma dipakai tabel BBM Total) di-generalisasi jadi `sharingExtraUnits` dan sekarang dipasang ke SEMUA tabel kategori (`renderCategoryTable(category, categoryData[category], sharingExtraUnits)`) -- perbaikan sekalian: PPNP sebagai unit tujuan share sekarang bisa muncul di kategori APA PUN (konsisten dengan Bagian AE yang sudah menggeneralisasi sharing ke semua kategori), bukan cuma yang sebelumnya khusus BBM Total.
+- `aggregateBbm` di `rekapanAggregation.js` TIDAK diubah -- `totals`/`byJenis` tetap dihitung (tidak dipakai di komponen), supaya kalau suatu saat user berubah pikiran, tabelnya bisa dimunculkan lagi tanpa ubah util.
+
+## 42.3 Task Development — Bagian AF
+
+- [x] Hapus render + entry dropdown "BBM -- Total Biaya"
+- [x] Generalisasi `bbmSharingExtraUnits` -> `sharingExtraUnits`, dipasang ke semua tabel kategori (bukan cuma yang dihapus)
+- [x] `CI=true npm run build` sukses, 85 test frontend tetap PASS (tidak ada perubahan util agregasi)
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: dropdown "Tampilkan Rekapan" tidak lagi ada opsi "BBM -- Total Biaya", tabelnya juga tidak tampil di halaman
+- [ ] Tes manual: kalau ada kategori (custom atau bawaan) yang di-share ke PPNP lewat "Kelola Sharing", konfirmasi baris PPNP muncul di tabel kategori itu (bukan cuma di tabel BBM lama)

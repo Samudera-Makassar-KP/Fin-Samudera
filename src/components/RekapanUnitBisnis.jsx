@@ -51,9 +51,10 @@ const CATEGORY_ORDER = [
     'Lainnya'
 ]
 
-// Key sentinel untuk 2 tabel BBM (bukan kategori dinamis dari data) supaya bisa
-// ikut difilter lewat dropdown "Tampilkan Rekapan" yang sama.
-const BBM_TOTAL_KEY = '__BBM_TOTAL__'
+// Key sentinel untuk tabel "BBM -- Liter per Plat Nomor" (bukan kategori dinamis
+// dari data) supaya bisa ikut difilter lewat dropdown "Tampilkan Rekapan" yang
+// sama. Tabel "BBM -- Total Biaya" dihapus di Bagian AF (user sudah punya grup
+// kategori custom sendiri lewat "Kelola Kategori" untuk kebutuhan itu).
 const BBM_LITER_KEY = '__BBM_LITER__'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -722,10 +723,12 @@ const RekapanUnitBisnis = () => {
     const displayUnits = unitsFilter
 
     // PPNP bukan Unit Bisnis resmi aplikasi (lihat rekapanSharing.js) -- cuma
-    // relevan sebagai baris tambahan di tabel BBM -- Total Biaya, dan cuma
-    // muncul saat Admin/Super Admin melihat SEMUA Unit Bisnis tanpa filter
-    // (kalau difilter ke unit tertentu, PPNP tidak mungkin jadi pilihan checkbox-nya).
-    const bbmSharingExtraUnits = useMemo(() => {
+    // relevan sebagai baris TAMBAHAN di tabel kategori APAPUN (Bagian AE: sharing
+    // generik, bukan cuma BBM lagi -- kategori mana pun bisa displit ke PPNP kalau
+    // dicentang di custom split), dan cuma muncul saat Admin/Super Admin melihat
+    // SEMUA Unit Bisnis tanpa filter (kalau difilter ke unit tertentu, PPNP tidak
+    // mungkin jadi pilihan checkbox-nya).
+    const sharingExtraUnits = useMemo(() => {
         return isAdmin && selectedUnitOptions.length === 0 ? [PPNP_UNIT_NAME] : []
     }, [isAdmin, selectedUnitOptions])
 
@@ -762,12 +765,16 @@ const RekapanUnitBisnis = () => {
     const [tableSearchText, setTableSearchText] = useState('')
 
     // Bagian AD: breakdown per jenis BBM (Pertalite/Pertamax/dst sebagai tabel
-    // terpisah) dihilangkan dari tampilan -- user cuma butuh 2 tabel BBM ("Total
-    // Biaya" & "Liter per Plat Nomor"). `bbmData.byJenis` tetap dihitung di
-    // aggregateBbm (tidak diutak-atik, cuma tidak dipakai di sini) supaya
-    // datanya tetap tersedia kalau suatu saat perlu lagi.
+    // terpisah) dihilangkan dari tampilan. Bagian AF: tabel "BBM -- Total Biaya"
+    // juga dihapus (user sudah punya grup kategori custom sendiri lewat "Kelola
+    // Kategori" yang menggantikan kebutuhan itu -- lihat SUMMARY_PENGEMBANGAN.md
+    // untuk peringatan bahwa "BBM -- Total Biaya" & kategori custom hasil "Kelola
+    // Kategori" adalah 2 SUMBER DATA BERBEDA yang tidak saling tumpang tindih,
+    // keputusan hapus ini SENGAJA & sudah dikonfirmasi user). `bbmData.byJenis`
+    // & `bbmData.totals` tetap dihitung di aggregateBbm (tidak diutak-atik, cuma
+    // tidak dipakai di sini) supaya datanya tetap tersedia kalau suatu saat perlu
+    // dimunculkan lagi.
     const tableFilterOptions = useMemo(() => [
-        { value: BBM_TOTAL_KEY, label: 'BBM -- Total Biaya' },
         { value: BBM_LITER_KEY, label: 'BBM -- Liter per Plat Nomor' },
         ...orderedCategories.map((c) => ({ value: c, label: c }))
     ], [orderedCategories])
@@ -1244,14 +1251,12 @@ const RekapanUnitBisnis = () => {
                 </div>
             ) : (
                 <>
-                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals, bbmSharingExtraUnits, 'BBM')}
                     {isTableVisible(BBM_LITER_KEY) && renderBbmLiterTable()}
                     {orderedCategories
                         .filter((category) => isTableVisible(category))
-                        .map((category) => renderCategoryTable(category, categoryData[category]))}
+                        .map((category) => renderCategoryTable(category, categoryData[category], sharingExtraUnits))}
 
                     {tableFilter.length > 0 &&
-                        !isTableVisible(BBM_TOTAL_KEY) &&
                         !isTableVisible(BBM_LITER_KEY) &&
                         orderedCategories.filter((category) => isTableVisible(category)).length === 0 && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-gray-500 dark:text-gray-400">
