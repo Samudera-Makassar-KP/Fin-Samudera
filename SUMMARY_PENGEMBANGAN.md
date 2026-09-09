@@ -1633,6 +1633,6 @@ Di modal drill-down "BBM -- Liter per Plat Nomor", banyak baris transaksi lama m
 - [x] `RekapanUnitBisnis.jsx`: tombol & editor inline "Atur Plat", `setItemStatus`/`saveCustomSplit`/`applyDefaultPoolSplit` mempertahankan `platOverride` yang sudah ada
 - [x] Test baru: 4 test `aggregateBbm` platOverride + 3 test `listBbmLineItems` platOverride -- total 92 test frontend, semua PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules, rules cuma perubahan komentar tapi ikut dideploy biar sinkron)
+- [x] Deploy ke produksi (hosting + firestore rules) — sukses 2026-09-09, diverifikasi teks "Atur Plat" ada di bundle live
 - [ ] Tes manual: buka drill-down BBM, klik "Atur Plat" di baris "Tidak diketahui", ketik nomor plat yang sudah ada di tabel "BBM -- Liter per Plat Nomor" (mis. "DD 1273 XBO"), simpan -- konfirmasi baris itu HILANG dari "Tidak diketahui" dan angkanya (liter+biaya) ikut menambah ke baris plat "DD 1273 XBO" yang sudah ada
 - [ ] Tes manual: setelah "Atur Plat" tersimpan, ubah Status baris itu jadi "Dibagi ke unit lain" lalu simpan split -- konfirmasi plat override TIDAK hilang (masih tergabung ke plat yang benar), bukan balik ke "Tidak diketahui"
