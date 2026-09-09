@@ -1517,6 +1517,6 @@ Screenshot panel "Kelola Sharing BBM": memilih status "Dibagi ke unit lain" di d
 - [x] `RekapanUnitBisnis.jsx`: `SHAREABLE_CATEGORIES`, `allCategoryLineItems`/`allShareableLineItems`, filter Kategori di panel, kolom Kategori di tabel klasifikasi (panel + drill-down modal)
 - [x] Test baru: 6 test `aggregateByCategory` sharing (default/dikecualikan/pool/custom/filter-unit/kategori-lain-generik) + 4 test `listCategoryLineItems` -- total 84 test frontend, semua PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Kelola Sharing (BBM, RTK, RTG)" ada di bundle live
 - [ ] Tes manual: di panel "Kelola Sharing (BBM, RTK, RTG)", pilih status "Dibagi ke unit lain" pada 1 baris BBM -- konfirmasi checkbox unit LANGSUNG muncul di bawah baris (belum tersimpan), pilih beberapa unit lalu "Simpan Split Custom", konfirmasi tersimpan & tabel Rekapan ikut berubah
 - [ ] Tes manual: filter Kategori ke "RTK", tandai 1 baris RTK "Dibagi ke unit lain" ke 2 unit, konfirmasi tabel Rekapan kategori "RTK" menampilkan porsi share ke kedua unit tersebut (bukan cuma ke unit pengaju asli)
