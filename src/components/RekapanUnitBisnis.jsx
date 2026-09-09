@@ -207,7 +207,8 @@ const RekapanUnitBisnis = () => {
 
     // 4. Roster headcount per unit (/rekapanHeadcount) -- dasar hitung persentase
     // sharing BBM MJS (pool "All Employee"). Bisa diedit Admin/Super Admin lewat
-    // panel "Kelola Data Sharing BBM" di bawah tabel BBM -- Total Biaya.
+    // modal "Kelola Data Sharing BBM" (Bagian AD, dibuka dari kartu "Pengaturan
+    // Rekapan" di bawah tabel).
     const [headcountByCode, setHeadcountByCode] = useState({})
     const [isHeadcountLoading, setIsHeadcountLoading] = useState(true)
     const [isEditingHeadcount, setIsEditingHeadcount] = useState(false)
@@ -757,14 +758,16 @@ const RekapanUnitBisnis = () => {
     const [isTableFilterOpen, setIsTableFilterOpen] = useState(false)
     const [tableSearchText, setTableSearchText] = useState('')
 
-    const orderedBbmJenis = useMemo(() => Object.keys(bbmData.byJenis || {}).sort(), [bbmData])
-
+    // Bagian AD: breakdown per jenis BBM (Pertalite/Pertamax/dst sebagai tabel
+    // terpisah) dihilangkan dari tampilan -- user cuma butuh 2 tabel BBM ("Total
+    // Biaya" & "Liter per Plat Nomor"). `bbmData.byJenis` tetap dihitung di
+    // aggregateBbm (tidak diutak-atik, cuma tidak dipakai di sini) supaya
+    // datanya tetap tersedia kalau suatu saat perlu lagi.
     const tableFilterOptions = useMemo(() => [
         { value: BBM_TOTAL_KEY, label: 'BBM -- Total Biaya' },
         { value: BBM_LITER_KEY, label: 'BBM -- Liter per Plat Nomor' },
-        ...orderedBbmJenis.map((jenis) => ({ value: jenis, label: jenis })),
         ...orderedCategories.map((c) => ({ value: c, label: c }))
-    ], [orderedCategories, orderedBbmJenis])
+    ], [orderedCategories])
 
     const isTableVisible = useCallback((key) => {
         return tableFilter.length === 0 || tableFilter.some((opt) => opt.value === key)
@@ -1236,9 +1239,6 @@ const RekapanUnitBisnis = () => {
                 <>
                     {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable('BBM -- Total Biaya', bbmData.totals, bbmSharingExtraUnits, true)}
                     {isTableVisible(BBM_LITER_KEY) && renderBbmLiterTable()}
-                    {orderedBbmJenis
-                        .filter((jenis) => isTableVisible(jenis))
-                        .map((jenis) => renderCategoryTable(jenis, bbmData.byJenis[jenis]))}
                     {orderedCategories
                         .filter((category) => isTableVisible(category))
                         .map((category) => renderCategoryTable(category, categoryData[category]))}
@@ -1259,319 +1259,362 @@ const RekapanUnitBisnis = () => {
                     )}
 
                     {isAdmin && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mt-2">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mt-4">
+                            <p className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Pengaturan Rekapan</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                Khusus Admin/Super Admin -- tidak memengaruhi tampilan Validator.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={startEditHeadcount}
+                                    disabled={isHeadcountLoading}
+                                    className="text-left border dark:border-gray-600 rounded-md p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50 transition-colors"
+                                >
+                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Kelola Data Sharing BBM</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Roster headcount per Unit Bisnis -- dasar persentase pool default.
+                                    </p>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsManagingSharing(true)}
+                                    disabled={isClassificationLoading}
+                                    className="text-left border dark:border-gray-600 rounded-md p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50 transition-colors"
+                                >
+                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Kelola Sharing (BBM, RTK, RTG)</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Tandai baris yang dibagi ke unit lain atau dikecualikan dari Rekapan.
+                                    </p>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsManagingCategories(true)}
+                                    disabled={isCategoryGroupsLoading}
+                                    className="text-left border dark:border-gray-600 rounded-md p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50 transition-colors"
+                                >
+                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Kelola Kategori</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Gabungkan label kategori yang mirip jadi 1 baris Rekapan.
+                                    </p>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {isEditingHeadcount && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/40" onClick={cancelEditHeadcount} />
+                    <div className="fixed z-50 inset-0 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+                            <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
                                 <div>
                                     <p className="font-semibold text-gray-800 dark:text-gray-100">
                                         Kelola Data Sharing BBM
                                     </p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
                                         Daftar nama per Unit Bisnis, dasar hitung persentase pool "All Employee" --
                                         dipakai sebagai split DEFAULT untuk baris BBM/RTK/RTG yang ditandai "dibagi"
-                                        di panel "Kelola Sharing" di bawah (kecuali baris itu diberi split custom
-                                        sendiri). Total headcount saat ini: {SHARING_UNITS.reduce((sum, u) => sum + (headcountByCode[u.code]?.length || 0), 0)} orang.
+                                        (kecuali baris itu diberi split custom sendiri). Total headcount saat ini:{' '}
+                                        {SHARING_UNITS.reduce((sum, u) => sum + (headcountByCode[u.code]?.length || 0), 0)} orang.
                                     </p>
                                 </div>
-                                {!isEditingHeadcount && (
-                                    <button
-                                        type="button"
-                                        onClick={startEditHeadcount}
-                                        disabled={isHeadcountLoading}
-                                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
-                                    >
-                                        Edit Roster
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={cancelEditHeadcount}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-2 flex-none"
+                                >
+                                    &times;
+                                </button>
                             </div>
-
-                            {isEditingHeadcount && (
-                                <div className="mt-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {SHARING_UNITS.map((u) => (
-                                            <div key={u.code}>
-                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    {u.name} <span className="text-gray-400">({u.code})</span>
-                                                </label>
-                                                <textarea
-                                                    rows={6}
-                                                    value={headcountDraft[u.code] || ''}
-                                                    onChange={(e) => setHeadcountDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
-                                                    placeholder="1 nama per baris"
-                                                    className="w-full text-sm border dark:border-gray-600 rounded-md p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="flex justify-end gap-2 mt-4">
-                                        <button
-                                            type="button"
-                                            onClick={cancelEditHeadcount}
-                                            disabled={isSavingHeadcount}
-                                            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:underline disabled:opacity-50"
-                                        >
-                                            Batal
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={saveHeadcount}
-                                            disabled={isSavingHeadcount}
-                                            className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
-                                        >
-                                            {isSavingHeadcount ? 'Menyimpan...' : 'Simpan'}
-                                        </button>
-                                    </div>
+                            <div className="overflow-auto p-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {SHARING_UNITS.map((u) => (
+                                        <div key={u.code}>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                {u.name} <span className="text-gray-400">({u.code})</span>
+                                            </label>
+                                            <textarea
+                                                rows={6}
+                                                value={headcountDraft[u.code] || ''}
+                                                onChange={(e) => setHeadcountDraft((prev) => ({ ...prev, [u.code]: e.target.value }))}
+                                                placeholder="1 nama per baris"
+                                                className="w-full text-sm border dark:border-gray-600 rounded-md p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
-                            )}
+                            </div>
+                            <div className="flex justify-end gap-2 px-4 py-3 border-t dark:border-gray-700">
+                                <button
+                                    type="button"
+                                    onClick={cancelEditHeadcount}
+                                    disabled={isSavingHeadcount}
+                                    className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:underline disabled:opacity-50"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={saveHeadcount}
+                                    disabled={isSavingHeadcount}
+                                    className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+                                >
+                                    {isSavingHeadcount ? 'Menyimpan...' : 'Simpan'}
+                                </button>
+                            </div>
                         </div>
-                    )}
+                    </div>
+                </>
+            )}
 
-                    {isAdmin && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mt-4">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
+            {isManagingSharing && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setIsManagingSharing(false)} />
+                    <div className="fixed z-50 inset-0 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[85vh] overflow-hidden flex flex-col">
+                            <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
                                 <div>
                                     <p className="font-semibold text-gray-800 dark:text-gray-100">
                                         Kelola Sharing (BBM, RTK, RTG)
                                     </p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
                                         Tandai satu-satu baris BBM/RTK/RTG: <strong>Dibagi</strong> ke unit lain (mis.
                                         biaya yang ditalangi dulu oleh 1 unit), atau <strong>Kecualikan</strong> kalau
-                                        di luar scope Biaya GA (tidak muncul di Rekapan sama sekali). Baris yang belum
-                                        ditandai tetap 100% ke unit pengaju -- tidak ada yang otomatis berubah.
+                                        di luar scope Biaya GA. Baris yang belum ditandai tetap 100% ke unit pengaju.
                                     </p>
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => setIsManagingSharing((prev) => !prev)}
-                                    disabled={isClassificationLoading}
-                                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                                    onClick={() => setIsManagingSharing(false)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-2 flex-none"
                                 >
-                                    {isManagingSharing ? 'Tutup' : 'Kelola'}
+                                    &times;
                                 </button>
                             </div>
-
-                            {isManagingSharing && (
-                                <div className="mt-4">
-                                    <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
-                                        <select
-                                            value={sharingCategoryFilter}
-                                            onChange={(e) => { setSharingCategoryFilter(e.target.value); setSharingPage(1) }}
-                                            className="border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                                        >
-                                            <option value="">Semua Kategori</option>
-                                            <option value="BBM">BBM</option>
-                                            {SHAREABLE_CATEGORIES.map((c) => (
-                                                <option key={c} value={c}>{c}</option>
-                                            ))}
-                                        </select>
-                                        <select
-                                            value={sharingUnitFilter}
-                                            onChange={(e) => { setSharingUnitFilter(e.target.value); setSharingPage(1) }}
-                                            className="border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                                        >
-                                            <option value="">Semua Unit Bisnis</option>
-                                            {BUSINESS_UNITS.map((u) => (
-                                                <option key={u.value} value={u.value}>{u.label}</option>
-                                            ))}
-                                        </select>
-                                        <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                                            <input
-                                                type="checkbox"
-                                                checked={showReviewedItems}
-                                                onChange={(e) => { setShowReviewedItems(e.target.checked); setSharingPage(1) }}
-                                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                                            />
-                                            Tampilkan yang sudah direview juga
-                                        </label>
-                                        <span className="text-gray-400">
-                                            {visibleShareableLineItems.length} baris
-                                        </span>
-                                    </div>
-
-                                    <div className="overflow-x-auto border dark:border-gray-600 rounded-md">
-                                        <table className="w-full text-sm border-collapse">
-                                            <thead>
-                                                <tr className="bg-gray-100 dark:bg-gray-700">
-                                                    <th className="px-3 py-2 text-left">Bulan</th>
-                                                    <th className="px-3 py-2 text-left">Unit Pengaju</th>
-                                                    <th className="px-3 py-2 text-left">Kategori</th>
-                                                    <th className="px-3 py-2 text-left">Plat</th>
-                                                    <th className="px-3 py-2 text-left">Jenis</th>
-                                                    <th className="px-3 py-2 text-right">Biaya</th>
-                                                    <th className="px-3 py-2 text-left">Status</th>
-                                                    <th className="px-3 py-2 text-left">Split</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {pagedShareableLineItems.length === 0 && (
-                                                    <tr>
-                                                        <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
-                                                            Tidak ada baris untuk filter ini.
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                                {pagedShareableLineItems.map((item) => renderClassificationRow(item))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    {totalSharingPages > 1 && (
-                                        <div className="flex items-center justify-center gap-3 mt-3 text-sm">
-                                            <button
-                                                type="button"
-                                                onClick={() => setSharingPage((p) => Math.max(1, p - 1))}
-                                                disabled={sharingPage === 1}
-                                                className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
-                                            >
-                                                Sebelumnya
-                                            </button>
-                                            <span className="text-gray-600 dark:text-gray-300">
-                                                Halaman {sharingPage} / {totalSharingPages}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setSharingPage((p) => Math.min(totalSharingPages, p + 1))}
-                                                disabled={sharingPage === totalSharingPages}
-                                                className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
-                                            >
-                                                Berikutnya
-                                            </button>
-                                        </div>
-                                    )}
+                            <div className="overflow-auto p-4">
+                                <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
+                                    <select
+                                        value={sharingCategoryFilter}
+                                        onChange={(e) => { setSharingCategoryFilter(e.target.value); setSharingPage(1) }}
+                                        className="border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    >
+                                        <option value="">Semua Kategori</option>
+                                        <option value="BBM">BBM</option>
+                                        {SHAREABLE_CATEGORIES.map((c) => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={sharingUnitFilter}
+                                        onChange={(e) => { setSharingUnitFilter(e.target.value); setSharingPage(1) }}
+                                        className="border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    >
+                                        <option value="">Semua Unit Bisnis</option>
+                                        {BUSINESS_UNITS.map((u) => (
+                                            <option key={u.value} value={u.value}>{u.label}</option>
+                                        ))}
+                                    </select>
+                                    <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={showReviewedItems}
+                                            onChange={(e) => { setShowReviewedItems(e.target.checked); setSharingPage(1) }}
+                                            className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                        />
+                                        Tampilkan yang sudah direview juga
+                                    </label>
+                                    <span className="text-gray-400">
+                                        {visibleShareableLineItems.length} baris
+                                    </span>
                                 </div>
-                            )}
-                        </div>
-                    )}
 
-                    {isAdmin && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mt-4">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="overflow-x-auto border dark:border-gray-600 rounded-md">
+                                    <table className="w-full text-sm border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-100 dark:bg-gray-700">
+                                                <th className="px-3 py-2 text-left">Bulan</th>
+                                                <th className="px-3 py-2 text-left">Unit Pengaju</th>
+                                                <th className="px-3 py-2 text-left">Kategori</th>
+                                                <th className="px-3 py-2 text-left">Plat</th>
+                                                <th className="px-3 py-2 text-left">Jenis</th>
+                                                <th className="px-3 py-2 text-right">Biaya</th>
+                                                <th className="px-3 py-2 text-left">Status</th>
+                                                <th className="px-3 py-2 text-left">Split</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {pagedShareableLineItems.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                        Tidak ada baris untuk filter ini.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {pagedShareableLineItems.map((item) => renderClassificationRow(item))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {totalSharingPages > 1 && (
+                                    <div className="flex items-center justify-center gap-3 mt-3 text-sm">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSharingPage((p) => Math.max(1, p - 1))}
+                                            disabled={sharingPage === 1}
+                                            className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
+                                        >
+                                            Sebelumnya
+                                        </button>
+                                        <span className="text-gray-600 dark:text-gray-300">
+                                            Halaman {sharingPage} / {totalSharingPages}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSharingPage((p) => Math.min(totalSharingPages, p + 1))}
+                                            disabled={sharingPage === totalSharingPages}
+                                            className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
+                                        >
+                                            Berikutnya
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {isManagingCategories && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setIsManagingCategories(false)} />
+                    <div className="fixed z-50 inset-0 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+                            <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
                                 <div>
                                     <p className="font-semibold text-gray-800 dark:text-gray-100">
                                         Kelola Kategori
                                     </p>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
                                         Gabungkan beberapa label kategori/keterangan yang sebenarnya sama (mis.
                                         "Meeting", "Biaya Meeting", "Cemilan kue ruang meeting") jadi{' '}
-                                        <strong>1 kategori Rekapan</strong>. Pengajuan baru yang keterangannya
-                                        mengandung salah satu anggota grup otomatis ikut tergabung, tidak perlu
-                                        diatur ulang setiap kali muncul variasi baru.
+                                        <strong>1 kategori Rekapan</strong>. Pengajuan baru yang mengandung salah
+                                        satu anggota grup otomatis ikut tergabung.
                                     </p>
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => setIsManagingCategories((prev) => !prev)}
-                                    disabled={isCategoryGroupsLoading}
-                                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                                    onClick={() => setIsManagingCategories(false)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-2 flex-none"
                                 >
-                                    {isManagingCategories ? 'Tutup' : 'Kelola'}
+                                    &times;
                                 </button>
                             </div>
-
-                            {isManagingCategories && (
-                                <div className="mt-4 space-y-6">
-                                    {categoryGroups.length > 0 && (
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                Grup yang sudah dibuat
-                                            </p>
-                                            <div className="space-y-3">
-                                                {categoryGroups.map((group) => (
-                                                    <div key={group.id} className="border dark:border-gray-600 rounded-md p-3">
-                                                        <div className="flex items-center justify-between gap-2 mb-2">
-                                                            <p className="font-semibold text-gray-800 dark:text-gray-100">{group.label}</p>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => deleteCategoryGroup(group.id)}
-                                                                className="text-xs text-red-600 hover:underline flex-none"
-                                                            >
-                                                                Hapus Grup
-                                                            </button>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {(group.members || []).map((member) => (
-                                                                <span
-                                                                    key={member}
-                                                                    className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-2 py-1 rounded-full"
-                                                                >
-                                                                    {member}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => removeMemberFromGroup(group.id, member)}
-                                                                        className="text-gray-400 hover:text-red-600"
-                                                                        title="Keluarkan dari grup"
-                                                                    >
-                                                                        &times;
-                                                                    </button>
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
+                            <div className="overflow-auto p-4 space-y-6">
+                                {categoryGroups.length > 0 && (
                                     <div>
                                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Buat/tambah grup -- centang label yang sebenarnya sama, lalu beri nama
-                                            gabungan (ketik nama grup yang sudah ada untuk menambah anggota ke grup itu)
+                                            Grup yang sudah dibuat
                                         </p>
-                                        <input
-                                            type="text"
-                                            value={categorySearchText}
-                                            onChange={(e) => setCategorySearchText(e.target.value)}
-                                            placeholder="Ketik untuk cari label..."
-                                            className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 mb-2"
-                                        />
-                                        <div className="max-h-56 overflow-y-auto border dark:border-gray-600 rounded-md divide-y dark:divide-gray-100 dark:divide-gray-700">
-                                            {rawCategoryLabels
-                                                .filter((label) => label.toLowerCase().includes(categorySearchText.toLowerCase()))
-                                                .map((label) => {
-                                                    const currentGroup = categoryGroups.find((g) => (g.members || []).includes(label))
-                                                    return (
-                                                        <label
-                                                            key={label}
-                                                            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                        <div className="space-y-3">
+                                            {categoryGroups.map((group) => (
+                                                <div key={group.id} className="border dark:border-gray-600 rounded-md p-3">
+                                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                                        <p className="font-semibold text-gray-800 dark:text-gray-100">{group.label}</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => deleteCategoryGroup(group.id)}
+                                                            className="text-xs text-red-600 hover:underline flex-none"
                                                         >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={Boolean(newGroupSelected[label])}
-                                                                onChange={(e) => setNewGroupSelected((prev) => ({ ...prev, [label]: e.target.checked }))}
-                                                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                                                            />
-                                                            <span className="flex-1">{label}</span>
-                                                            {currentGroup && (
-                                                                <span className="text-xs text-gray-400">sudah di grup "{currentGroup.label}"</span>
-                                                            )}
-                                                        </label>
-                                                    )
-                                                })}
-                                            {rawCategoryLabels.filter((label) => label.toLowerCase().includes(categorySearchText.toLowerCase())).length === 0 && (
-                                                <p className="px-3 py-3 text-sm text-gray-400 text-center">Tidak ditemukan</p>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-3">
-                                            <input
-                                                type="text"
-                                                value={newGroupLabel}
-                                                onChange={(e) => setNewGroupLabel(e.target.value)}
-                                                placeholder="Nama kategori gabungan, mis. Meeting"
-                                                className="flex-1 text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={createOrExtendCategoryGroup}
-                                                disabled={isSavingGroup}
-                                                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50 flex-none"
-                                            >
-                                                {isSavingGroup ? 'Menyimpan...' : 'Gabungkan'}
-                                            </button>
+                                                            Hapus Grup
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(group.members || []).map((member) => (
+                                                            <span
+                                                                key={member}
+                                                                className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs px-2 py-1 rounded-full"
+                                                            >
+                                                                {member}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeMemberFromGroup(group.id, member)}
+                                                                    className="text-gray-400 hover:text-red-600"
+                                                                    title="Keluarkan dari grup"
+                                                                >
+                                                                    &times;
+                                                                </button>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
+                                )}
+
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Buat/tambah grup -- centang label yang sebenarnya sama, lalu beri nama
+                                        gabungan (ketik nama grup yang sudah ada untuk menambah anggota ke grup itu)
+                                    </p>
+                                    <input
+                                        type="text"
+                                        value={categorySearchText}
+                                        onChange={(e) => setCategorySearchText(e.target.value)}
+                                        placeholder="Ketik untuk cari label..."
+                                        className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 mb-2"
+                                    />
+                                    <div className="max-h-56 overflow-y-auto border dark:border-gray-600 rounded-md divide-y dark:divide-gray-100 dark:divide-gray-700">
+                                        {rawCategoryLabels
+                                            .filter((label) => label.toLowerCase().includes(categorySearchText.toLowerCase()))
+                                            .map((label) => {
+                                                const currentGroup = categoryGroups.find((g) => (g.members || []).includes(label))
+                                                return (
+                                                    <label
+                                                        key={label}
+                                                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={Boolean(newGroupSelected[label])}
+                                                            onChange={(e) => setNewGroupSelected((prev) => ({ ...prev, [label]: e.target.checked }))}
+                                                            className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                        />
+                                                        <span className="flex-1">{label}</span>
+                                                        {currentGroup && (
+                                                            <span className="text-xs text-gray-400">sudah di grup "{currentGroup.label}"</span>
+                                                        )}
+                                                    </label>
+                                                )
+                                            })}
+                                        {rawCategoryLabels.filter((label) => label.toLowerCase().includes(categorySearchText.toLowerCase())).length === 0 && (
+                                            <p className="px-3 py-3 text-sm text-gray-400 text-center">Tidak ditemukan</p>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-3">
+                                        <input
+                                            type="text"
+                                            value={newGroupLabel}
+                                            onChange={(e) => setNewGroupLabel(e.target.value)}
+                                            placeholder="Nama kategori gabungan, mis. Meeting"
+                                            className="flex-1 text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={createOrExtendCategoryGroup}
+                                            disabled={isSavingGroup}
+                                            className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50 flex-none"
+                                        >
+                                            {isSavingGroup ? 'Menyimpan...' : 'Gabungkan'}
+                                        </button>
+                                    </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
-                    )}
+                    </div>
                 </>
             )}
 

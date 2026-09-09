@@ -1520,3 +1520,34 @@ Screenshot panel "Kelola Sharing BBM": memilih status "Dibagi ke unit lain" di d
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Kelola Sharing (BBM, RTK, RTG)" ada di bundle live
 - [ ] Tes manual: di panel "Kelola Sharing (BBM, RTK, RTG)", pilih status "Dibagi ke unit lain" pada 1 baris BBM -- konfirmasi checkbox unit LANGSUNG muncul di bawah baris (belum tersimpan), pilih beberapa unit lalu "Simpan Split Custom", konfirmasi tersimpan & tabel Rekapan ikut berubah
 - [ ] Tes manual: filter Kategori ke "RTK", tandai 1 baris RTK "Dibagi ke unit lain" ke 2 unit, konfirmasi tabel Rekapan kategori "RTK" menampilkan porsi share ke kedua unit tersebut (bukan cuma ke unit pengaju asli)
+
+---
+
+# BAGIAN AD — Hilangkan Breakdown Per Jenis BBM & Panel Kelola Jadi Modal (2026-09-09)
+
+## 40.1 Permintaan User
+
+Dua permintaan dari screenshot dropdown "Tampilkan Rekapan" (menampilkan "BBM -- Total Biaya", "BBM -- Liter per Plat Nomor", "BBM Lainnya", "BBM Pertalite", "BBM Pertamax", dst):
+1. User cuma butuh **2 tabel BBM**: "BBM -- Total Biaya" (per Unit Bisnis) dan "BBM -- Liter per Plat Nomor" (liter + nominal per bulan + total) -- breakdown per jenis BBM (Pertalite/Pertamax/Solar/dst sebagai tabel terpisah) tidak diperlukan dan bikin dropdown penuh.
+2. 3 panel "Kelola" (Kelola Data Sharing BBM, Kelola Sharing BBM/RTK/RTG, Kelola Kategori) yang sebelumnya nempel sebagai kartu penuh expand-inline di bawah tabel Rekapan diminta dibuat lebih elegan & user-friendly -- dipilih jadi **modal terpisah** (bukan cuma dirapikan inline) supaya halaman utama Rekapan lebih ringkas.
+
+## 40.2 Implementasi
+
+### Hilangkan breakdown per jenis BBM
+- `RekapanUnitBisnis.jsx`: `orderedBbmJenis` (dulu daftar `Object.keys(bbmData.byJenis)`) dihapus dari `tableFilterOptions` dan dari render loop tabel -- breakdown per jenis BBM (Pertalite/Pertamax/Pertamax Turbo/Solar/Dexlite/Lainnya) TIDAK lagi muncul sebagai tabel/opsi dropdown terpisah. `bbmData.byJenis` di `rekapanAggregation.js` TIDAK dihapus/diubah (tetap dihitung `aggregateBbm`, cuma tidak dipakai di komponen) -- kalau suatu saat perlu lagi, datanya sudah tersedia tanpa perlu ubah util.
+- Dropdown "Tampilkan Rekapan" sekarang cuma berisi: "BBM -- Total Biaya", "BBM -- Liter per Plat Nomor", + kategori non-BBM (ATK, RTG, RTK, Meeting, dst).
+
+### Panel Kelola jadi modal
+- 3 kartu "Kelola Data Sharing BBM" / "Kelola Sharing (BBM, RTK, RTG)" / "Kelola Kategori" yang sebelumnya masing-masing kartu penuh dengan paragraf deskripsi + expand inline, diringkas jadi **1 kartu "Pengaturan Rekapan"** berisi 3 tombol aksi ringkas (judul + 1 baris deskripsi tiap tombol) dalam grid 3 kolom.
+- Klik salah satu tombol membuka **modal** (pola sama dengan modal drill-down yang sudah ada: overlay gelap + dialog terpusat, bisa ditutup lewat tombol &times;, klik overlay, atau tombol "Batal") -- isi tiap modal (filter, tabel, form) SAMA PERSIS dengan versi inline sebelumnya, cuma dipindah wadahnya. State pembuka modal reuse state yang sudah ada (`isEditingHeadcount`, `isManagingSharing`, `isManagingCategories`) -- tidak ada state baru, murni pemindahan JSX.
+- Halaman utama Rekapan sekarang jauh lebih ringkas untuk Admin/Super Admin -- tidak ada lagi 3 kartu tebal berturut-turut di bawah tabel data.
+
+## 40.3 Task Development — Bagian AD
+
+- [x] `RekapanUnitBisnis.jsx`: hapus `orderedBbmJenis` dari `tableFilterOptions` & render loop (breakdown per jenis BBM tidak lagi tampil)
+- [x] Ringkas 3 kartu "Kelola" jadi 1 kartu "Pengaturan Rekapan" (grid 3 tombol aksi)
+- [x] Pindahkan isi ketiga panel (headcount, sharing, kategori) jadi modal terpisah (pola sama dengan modal drill-down)
+- [x] `CI=true npm run build` sukses, 84 test frontend tetap PASS (murni perubahan render/layout, tidak menyentuh util agregasi)
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: dropdown "Tampilkan Rekapan" tidak lagi menampilkan "BBM Pertalite"/"BBM Pertamax"/dst, cuma "BBM -- Total Biaya" & "BBM -- Liter per Plat Nomor" + kategori non-BBM
+- [ ] Tes manual: klik masing-masing dari 3 tombol di kartu "Pengaturan Rekapan" -- konfirmasi modal terbuka dengan benar, bisa ditutup lewat &times;/klik overlay/Batal, dan menyimpan data tetap berfungsi seperti sebelumnya (headcount, klasifikasi sharing, grup kategori)
