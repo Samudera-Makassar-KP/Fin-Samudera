@@ -58,6 +58,15 @@ const BBM_LITER_KEY = '__BBM_LITER__'
 const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => ({ value: y, label: String(y) }))
 
+// Filter "Bulan" (Bagian AB) -- default null = tampilkan semua 12 kolom bulan
+// seperti sebelumnya. Pilih 1 bulan tertentu untuk mempersempit SEMUA tabel
+// Rekapan (termasuk BBM) jadi cuma 1 kolom bulan itu -- dipakai bikin rekapan
+// bulanan (mis. screenshot/export PNG per bulan) tanpa 11 kolom kosong lain.
+const MONTH_FILTER_OPTIONS = [
+    { value: null, label: 'Semua Bulan' },
+    ...MONTH_LABELS.map((label, value) => ({ value, label }))
+]
+
 const RekapanUnitBisnis = () => {
     const { theme } = useTheme()
     const isDark = theme === 'dark'
@@ -71,6 +80,13 @@ const RekapanUnitBisnis = () => {
     const [isUnitFilterOpen, setIsUnitFilterOpen] = useState(false)
     const [unitSearchText, setUnitSearchText] = useState('')
     const [selectedYear, setSelectedYear] = useState(YEAR_OPTIONS[0])
+    const [selectedMonth, setSelectedMonth] = useState(MONTH_FILTER_OPTIONS[0])
+
+    // Index bulan (0-11) yang ditampilkan di semua tabel -- "Semua Bulan" berarti
+    // 12 kolom seperti sebelumnya, pilih 1 bulan berarti tabel cuma 1 kolom itu.
+    const visibleMonthIndexes = useMemo(() => {
+        return selectedMonth?.value == null ? MONTH_LABELS.map((_, i) => i) : [selectedMonth.value]
+    }, [selectedMonth])
 
     const [isDataLoading, setIsDataLoading] = useState(true)
     const [reimbursementDocs, setReimbursementDocs] = useState([])
@@ -98,8 +114,9 @@ const RekapanUnitBisnis = () => {
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             const safeName = title.replace(/[^a-zA-Z0-9]+/g, '_')
+            const monthSuffix = selectedMonth?.value != null ? `_${selectedMonth.label}` : ''
             link.href = url
-            link.download = `Rekapan_${safeName}_${selectedYear?.value || ''}.png`
+            link.download = `Rekapan_${safeName}_${selectedYear?.value || ''}${monthSuffix}.png`
             document.body.appendChild(link)
             link.click()
             link.remove()
@@ -748,6 +765,7 @@ const RekapanUnitBisnis = () => {
         // (mis. PPNP, bukan Unit Bisnis resmi aplikasi) yang cuma relevan untuk
         // tabel ini -- ditambahkan setelah displayUnits, bukan menggantikannya.
         const rowUnits = [...displayUnits, ...extraUnits]
+        const colCount = 1 + visibleMonthIndexes.length + 1
         return (
             <div key={title} className="mb-6">
                 <div className="flex justify-end mb-2">
@@ -769,14 +787,14 @@ const RekapanUnitBisnis = () => {
                         <table className="w-full text-sm border-collapse">
                             <thead>
                                 <tr style={{ backgroundColor: '#ED1C24' }}>
-                                    <th colSpan={14} className="py-2 px-4 text-white text-left font-semibold">
+                                    <th colSpan={colCount} className="py-2 px-4 text-white text-left font-semibold">
                                         {title}
                                     </th>
                                 </tr>
                                 <tr style={{ backgroundColor: '#ED1C24' }}>
                                     <th className="py-2 px-4 text-white text-left font-medium min-w-[220px]">Unit Bisnis</th>
-                                    {MONTH_LABELS.map((m) => (
-                                        <th key={m} className="py-2 px-2 text-white text-center font-medium">{m}</th>
+                                    {visibleMonthIndexes.map((i) => (
+                                        <th key={i} className="py-2 px-2 text-white text-center font-medium">{MONTH_LABELS[i]}</th>
                                     ))}
                                     <th className="py-2 px-3 text-white text-center font-medium">Total</th>
                                 </tr>
@@ -788,18 +806,21 @@ const RekapanUnitBisnis = () => {
                                     return (
                                         <tr key={unit} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}>
                                             <td className="py-2 px-4 text-gray-800 dark:text-gray-100 whitespace-nowrap">{getUnitLabel(unit)}</td>
-                                            {months.map((val, i) => (
-                                                <td
-                                                    key={i}
-                                                    onClick={canDrillDown && val ? () => openDrillDown('unit', unit, i, getUnitLabel(unit)) : undefined}
-                                                    title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
-                                                    className={`py-2 px-2 text-right text-gray-700 dark:text-gray-200 ${canDrillDown && val ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 hover:underline' : ''}`}
-                                                >
-                                                    {val ? val.toLocaleString('id-ID') : '-'}
-                                                </td>
-                                            ))}
+                                            {visibleMonthIndexes.map((i) => {
+                                                const val = months[i]
+                                                return (
+                                                    <td
+                                                        key={i}
+                                                        onClick={canDrillDown && val ? () => openDrillDown('unit', unit, i, getUnitLabel(unit)) : undefined}
+                                                        title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
+                                                        className={`py-2 px-2 text-right text-gray-700 dark:text-gray-200 ${canDrillDown && val ? 'cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 hover:underline' : ''}`}
+                                                    >
+                                                        {val ? val.toLocaleString('id-ID') : '-'}
+                                                    </td>
+                                                )
+                                            })}
                                             <td className="py-2 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
-                                                {sumMonths(months).toLocaleString('id-ID')}
+                                                {sumMonths(visibleMonthIndexes.map((i) => months[i])).toLocaleString('id-ID')}
                                             </td>
                                         </tr>
                                     )
@@ -815,6 +836,7 @@ const RekapanUnitBisnis = () => {
     const renderBbmLiterTable = () => {
         const title = 'BBM -- Liter per Plat Nomor'
         const plats = Object.keys(bbmData.byPlat).sort()
+        const colCount = 2 + visibleMonthIndexes.length + 1
         return (
             <div className="mb-6">
                 <div className="flex justify-end mb-2">
@@ -836,15 +858,15 @@ const RekapanUnitBisnis = () => {
                     <table className="w-full text-sm border-collapse">
                         <thead>
                             <tr style={{ backgroundColor: '#ED1C24' }}>
-                                <th colSpan={15} className="py-2 px-4 text-white text-left font-semibold">
+                                <th colSpan={colCount} className="py-2 px-4 text-white text-left font-semibold">
                                     {title}
                                 </th>
                             </tr>
                             <tr style={{ backgroundColor: '#ED1C24' }}>
                                 <th className="py-2 px-4 text-white text-left font-medium min-w-[160px]">Plat Nomor</th>
                                 <th className="py-2 px-2 text-white text-left font-medium">Satuan</th>
-                                {MONTH_LABELS.map((m) => (
-                                    <th key={m} className="py-2 px-2 text-white text-center font-medium">{m}</th>
+                                {visibleMonthIndexes.map((i) => (
+                                    <th key={i} className="py-2 px-2 text-white text-center font-medium">{MONTH_LABELS[i]}</th>
                                 ))}
                                 <th className="py-2 px-3 text-white text-center font-medium">Total</th>
                             </tr>
@@ -852,7 +874,7 @@ const RekapanUnitBisnis = () => {
                         <tbody>
                             {plats.length === 0 && (
                                 <tr>
-                                    <td colSpan={15} className="py-4 px-4 text-center text-gray-500 dark:text-gray-400">
+                                    <td colSpan={colCount} className="py-4 px-4 text-center text-gray-500 dark:text-gray-400">
                                         Tidak ada data BBM untuk filter ini.
                                     </td>
                                 </tr>
@@ -868,34 +890,40 @@ const RekapanUnitBisnis = () => {
                                                 {plat}
                                             </td>
                                             <td className="py-1 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">Liter (L)</td>
-                                            {bbmData.byPlat[plat].liter.map((val, i) => (
-                                                <td
-                                                    key={i}
-                                                    onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
-                                                    title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
-                                                    className={cellCls(val)}
-                                                >
-                                                    {val ? val.toLocaleString('id-ID') : '-'}
-                                                </td>
-                                            ))}
+                                            {visibleMonthIndexes.map((i) => {
+                                                const val = bbmData.byPlat[plat].liter[i]
+                                                return (
+                                                    <td
+                                                        key={i}
+                                                        onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
+                                                        title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
+                                                        className={cellCls(val)}
+                                                    >
+                                                        {val ? val.toLocaleString('id-ID') : '-'}
+                                                    </td>
+                                                )
+                                            })}
                                             <td className="py-1 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
-                                                {sumMonths(bbmData.byPlat[plat].liter).toLocaleString('id-ID')}
+                                                {sumMonths(visibleMonthIndexes.map((i) => bbmData.byPlat[plat].liter[i])).toLocaleString('id-ID')}
                                             </td>
                                         </tr>
                                         <tr className={`${rowBg} border-b dark:border-gray-600`}>
                                             <td className="py-1 px-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">Biaya (Rp)</td>
-                                            {bbmData.byPlat[plat].biaya.map((val, i) => (
-                                                <td
-                                                    key={i}
-                                                    onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
-                                                    title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
-                                                    className={cellCls(val)}
-                                                >
-                                                    {val ? val.toLocaleString('id-ID') : '-'}
-                                                </td>
-                                            ))}
+                                            {visibleMonthIndexes.map((i) => {
+                                                const val = bbmData.byPlat[plat].biaya[i]
+                                                return (
+                                                    <td
+                                                        key={i}
+                                                        onClick={canDrillDown && val ? () => openDrillDown('plat', plat, i, plat) : undefined}
+                                                        title={canDrillDown && val ? 'Klik untuk lihat rincian transaksi' : undefined}
+                                                        className={cellCls(val)}
+                                                    >
+                                                        {val ? val.toLocaleString('id-ID') : '-'}
+                                                    </td>
+                                                )
+                                            })}
                                             <td className="py-1 px-3 text-right font-semibold text-gray-900 dark:text-gray-50">
-                                                {sumMonths(bbmData.byPlat[plat].biaya).toLocaleString('id-ID')}
+                                                {sumMonths(visibleMonthIndexes.map((i) => bbmData.byPlat[plat].biaya[i])).toLocaleString('id-ID')}
                                             </td>
                                         </tr>
                                     </React.Fragment>
@@ -923,7 +951,7 @@ const RekapanUnitBisnis = () => {
             <h2 className="text-xl font-medium mb-6 dark:text-gray-100">Rekapan Unit Bisnis</h2>
 
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6 transition-colors">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Unit Bisnis</label>
                         <div className="relative">
@@ -1005,6 +1033,18 @@ const RekapanUnitBisnis = () => {
                             options={YEAR_OPTIONS}
                             value={selectedYear}
                             onChange={setSelectedYear}
+                            styles={customStyles}
+                            isSearchable={false}
+                            menuPortalTarget={document.body}
+                            menuPosition="absolute"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">Bulan</label>
+                        <Select
+                            options={MONTH_FILTER_OPTIONS}
+                            value={selectedMonth}
+                            onChange={setSelectedMonth}
                             styles={customStyles}
                             isSearchable={false}
                             menuPortalTarget={document.body}

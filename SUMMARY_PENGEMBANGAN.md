@@ -1451,3 +1451,28 @@ Screenshot dropdown "Tampilkan Rekapan" menunjukkan hasil ketik "meeting" memunc
 - [x] Deploy ke produksi (hosting + firestore rules) — sukses 2026-09-08, diverifikasi teks "Kelola Kategori" ada di bundle live
 - [ ] Tes manual: Super Admin buka panel "Kelola Kategori", centang "Meals Meeting" + "Biaya Meeting" + "Cemilan kue ruang meeting", ketik nama grup "Meeting", klik "Gabungkan" — konfirmasi tabel Rekapan langsung menampilkan 1 baris "Meeting" per Unit Bisnis dengan angka gabungan, dropdown "Tampilkan Rekapan" cuma menyisakan 1 opsi "Meeting" (bukan 3 opsi terpisah lagi)
 - [ ] Tes manual: submit RBS/LPJ baru dengan keterangan yang mengandung kata "meeting" (belum pernah ada persis sebelumnya) — konfirmasi otomatis masuk kategori "Meeting" tanpa perlu Admin atur ulang
+
+---
+
+# BAGIAN AB — Filter "Bulan" di Rekapan (2026-09-09)
+
+## 38.1 Permintaan User
+
+Semua tabel Rekapan (BBM & kategori lain) selalu menampilkan 12 kolom bulan (Jan-Des) + Total, walau user cuma butuh 1 bulan tertentu untuk bikin rekapan bulanan (mis. screenshot/export PNG laporan bulan berjalan) — 11 kolom lain jadi kosong/tidak relevan dan bikin tabel lebih lebar dari perlu.
+
+## 38.2 Implementasi
+
+- Dropdown baru **"Bulan"** (di sebelah "Tahun", pola `react-select` yang sama) dengan opsi "Semua Bulan" (default, 12 kolom seperti sebelumnya) + Januari–Desember (1 kolom).
+- Murni filter TAMPILAN di komponen (`visibleMonthIndexes`, memo dari `selectedMonth`) — TIDAK mengubah util agregasi (`aggregateByCategory`/`aggregateBbm` tetap menghitung 12 bulan penuh seperti biasa, cuma kolom yang dirender yang disaring). `renderCategoryTable` & `renderBbmLiterTable` (termasuk baris Liter & Biaya per plat BBM) sekarang mengiterasi `visibleMonthIndexes`, bukan `MONTH_LABELS` mentah — `colSpan` header & kolom "Total" ikut menyesuaikan (Total = jumlah kolom yang sedang tampil, jadi kalau filter ke 1 bulan, Total = angka bulan itu).
+- Drill-down modal (klik sel tabel BBM) tetap pakai index bulan asli (bukan posisi kolom setelah difilter), jadi tetap akurat menampilkan bulan yang benar berapa pun filter yang aktif.
+- Nama file export PNG ikut menambahkan nama bulan kalau filter aktif (mis. `Rekapan_BBM_Total_Biaya_2026_Maret.png`).
+- Grid filter di atas tabel diperlebar dari 3 jadi 4 kolom (`lg:grid-cols-4`) untuk menampung dropdown baru ini.
+
+## 38.3 Task Development — Bagian AB
+
+- [x] `RekapanUnitBisnis.jsx`: `MONTH_FILTER_OPTIONS`, state `selectedMonth`, memo `visibleMonthIndexes`
+- [x] `renderCategoryTable` & `renderBbmLiterTable`: header + body + `colSpan` + kolom Total mengikuti `visibleMonthIndexes`
+- [x] Nama file export PNG menyertakan nama bulan saat filter aktif
+- [x] `CI=true npm run build` sukses, 74 test frontend tetap PASS (murni perubahan render, tidak menyentuh util agregasi)
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: pilih "Bulan: Maret" di dropdown baru, konfirmasi semua tabel (termasuk "BBM -- Liter per Plat Nomor") cuma menampilkan 1 kolom Maret + Total yang sama, lalu export PNG dan cek nama filenya menyertakan "Maret"
