@@ -1658,5 +1658,5 @@ Opsi yang dipertimbangkan: (a) izinkan item BBM ikut masuk grup "Kelola Kategori
 - [x] Munculkan lagi render "BBM -- Total Biaya" dengan judul & catatan baru yang lebih jelas
 - [x] `renderCategoryTable`: parameter opsional `note` untuk teks klarifikasi di atas tabel
 - [x] `CI=true npm run build` sukses, 92 test frontend tetap PASS (tidak ada perubahan util agregasi)
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "BBM (Form Resmi)" ada di bundle live
 - [ ] Tes manual: tabel "BBM (Form Resmi) -- Total Biaya per Unit Bisnis" tampil lagi dengan catatan penjelas di atasnya, dropdown "Tampilkan Rekapan" juga punya opsinya lagi
