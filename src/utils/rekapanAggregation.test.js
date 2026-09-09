@@ -1,4 +1,4 @@
-import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels } from './rekapanAggregation'
+import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels, listCategoryLineItems } from './rekapanAggregation'
 
 const MJS = 'PT Makassar Jaya Samudera'
 const SAG = 'PT Samudera Agencies Indonesia'
@@ -367,5 +367,150 @@ describe('listCategoryRawLabels', () => {
     test('kosong kalau tidak ada dokumen', () => {
         expect(listCategoryRawLabels([], [])).toEqual([])
         expect(listCategoryRawLabels(undefined, undefined)).toEqual([])
+    })
+})
+
+describe('aggregateByCategory - sharingClassification (Bagian AC, generalisasi dari BBM ke RTK/RTG)', () => {
+    const makeReimbursement = (id, unit, biaya, jenis) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis, biaya, tanggal: '2026-03-15' }
+        ]
+    })
+
+    test('baris TANPA classification tetap 100% ke unit pengaju (default aman, sama seperti BBM)', () => {
+        const docs = [makeReimbursement('doc1', MJS, 500000, 'RTK')]
+        const result = aggregateByCategory(docs, [], { year: 2026 })
+
+        expect(result.RTK[MJS][2]).toBe(500000)
+    })
+
+    test('baris dikecualikan: true TIDAK muncul sama sekali di hasil', () => {
+        const docs = [makeReimbursement('doc1', MJS, 500000, 'RTK')]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dikecualikan: true } }
+        const result = aggregateByCategory(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(result.RTK).toBeUndefined()
+    })
+
+    test('baris dibagi:true splitMode pool -> displit sesuai defaultPoolShares, kategori (RTK) tidak berubah', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000, 'RTK')]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: true, splitMode: 'pool' } }
+        const defaultPoolShares = { [MJS]: 30, [SAG]: 70 }
+
+        const result = aggregateByCategory(docs, [], { year: 2026, sharingClassification: classification, defaultPoolShares })
+
+        expect(result.RTK[MJS][2]).toBe(300000)
+        expect(result.RTK[SAG][2]).toBe(700000)
+    })
+
+    test('baris dibagi:true splitMode custom -> displit sesuai customShares baris itu, bukan defaultPoolShares', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000, 'RTG')]
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: {
+                dibagi: true,
+                splitMode: 'custom',
+                customShares: { [MJS]: 40, [SAG]: 60 }
+            }
+        }
+        const defaultPoolShares = { [MJS]: 90, [SAG]: 10 }
+
+        const result = aggregateByCategory(docs, [], { year: 2026, sharingClassification: classification, defaultPoolShares })
+
+        expect(result.RTG[MJS][2]).toBe(400000)
+        expect(result.RTG[SAG][2]).toBe(600000)
+    })
+
+    test('baris dibagi tetap displit walau unit pengaju difilter dari tampilan (units) -- filter diterapkan ke hasil akhir', () => {
+        const docs = [makeReimbursement('doc1', MJS, 1000000, 'RTK')]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: true, splitMode: 'pool' } }
+        const defaultPoolShares = { [MJS]: 50, [SAG]: 50 }
+
+        const result = aggregateByCategory(docs, [], {
+            year: 2026,
+            units: [SAG],
+            sharingClassification: classification,
+            defaultPoolShares
+        })
+
+        expect(result.RTK[SAG][2]).toBe(500000)
+        expect(result.RTK[MJS]).toBeUndefined()
+    })
+
+    test('kategori lain (bukan RTK/RTG) tetap kena mekanisme sharing yang sama kalau ada entry classification -- fungsi ini generik, kurasi kategori mana yang dipakai ada di UI, bukan di util', () => {
+        const docs = [makeReimbursement('doc1', MJS, 200000, 'ATK')]
+        const classification = { [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dikecualikan: true } }
+        const result = aggregateByCategory(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(result.ATK).toBeUndefined()
+    })
+})
+
+describe('listCategoryLineItems', () => {
+    test('cuma mengambil item non-BBM yang kategorinya (setelah dikanonisasi) ada di `categories`', () => {
+        const reimbursementDocs = [
+            {
+                id: 'r1',
+                status: 'Disetujui',
+                user: { unit: MJS },
+                reimbursements: [
+                    { jenis: 'RTK', biaya: 100000, tanggal: '2026-01-10' },
+                    { jenis: 'ATK', biaya: 50000, tanggal: '2026-01-10' },
+                    { jenis: 'BBM Pertalite', biaya: 70000, tanggal: '2026-01-10' }
+                ]
+            }
+        ]
+
+        const result = listCategoryLineItems(reimbursementDocs, [], { year: 2026, categories: ['RTK', 'RTG'] })
+
+        expect(result).toHaveLength(1)
+        expect(result[0].category).toBe('RTK')
+        expect(result[0].jenis).toBe('RTK')
+        expect(result[0].plat).toBeNull()
+        expect(result[0].key).toBe(buildBbmItemKey('reimbursement', 'r1', 0))
+    })
+
+    test('label mentah yang dikanonisasi lewat categoryGroups ikut tersaring sesuai kategori hasil canonicalize', () => {
+        const reimbursementDocs = [
+            {
+                id: 'r1',
+                status: 'Disetujui',
+                user: { unit: MJS },
+                reimbursements: [{ jenis: 'RTK Kantor Cabang', biaya: 100000, tanggal: '2026-02-05' }]
+            }
+        ]
+        const categoryGroups = [{ label: 'RTK', members: ['RTK'] }]
+
+        const result = listCategoryLineItems(reimbursementDocs, [], { year: 2026, categoryGroups, categories: ['RTK', 'RTG'] })
+
+        expect(result).toHaveLength(1)
+        expect(result[0].category).toBe('RTK')
+    })
+
+    test('array categories kosong/tidak diisi -> selalu kosong', () => {
+        const docs = [{ id: 'r1', status: 'Disetujui', user: { unit: MJS }, reimbursements: [{ jenis: 'RTK', biaya: 100000, tanggal: '2026-01-10' }] }]
+        expect(listCategoryLineItems(docs, [], { year: 2026 })).toEqual([])
+        expect(listCategoryLineItems(docs, [], { year: 2026, categories: [] })).toEqual([])
+    })
+
+    test('key sama formatnya dengan listBbmLineItems (buildBbmItemKey), tidak bentrok walau 1 dokumen campur BBM & RTK', () => {
+        const reimbursementDocs = [
+            {
+                id: 'r1',
+                status: 'Disetujui',
+                user: { unit: MJS },
+                reimbursements: [
+                    { jenis: 'BBM Pertalite', biaya: 70000, tanggal: '2026-01-10' },
+                    { jenis: 'RTK', biaya: 100000, tanggal: '2026-01-10' }
+                ]
+            }
+        ]
+
+        const result = listCategoryLineItems(reimbursementDocs, [], { year: 2026, categories: ['RTK', 'RTG'] })
+
+        expect(result[0].itemIndex).toBe(1)
+        expect(result[0].key).toBe('reimbursement_r1_1')
     })
 })

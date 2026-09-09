@@ -16,6 +16,7 @@ import {
     aggregateByCategory,
     aggregateBbm,
     listBbmLineItems,
+    listCategoryLineItems,
     listCategoryRawLabels
 } from '../utils/rekapanAggregation'
 import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from '../constants/rekapanSharing'
@@ -54,6 +55,14 @@ const CATEGORY_ORDER = [
 // ikut difilter lewat dropdown "Tampilkan Rekapan" yang sama.
 const BBM_TOTAL_KEY = '__BBM_TOTAL__'
 const BBM_LITER_KEY = '__BBM_LITER__'
+
+// Kategori non-BBM yang JUGA didukung mekanisme "dibagi ke unit lain" (Bagian AC)
+// -- sebelumnya cuma BBM yang bisa displit per-baris ke unit lain, sekarang RTK &
+// RTG juga bisa (permintaan user: sering ada RTK/RTG yang ditalangi 1 unit dulu
+// lalu genuinely jadi beban bareng, sama seperti kasus BBM). Kategori lain (ATK,
+// Meeting, Entertaint, dst) TIDAK termasuk -- tetap selalu 100% ke unit pengaju,
+// tidak ada UI klasifikasi untuk itu.
+const SHAREABLE_CATEGORIES = ['RTK', 'RTG']
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => ({ value: y, label: String(y) }))
@@ -227,11 +236,13 @@ const RekapanUnitBisnis = () => {
 
     const defaultPoolShares = useMemo(() => computeAllEmployeeShares(headcountByCode), [headcountByCode])
 
-    // 5. Klasifikasi per-baris BBM (/rekapanBbmSharing, Bagian U) -- baris mana
-    // yang genuinely "dibagi" ke unit lain, ditentukan Admin/Super Admin satu
-    // per satu lewat panel "Kelola Sharing BBM" (bukan asumsi blanket seperti
-    // versi pertama Bagian T yang keliru). Baris tanpa entry di sini TETAP
-    // 100% ke unit pengaju (default aman, lihat aggregateBbm).
+    // 5. Klasifikasi per-baris (/rekapanBbmSharing, Bagian U, diperluas ke RTK/RTG
+    // di Bagian AC) -- baris mana yang genuinely "dibagi" ke unit lain, ditentukan
+    // Admin/Super Admin satu per satu lewat panel "Kelola Sharing" (bukan asumsi
+    // blanket seperti versi pertama Bagian T yang keliru). Baris tanpa entry di
+    // sini TETAP 100% ke unit pengaju (default aman, lihat aggregateBbm/aggregateByCategory).
+    // Nama koleksi Firestore tetap `rekapanBbmSharing` walau sekarang juga menampung
+    // klasifikasi RTK/RTG (key sudah unik per docType+docId+itemIndex, tidak bentrok).
     const [sharingClassification, setSharingClassification] = useState({})
     const [isClassificationLoading, setIsClassificationLoading] = useState(true)
 
@@ -355,11 +366,13 @@ const RekapanUnitBisnis = () => {
         }
     }
 
-    // Panel kurasi "Kelola Sharing BBM" (Admin/Super Admin only) -- daftar
-    // SEMUA baris BBM tahun berjalan (tidak terpengaruh filter Unit Bisnis di
-    // atas, Admin perlu lihat semua unit untuk klasifikasi), Validator tidak
-    // pernah melihat panel ini sama sekali (cuma lihat hasil akhir di tabel).
+    // Panel kurasi "Kelola Sharing" (Admin/Super Admin only, Bagian AC diperluas
+    // dari BBM-only ke BBM + RTK + RTG) -- daftar SEMUA baris BBM/RTK/RTG tahun
+    // berjalan (tidak terpengaruh filter Unit Bisnis di atas, Admin perlu lihat
+    // semua unit untuk klasifikasi), Validator tidak pernah melihat panel ini
+    // sama sekali (cuma lihat hasil akhir di tabel).
     const [isManagingSharing, setIsManagingSharing] = useState(false)
+    const [sharingCategoryFilter, setSharingCategoryFilter] = useState('')
     const [sharingUnitFilter, setSharingUnitFilter] = useState('')
     const [showReviewedItems, setShowReviewedItems] = useState(false)
     const [customEditKey, setCustomEditKey] = useState(null)
@@ -369,25 +382,43 @@ const RekapanUnitBisnis = () => {
     const [sharingPage, setSharingPage] = useState(1)
     const SHARING_PAGE_SIZE = 25
 
+    // allBbmLineItems dipakai TERPISAH juga oleh drillDownItems (modal BBM saja,
+    // lihat di bawah) -- makanya tetap dipertahankan sendiri, bukan langsung
+    // digabung dari awal, supaya drill-down BBM tidak ikut kebawa item RTK/RTG.
     const allBbmLineItems = useMemo(() => {
         return listBbmLineItems(reimbursementDocs, lpjDocs, { year: selectedYear.value })
     }, [reimbursementDocs, lpjDocs, selectedYear])
 
-    const visibleBbmLineItems = useMemo(() => {
-        return allBbmLineItems.filter((item) => {
+    const allCategoryLineItems = useMemo(() => {
+        return listCategoryLineItems(reimbursementDocs, lpjDocs, {
+            year: selectedYear.value,
+            categoryGroups,
+            categories: SHAREABLE_CATEGORIES
+        })
+    }, [reimbursementDocs, lpjDocs, selectedYear, categoryGroups])
+
+    // Gabungan BBM + RTK/RTG -- dasar panel "Kelola Sharing" (bukan dipakai
+    // drill-down, yang tetap BBM-only lewat allBbmLineItems di atas).
+    const allShareableLineItems = useMemo(() => {
+        return [...allBbmLineItems, ...allCategoryLineItems].sort((a, b) => a.month - b.month)
+    }, [allBbmLineItems, allCategoryLineItems])
+
+    const visibleShareableLineItems = useMemo(() => {
+        return allShareableLineItems.filter((item) => {
+            if (sharingCategoryFilter && item.category !== sharingCategoryFilter) return false
             if (sharingUnitFilter && item.unit !== sharingUnitFilter) return false
             const isReviewed = Boolean(sharingClassification[item.key])
             if (!showReviewedItems && isReviewed) return false
             return true
         })
-    }, [allBbmLineItems, sharingUnitFilter, showReviewedItems, sharingClassification])
+    }, [allShareableLineItems, sharingCategoryFilter, sharingUnitFilter, showReviewedItems, sharingClassification])
 
-    const pagedBbmLineItems = useMemo(() => {
+    const pagedShareableLineItems = useMemo(() => {
         const start = (sharingPage - 1) * SHARING_PAGE_SIZE
-        return visibleBbmLineItems.slice(start, start + SHARING_PAGE_SIZE)
-    }, [visibleBbmLineItems, sharingPage])
+        return visibleShareableLineItems.slice(start, start + SHARING_PAGE_SIZE)
+    }, [visibleShareableLineItems, sharingPage])
 
-    const totalSharingPages = Math.max(1, Math.ceil(visibleBbmLineItems.length / SHARING_PAGE_SIZE))
+    const totalSharingPages = Math.max(1, Math.ceil(visibleShareableLineItems.length / SHARING_PAGE_SIZE))
 
     const saveClassification = async (key, data) => {
         setSavingItemKey(key)
@@ -494,26 +525,46 @@ const RekapanUnitBisnis = () => {
     }, [drillDown, allBbmLineItems])
 
     // Baris klasifikasi (dropdown status + "Atur Split") -- dipakai SAMA baik
-    // di panel "Kelola Sharing BBM" maupun modal drill-down, supaya kontrolnya
+    // di panel "Kelola Sharing" maupun modal drill-down, supaya kontrolnya
     // konsisten & tidak duplikat ~90 baris JSX.
+    //
+    // Bagian AC: sebelumnya memilih "Dibagi ke unit lain" di dropdown LANGSUNG
+    // menyimpan split "Pool Default" (semua unit) sebelum Admin sempat pilih unit
+    // mana saja lewat checkbox -- Admin harus klik "Atur Split" terpisah untuk
+    // benar-benar memilih. Sekarang memilih "Dibagi" LANGSUNG membuka editor
+    // checkbox (belum tersimpan), memaksa Admin memilih unit tujuan dulu sebelum
+    // baris ini benar-benar tersimpan sebagai "dibagi".
+    const handleStatusChange = (item, value) => {
+        if (value === 'dibagi') {
+            openCustomEditor(item)
+        } else {
+            setCustomEditKey(null)
+            setItemStatus(item, value)
+        }
+    }
+
     const renderClassificationRow = (item) => {
         const classification = sharingClassification[item.key]
         const status = getItemStatus(item)
-        const isDibagi = status === 'dibagi'
         const isEditingCustom = customEditKey === item.key
+        // Selagi editor checkbox terbuka (belum tersimpan), dropdown tetap
+        // menampilkan "Dibagi ke unit lain" walau classification belum committed.
+        const displayedStatus = isEditingCustom ? 'dibagi' : status
+        const isDibagi = displayedStatus === 'dibagi'
         return (
             <React.Fragment key={item.key}>
                 <tr className="border-t dark:border-gray-700">
                     <td className="px-3 py-2">{MONTH_LABELS[item.month]}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{getUnitLabel(item.unit)}</td>
-                    <td className="px-3 py-2">{item.plat}</td>
+                    <td className="px-3 py-2">{item.category || 'BBM'}</td>
+                    <td className="px-3 py-2">{item.plat || '-'}</td>
                     <td className="px-3 py-2">{item.jenis}</td>
                     <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2">
                         <select
-                            value={status}
+                            value={displayedStatus}
                             disabled={savingItemKey === item.key}
-                            onChange={(e) => setItemStatus(item, e.target.value)}
+                            onChange={(e) => handleStatusChange(item, e.target.value)}
                             className="text-sm border dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
                         >
                             <option value="default">Tampilkan (default)</option>
@@ -522,7 +573,7 @@ const RekapanUnitBisnis = () => {
                         </select>
                     </td>
                     <td className="px-3 py-2">
-                        {isDibagi && (
+                        {isDibagi && status === 'dibagi' && (
                             <div className="flex items-center gap-2">
                                 <span className="text-gray-500 dark:text-gray-400">
                                     {classification?.splitMode === 'custom' ? 'Custom' : 'Pool Default'}
@@ -540,7 +591,7 @@ const RekapanUnitBisnis = () => {
                 </tr>
                 {isEditingCustom && (
                     <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
-                        <td colSpan={7} className="px-3 py-3">
+                        <td colSpan={8} className="px-3 py-3">
                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                 Centang Unit Bisnis tujuan -- persentase terisi otomatis proporsional (bisa diedit manual kalau perlu).
                             </p>
@@ -675,8 +726,14 @@ const RekapanUnitBisnis = () => {
     }, [isAdmin, selectedUnitOptions])
 
     const categoryData = useMemo(() => {
-        return aggregateByCategory(reimbursementDocs, lpjDocs, { year: selectedYear.value, units: unitsFilter, categoryGroups })
-    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter, categoryGroups])
+        return aggregateByCategory(reimbursementDocs, lpjDocs, {
+            year: selectedYear.value,
+            units: unitsFilter,
+            categoryGroups,
+            sharingClassification,
+            defaultPoolShares
+        })
+    }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter, categoryGroups, sharingClassification, defaultPoolShares])
 
     const bbmData = useMemo(() => {
         return aggregateBbm(reimbursementDocs, lpjDocs, {
@@ -1210,9 +1267,9 @@ const RekapanUnitBisnis = () => {
                                     </p>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">
                                         Daftar nama per Unit Bisnis, dasar hitung persentase pool "All Employee" --
-                                        dipakai sebagai split DEFAULT untuk baris BBM yang ditandai "dibagi" di panel
-                                        "Kelola Sharing BBM" di bawah (kecuali baris itu diberi split custom sendiri).
-                                        Total headcount saat ini: {SHARING_UNITS.reduce((sum, u) => sum + (headcountByCode[u.code]?.length || 0), 0)} orang.
+                                        dipakai sebagai split DEFAULT untuk baris BBM/RTK/RTG yang ditandai "dibagi"
+                                        di panel "Kelola Sharing" di bawah (kecuali baris itu diberi split custom
+                                        sendiri). Total headcount saat ini: {SHARING_UNITS.reduce((sum, u) => sum + (headcountByCode[u.code]?.length || 0), 0)} orang.
                                     </p>
                                 </div>
                                 {!isEditingHeadcount && (
@@ -1273,13 +1330,13 @@ const RekapanUnitBisnis = () => {
                             <div className="flex items-center justify-between flex-wrap gap-2">
                                 <div>
                                     <p className="font-semibold text-gray-800 dark:text-gray-100">
-                                        Kelola Sharing BBM
+                                        Kelola Sharing (BBM, RTK, RTG)
                                     </p>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        Tandai satu-satu baris BBM: <strong>Dibagi</strong> ke unit lain (mis. BBM
-                                        yang ditalangi dulu oleh 1 unit), atau <strong>Kecualikan</strong> kalau BBM
-                                        itu di luar scope Biaya GA (tidak muncul di Rekapan sama sekali). Baris yang
-                                        belum ditandai tetap 100% ke unit pengaju -- tidak ada yang otomatis berubah.
+                                        Tandai satu-satu baris BBM/RTK/RTG: <strong>Dibagi</strong> ke unit lain (mis.
+                                        biaya yang ditalangi dulu oleh 1 unit), atau <strong>Kecualikan</strong> kalau
+                                        di luar scope Biaya GA (tidak muncul di Rekapan sama sekali). Baris yang belum
+                                        ditandai tetap 100% ke unit pengaju -- tidak ada yang otomatis berubah.
                                     </p>
                                 </div>
                                 <button
@@ -1295,6 +1352,17 @@ const RekapanUnitBisnis = () => {
                             {isManagingSharing && (
                                 <div className="mt-4">
                                     <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
+                                        <select
+                                            value={sharingCategoryFilter}
+                                            onChange={(e) => { setSharingCategoryFilter(e.target.value); setSharingPage(1) }}
+                                            className="border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                        >
+                                            <option value="">Semua Kategori</option>
+                                            <option value="BBM">BBM</option>
+                                            {SHAREABLE_CATEGORIES.map((c) => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
                                         <select
                                             value={sharingUnitFilter}
                                             onChange={(e) => { setSharingUnitFilter(e.target.value); setSharingPage(1) }}
@@ -1315,7 +1383,7 @@ const RekapanUnitBisnis = () => {
                                             Tampilkan yang sudah direview juga
                                         </label>
                                         <span className="text-gray-400">
-                                            {visibleBbmLineItems.length} baris
+                                            {visibleShareableLineItems.length} baris
                                         </span>
                                     </div>
 
@@ -1325,6 +1393,7 @@ const RekapanUnitBisnis = () => {
                                                 <tr className="bg-gray-100 dark:bg-gray-700">
                                                     <th className="px-3 py-2 text-left">Bulan</th>
                                                     <th className="px-3 py-2 text-left">Unit Pengaju</th>
+                                                    <th className="px-3 py-2 text-left">Kategori</th>
                                                     <th className="px-3 py-2 text-left">Plat</th>
                                                     <th className="px-3 py-2 text-left">Jenis</th>
                                                     <th className="px-3 py-2 text-right">Biaya</th>
@@ -1333,14 +1402,14 @@ const RekapanUnitBisnis = () => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {pagedBbmLineItems.length === 0 && (
+                                                {pagedShareableLineItems.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={7} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
-                                                            Tidak ada baris BBM untuk filter ini.
+                                                        <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                            Tidak ada baris untuk filter ini.
                                                         </td>
                                                     </tr>
                                                 )}
-                                                {pagedBbmLineItems.map((item) => renderClassificationRow(item))}
+                                                {pagedShareableLineItems.map((item) => renderClassificationRow(item))}
                                             </tbody>
                                         </table>
                                     </div>
@@ -1536,6 +1605,7 @@ const RekapanUnitBisnis = () => {
                                         <tr className="bg-gray-100 dark:bg-gray-700">
                                             <th className="px-3 py-2 text-left">Bulan</th>
                                             <th className="px-3 py-2 text-left">Unit Pengaju</th>
+                                            <th className="px-3 py-2 text-left">Kategori</th>
                                             <th className="px-3 py-2 text-left">Plat</th>
                                             <th className="px-3 py-2 text-left">Jenis</th>
                                             <th className="px-3 py-2 text-right">Biaya</th>
@@ -1546,7 +1616,7 @@ const RekapanUnitBisnis = () => {
                                     <tbody>
                                         {drillDownItems.length === 0 && (
                                             <tr>
-                                                <td colSpan={7} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
                                                     Tidak ada transaksi.
                                                 </td>
                                             </tr>

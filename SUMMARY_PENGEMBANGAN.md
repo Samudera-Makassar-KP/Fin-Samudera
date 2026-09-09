@@ -1485,3 +1485,38 @@ Permintaan lanjutan: tabel "BBM -- Liter per Plat Nomor" sebelumnya cuma punya T
 - [x] Deploy ke produksi (hosting saja) untuk tambahan Grand Total — sukses 2026-09-09, diverifikasi teks "Grand Total" ada di bundle live
 - [ ] Tes manual: pilih "Bulan: Maret" di dropdown baru, konfirmasi SEMUA tabel (BBM maupun non-BBM seperti ATK/Meeting) cuma menampilkan 1 kolom Maret + Total yang sama, lalu export PNG dan cek nama filenya menyertakan "Maret"
 - [ ] Tes manual: cek tabel "BBM -- Liter per Plat Nomor" -- baris "Grand Total" paling bawah menjumlahkan liter & biaya SEMUA plat dengan benar (bandingkan manual dengan jumlah Total per plat di atasnya)
+
+---
+
+# BAGIAN AC — Fix UX "Dibagi ke Unit Lain" + Sharing Diperluas ke RTK/RTG (2026-09-09)
+
+## 39.1 Permintaan User
+
+Screenshot panel "Kelola Sharing BBM": memilih status "Dibagi ke unit lain" di dropdown TIDAK langsung menampilkan checkbox unit tujuan -- cuma muncul teks "Pool Default" + link "Atur Split" terpisah yang harus diklik lagi. User minta begitu pilih "Dibagi ke unit lain", checkbox pilihan unit langsung muncul. Selain itu, mekanisme sharing per-baris ini (dibagi/dikecualikan/checkbox split) yang sebelumnya cuma ada untuk BBM diminta berlaku JUGA untuk kategori **RTK** dan **RTG**.
+
+## 39.2 Root Cause (UX)
+
+`setItemStatus(item, 'dibagi')` dipanggil LANGSUNG dari `onChange` dropdown, otomatis menyimpan `{ dibagi: true, splitMode: 'pool' }` (share ke SEMUA 9 unit sesuai persentase pool) SEBELUM Admin sempat memilih unit tujuan lewat checkbox -- checkbox yang sudah ada (Bagian Y) cuma bisa diakses lewat klik "Atur Split" TERPISAH setelah itu, gampang terlewat. Baris yang cuma diklik "Dibagi ke unit lain" tanpa pernah klik "Atur Split" diam-diam sudah tersimpan share ke SEMUA unit, bukan cuma yang genuinely relevan.
+
+## 39.3 Implementasi
+
+### Fix UX Dibagi
+- `renderClassificationRow`: dropdown status `onChange` sekarang lewat `handleStatusChange` -- pilih **"Dibagi ke unit lain"** LANGSUNG memanggil `openCustomEditor(item)` (buka editor checkbox di bawah baris, BELUM tersimpan ke Firestore), bukan `setItemStatus` langsung. Baris cuma benar-benar tersimpan sebagai "dibagi" setelah Admin klik "Simpan Split Custom" (pilih unit manual) ATAU "Pakai Pool Default" (tombol shortcut yang sudah ada, tetap dipertahankan untuk kasus yang genuinely mau share ke semua unit). Pilih "Tampilkan (default)"/"Kecualikan" tetap tersimpan otomatis seperti sebelumnya (tidak butuh checkbox).
+- Dropdown tetap menampilkan "Dibagi ke unit lain" selama editor terbuka (state lokal `isEditingCustom`, belum tergantung status yang sudah committed) supaya tidak terlihat "balik ke default" secara visual saat checkbox lagi diisi.
+
+### Perluasan Sharing ke RTK/RTG
+- `rekapanAggregation.js`: `aggregateByCategory` sekarang generik menerima `sharingClassification`/`defaultPoolShares` (parameter & logic PERSIS sama dengan `aggregateBbm` -- dikecualikan/dibagi/pool/custom, diproses unconditional lalu difilter unit di akhir). Fungsi baru `listCategoryLineItems(reimbursementDocs, lpjDocs, { year, categoryGroups, categories })`: daftar baris mentah non-BBM yang kategorinya (setelah canonicalize lewat `categoryGroups`) ada di `categories` -- dipakai isi panel Kelola Sharing untuk kategori selain BBM.
+- `RekapanUnitBisnis.jsx`: konstanta `SHAREABLE_CATEGORIES = ['RTK', 'RTG']` -- HANYA 2 kategori ini yang didukung sharing per baris (kategori lain seperti ATK/Meeting/Entertaint TETAP selalu 100% ke unit pengaju, tidak ada UI klasifikasi untuk itu). Panel "Kelola Sharing BBM" diperluas jadi **"Kelola Sharing (BBM, RTK, RTG)"**: daftar baris gabungan BBM + RTK/RTG (`allShareableLineItems`), + dropdown filter **Kategori** baru (Semua/BBM/RTK/RTG) di samping filter Unit Bisnis yang sudah ada. Kolom **Kategori** baru ditambahkan ke tabel panel (BBM selalu "BBM", RTK/RTG tampilkan kategori hasil canonicalize).
+- Drill-down (klik sel tabel "BBM -- Total Biaya") TETAP BBM-only (`allBbmLineItems` dipertahankan terpisah, tidak digabung ke drill-down) -- RTK/RTG tidak dapat drill-down modal di bagian ini, cukup diklasifikasi lewat panel "Kelola Sharing".
+- Koleksi Firestore & key TIDAK berubah -- tetap `rekapanBbmSharing` + `buildBbmItemKey(docType, docId, itemIndex)` (key sudah unik per posisi item di array manapun, BBM atau bukan, tidak ada migrasi/rename koleksi yang diperlukan).
+
+## 39.4 Task Development — Bagian AC
+
+- [x] Fix UX: pilih "Dibagi ke unit lain" langsung buka editor checkbox (`handleStatusChange`), tidak lagi auto-simpan "Pool Default" tanpa pilihan unit eksplisit
+- [x] `rekapanAggregation.js`: `aggregateByCategory` menerima `sharingClassification`/`defaultPoolShares` (generik, sama logic dengan `aggregateBbm`), fungsi baru `listCategoryLineItems`, field `category` ditambahkan ke `listBbmLineItems`
+- [x] `RekapanUnitBisnis.jsx`: `SHAREABLE_CATEGORIES`, `allCategoryLineItems`/`allShareableLineItems`, filter Kategori di panel, kolom Kategori di tabel klasifikasi (panel + drill-down modal)
+- [x] Test baru: 6 test `aggregateByCategory` sharing (default/dikecualikan/pool/custom/filter-unit/kategori-lain-generik) + 4 test `listCategoryLineItems` -- total 84 test frontend, semua PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: di panel "Kelola Sharing (BBM, RTK, RTG)", pilih status "Dibagi ke unit lain" pada 1 baris BBM -- konfirmasi checkbox unit LANGSUNG muncul di bawah baris (belum tersimpan), pilih beberapa unit lalu "Simpan Split Custom", konfirmasi tersimpan & tabel Rekapan ikut berubah
+- [ ] Tes manual: filter Kategori ke "RTK", tandai 1 baris RTK "Dibagi ke unit lain" ke 2 unit, konfirmasi tabel Rekapan kategori "RTK" menampilkan porsi share ke kedua unit tersebut (bukan cuma ke unit pengaju asli)

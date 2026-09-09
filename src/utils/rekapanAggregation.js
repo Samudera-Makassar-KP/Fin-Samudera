@@ -80,9 +80,20 @@ export const buildBbmItemKey = (docType, docId, itemIndex) => `${docType}_${docI
  * src/constants/rekapanCategoryGroups.js. Tanpa `categoryGroups`, perilaku sama
  * seperti sebelumnya (tiap label mentah jadi kategori sendiri).
  *
+ * `sharingClassification`/`defaultPoolShares` (opsional, Bagian AC): sama persis
+ * mekanismenya dengan `aggregateBbm` -- per BARIS (bukan blanket per kategori/unit),
+ * ditandai manual oleh Admin/Super Admin lewat panel "Kelola Sharing" (key = sama
+ * `buildBbmItemKey(docType, docId, itemIndex)`, koleksi Firestore `rekapanBbmSharing`
+ * yang SAMA dipakai lintas kategori -- key sudah unik per item apa pun kategorinya,
+ * tidak ada tabrakan). Baris tanpa entry tetap 100% ke unit pengaju (default aman).
+ * Baris `dikecualikan` tidak muncul sama sekali. Baris `dibagi` displit ke unit lain
+ * (pool default atau custom), diproses UNCONDITIONAL (termasuk dokumen yang difilter
+ * dari tampilan lewat `units`) supaya unit tujuan share tetap dapat porsinya --
+ * filter `units` baru diterapkan ke HASIL AKHIR, sama pola dengan `aggregateBbm`.
+ *
  * @returns {{ [kategori: string]: { [unit: string]: number[] } }}
  */
-export function aggregateByCategory(reimbursementDocs, lpjDocs, { year, units, categoryGroups } = {}) {
+export function aggregateByCategory(reimbursementDocs, lpjDocs, { year, units, categoryGroups, sharingClassification, defaultPoolShares } = {}) {
     const result = {}
 
     const addToResult = (category, unit, month, amount) => {
@@ -92,33 +103,61 @@ export function aggregateByCategory(reimbursementDocs, lpjDocs, { year, units, c
         result[category][unit][month] += amount
     }
 
+    const processItem = (docType, docId, itemIndex, category, unit, month, amount) => {
+        const classification = sharingClassification?.[buildBbmItemKey(docType, docId, itemIndex)]
+        if (classification?.dikecualikan) return
+
+        if (classification?.dibagi) {
+            const shares = (classification.splitMode === 'custom' && classification.customShares)
+                ? classification.customShares
+                : defaultPoolShares
+
+            if (shares && Object.keys(shares).length > 0) {
+                Object.entries(shares).forEach(([unitName, pct]) => {
+                    addToResult(category, unitName, month, amount * ((pct || 0) / 100))
+                })
+                return
+            }
+        }
+
+        addToResult(category, unit, month, amount)
+    }
+
     ;(reimbursementDocs || []).forEach((doc) => {
         if (doc.status !== 'Disetujui') return
         const unit = doc.user?.unit
-        if (!matchesUnitFilter(unit, units)) return
 
-        ;(doc.reimbursements || []).forEach((item) => {
+        ;(doc.reimbursements || []).forEach((item, itemIndex) => {
             if (isBbmValue(item.jenis)) return
             const dateParts = resolveReimbursementItemDate(item, doc)
             if (!dateParts || dateParts.year !== year) return
-            addToResult(canonicalizeCategoryLabel(item.jenis, categoryGroups), unit, dateParts.month, item.biaya || 0)
+            const category = canonicalizeCategoryLabel(item.jenis, categoryGroups)
+            processItem('reimbursement', doc.id, itemIndex, category, unit, dateParts.month, item.biaya || 0)
         })
     })
 
     ;(lpjDocs || []).forEach((doc) => {
         if (doc.status !== 'Disetujui') return
         const unit = doc.user?.unit
-        if (!matchesUnitFilter(unit, units)) return
 
         const dateParts = resolveLpjDocDate(doc)
         if (!dateParts || dateParts.year !== year) return
 
-        ;(doc.lpj || []).forEach((item) => {
+        ;(doc.lpj || []).forEach((item, itemIndex) => {
             if (isBbmValue(item.namaItem)) return
             const jumlahBiaya = item.jumlahBiaya ?? (Number(item.biaya) || 0) * (Number(item.jumlah) || 0)
-            addToResult(canonicalizeCategoryLabel(item.namaItem, categoryGroups), unit, dateParts.month, jumlahBiaya)
+            const category = canonicalizeCategoryLabel(item.namaItem, categoryGroups)
+            processItem('lpj', doc.id, itemIndex, category, unit, dateParts.month, jumlahBiaya)
         })
     })
+
+    if (units && units.length > 0) {
+        Object.keys(result).forEach((category) => {
+            Object.keys(result[category]).forEach((unitName) => {
+                if (!matchesUnitFilter(unitName, units)) delete result[category][unitName]
+            })
+        })
+    }
 
     return result
 }
@@ -358,6 +397,7 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
                 itemIndex,
                 unit,
                 month: dateParts.month,
+                category: 'BBM',
                 jenis: item.jenis,
                 plat: formatPlatDisplay(normalizePlatKey(item.plat)) || 'Tidak diketahui',
                 biayaTotal: item.biaya || 0
@@ -382,9 +422,87 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
                 itemIndex,
                 unit,
                 month: dateParts.month,
+                category: 'BBM',
                 jenis: item.namaItem,
                 plat: formatPlatDisplay(normalizePlatKey(item.plat)) || 'Tidak diketahui',
                 biayaTotal
+            })
+        })
+    })
+
+    return items.sort((a, b) => a.month - b.month)
+}
+
+/**
+ * Daftar MENTAH (bukan agregat) semua baris/item NON-BBM dari reimbursement+lpj
+ * yang Disetujui DAN kategorinya (setelah dikanonisasi lewat `categoryGroups`,
+ * lihat canonicalizeCategoryLabel) ada di `categories` -- dipakai panel "Kelola
+ * Sharing" (Bagian AC) supaya mekanisme dibagi/dikecualikan/split yang sebelumnya
+ * cuma ada untuk BBM juga bisa dipakai untuk kategori lain (mis. RTK, RTG).
+ * `key` SAMA formatnya dengan `listBbmLineItems` (`buildBbmItemKey`) dan disimpan
+ * di koleksi Firestore YANG SAMA (`rekapanBbmSharing`) -- key sudah unik per
+ * docType+docId+itemIndex, tidak ada tabrakan antar kategori/BBM walau 1 dokumen
+ * bisa berisi campuran item BBM & non-BBM di array yang sama.
+ *
+ * `plat` selalu `null` (konsep plat nomor tidak relevan untuk kategori non-BBM),
+ * disertakan supaya bentuk objeknya kompatibel dengan `renderClassificationRow`
+ * yang dipakai bareng dengan item BBM.
+ *
+ * @returns {Array<{ key: string, docType: string, docId: string, itemIndex: number, unit: string, month: number, category: string, jenis: string, plat: null, biayaTotal: number }>}
+ */
+export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, categoryGroups, categories } = {}) {
+    const wantedCategories = categories || []
+    if (wantedCategories.length === 0) return []
+
+    const items = []
+
+    ;(reimbursementDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        const unit = doc.user?.unit
+
+        ;(doc.reimbursements || []).forEach((item, itemIndex) => {
+            if (isBbmValue(item.jenis) || !item.jenis) return
+            const category = canonicalizeCategoryLabel(item.jenis, categoryGroups)
+            if (!wantedCategories.includes(category)) return
+            const dateParts = resolveReimbursementItemDate(item, doc)
+            if (!dateParts || dateParts.year !== year) return
+            items.push({
+                key: buildBbmItemKey('reimbursement', doc.id, itemIndex),
+                docType: 'reimbursement',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                category,
+                jenis: item.jenis,
+                plat: null,
+                biayaTotal: item.biaya || 0
+            })
+        })
+    })
+
+    ;(lpjDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        const unit = doc.user?.unit
+        const dateParts = resolveLpjDocDate(doc)
+        if (!dateParts || dateParts.year !== year) return
+
+        ;(doc.lpj || []).forEach((item, itemIndex) => {
+            if (isBbmValue(item.namaItem) || !item.namaItem) return
+            const category = canonicalizeCategoryLabel(item.namaItem, categoryGroups)
+            if (!wantedCategories.includes(category)) return
+            const jumlahBiaya = item.jumlahBiaya ?? (Number(item.biaya) || 0) * (Number(item.jumlah) || 0)
+            items.push({
+                key: buildBbmItemKey('lpj', doc.id, itemIndex),
+                docType: 'lpj',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                category,
+                jenis: item.namaItem,
+                plat: null,
+                biayaTotal: jumlahBiaya
             })
         })
     })
