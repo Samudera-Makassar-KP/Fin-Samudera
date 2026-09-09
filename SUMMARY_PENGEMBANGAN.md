@@ -1585,6 +1585,6 @@ User membuat grup kategori baru lewat "Kelola Kategori" (contoh: "BBM RANDIS", g
 - [x] Panel "Kelola Sharing" & filter Kategori di dalamnya jadi dinamis (bukan daftar hardcode BBM/RTK/RTG)
 - [x] Test baru/diupdate: `listCategoryLineItems` (2 test disesuaikan untuk semantik baru) -- total 85 test frontend, semua PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Tandai baris kategori apa pun" ada di bundle live
 - [ ] Tes manual: buat/pastikan ada grup kategori custom (mis. "BBM RANDIS") di "Kelola Kategori", klik sel angka di tabelnya -- konfirmasi modal rincian transaksi terbuka sama seperti tabel BBM/kategori lain
 - [ ] Tes manual: di modal "Kelola Sharing" (atau langsung dari drill-down kategori custom itu), pilih "Dibagi ke unit lain" -- konfirmasi checkbox Unit Bisnis muncul & bisa disimpan, tabel Rekapan kategori itu ikut menampilkan porsi share ke unit yang dipilih
