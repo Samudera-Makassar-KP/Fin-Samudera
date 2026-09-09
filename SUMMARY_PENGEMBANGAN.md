@@ -1482,6 +1482,6 @@ Permintaan lanjutan: tabel "BBM -- Liter per Plat Nomor" sebelumnya cuma punya T
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Semua Bulan" ada di bundle live
 - [x] Baris "Grand Total" (Liter & Biaya lintas semua plat) di tabel "BBM -- Liter per Plat Nomor", ikut `visibleMonthIndexes`
 - [x] `CI=true npm run build` + 74 test frontend PASS lagi setelah tambahan Grand Total
-- [ ] Deploy ke produksi (hosting saja) untuk tambahan Grand Total
+- [x] Deploy ke produksi (hosting saja) untuk tambahan Grand Total — sukses 2026-09-09, diverifikasi teks "Grand Total" ada di bundle live
 - [ ] Tes manual: pilih "Bulan: Maret" di dropdown baru, konfirmasi SEMUA tabel (BBM maupun non-BBM seperti ATK/Meeting) cuma menampilkan 1 kolom Maret + Total yang sama, lalu export PNG dan cek nama filenya menyertakan "Maret"
 - [ ] Tes manual: cek tabel "BBM -- Liter per Plat Nomor" -- baris "Grand Total" paling bawah menjumlahkan liter & biaya SEMUA plat dengan benar (bandingkan manual dengan jumlah Total per plat di atasnya)
