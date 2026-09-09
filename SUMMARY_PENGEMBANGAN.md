@@ -1474,5 +1474,5 @@ Semua tabel Rekapan (BBM & kategori lain) selalu menampilkan 12 kolom bulan (Jan
 - [x] `renderCategoryTable` & `renderBbmLiterTable`: header + body + `colSpan` + kolom Total mengikuti `visibleMonthIndexes`
 - [x] Nama file export PNG menyertakan nama bulan saat filter aktif
 - [x] `CI=true npm run build` sukses, 74 test frontend tetap PASS (murni perubahan render, tidak menyentuh util agregasi)
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "Semua Bulan" ada di bundle live
 - [ ] Tes manual: pilih "Bulan: Maret" di dropdown baru, konfirmasi semua tabel (termasuk "BBM -- Liter per Plat Nomor") cuma menampilkan 1 kolom Maret + Total yang sama, lalu export PNG dan cek nama filenya menyertakan "Maret"
