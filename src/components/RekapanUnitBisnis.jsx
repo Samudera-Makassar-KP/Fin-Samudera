@@ -385,8 +385,8 @@ const RekapanUnitBisnis = () => {
     // MAUPUN drill-down per kategori (Bagian AE, lihat drillDownItems) supaya
     // klik sel tabel APAPUN kategorinya membuka rincian transaksi yang sama.
     const allBbmLineItems = useMemo(() => {
-        return listBbmLineItems(reimbursementDocs, lpjDocs, { year: selectedYear.value })
-    }, [reimbursementDocs, lpjDocs, selectedYear])
+        return listBbmLineItems(reimbursementDocs, lpjDocs, { year: selectedYear.value, sharingClassification })
+    }, [reimbursementDocs, lpjDocs, selectedYear, sharingClassification])
 
     // `categories` SENGAJA di-OMIT (bukan array) supaya SEMUA kategori non-BBM
     // ikut tersedia untuk sharing & drill-down, bukan cuma RTK/RTG seperti versi
@@ -449,7 +449,8 @@ const RekapanUnitBisnis = () => {
             dibagi: status === 'dibagi',
             dikecualikan: status === 'dikecualikan',
             splitMode: current?.splitMode || 'pool',
-            customShares: current?.customShares || null
+            customShares: current?.customShares || null,
+            platOverride: current?.platOverride || null
         })
     }
 
@@ -487,18 +488,61 @@ const RekapanUnitBisnis = () => {
     }
 
     const saveCustomSplit = async (item) => {
+        const current = sharingClassification[item.key]
         const customShares = {}
         SHARING_UNITS.forEach((u) => {
             customShares[u.name] = customEditIncluded[u.code] ? (Number(customEditDraft[u.code]) || 0) : 0
         })
-        await saveClassification(item.key, { dibagi: true, dikecualikan: false, splitMode: 'custom', customShares })
+        await saveClassification(item.key, {
+            dibagi: true,
+            dikecualikan: false,
+            splitMode: 'custom',
+            customShares,
+            platOverride: current?.platOverride || null
+        })
         setCustomEditKey(null)
     }
 
     const applyDefaultPoolSplit = (item) => {
         const current = sharingClassification[item.key]
-        saveClassification(item.key, { dibagi: true, dikecualikan: false, splitMode: 'pool', customShares: current?.customShares || null })
+        saveClassification(item.key, {
+            dibagi: true,
+            dikecualikan: false,
+            splitMode: 'pool',
+            customShares: current?.customShares || null,
+            platOverride: current?.platOverride || null
+        })
         setCustomEditKey(null)
+    }
+
+    // Bagian AG: "Atur Plat" -- koreksi/set nomor plat manual untuk baris BBM
+    // yang plat aslinya kosong ("Tidak diketahui", biasanya transaksi lama yang
+    // nomor platnya diketik bebas di field jenis, bukan field plat khusus).
+    // Disimpan sebagai `platOverride` di dokumen klasifikasi yang SAMA
+    // (rekapanBbmSharing/{key}) -- begitu tersimpan, baris ini otomatis
+    // tergabung ke grup plat yang sama (dinormalisasi) di tabel "BBM -- Liter
+    // per Plat Nomor" (lihat aggregateBbm), TIDAK mengubah dokumen
+    // reimbursement/lpj aslinya sama sekali.
+    const [platEditKey, setPlatEditKey] = useState(null)
+    const [platEditDraft, setPlatEditDraft] = useState('')
+
+    const openPlatEditor = (item) => {
+        const current = sharingClassification[item.key]
+        setPlatEditDraft(current?.platOverride || (item.plat !== 'Tidak diketahui' ? item.plat : ''))
+        setPlatEditKey(item.key)
+    }
+
+    const savePlatOverride = async (item) => {
+        const current = sharingClassification[item.key]
+        const trimmed = platEditDraft.trim()
+        await saveClassification(item.key, {
+            dibagi: current?.dibagi || false,
+            dikecualikan: current?.dikecualikan || false,
+            splitMode: current?.splitMode || 'pool',
+            customShares: current?.customShares || null,
+            platOverride: trimmed || null
+        })
+        setPlatEditKey(null)
     }
 
     // Drill-down (Bagian X, digeneralisasi ke SEMUA kategori di Bagian AE): klik
@@ -552,6 +596,7 @@ const RekapanUnitBisnis = () => {
         const classification = sharingClassification[item.key]
         const status = getItemStatus(item)
         const isEditingCustom = customEditKey === item.key
+        const isEditingPlat = platEditKey === item.key
         // Selagi editor checkbox terbuka (belum tersimpan), dropdown tetap
         // menampilkan "Dibagi ke unit lain" walau classification belum committed.
         const displayedStatus = isEditingCustom ? 'dibagi' : status
@@ -562,7 +607,22 @@ const RekapanUnitBisnis = () => {
                     <td className="px-3 py-2">{MONTH_LABELS[item.month]}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{getUnitLabel(item.unit)}</td>
                     <td className="px-3 py-2">{item.category || 'BBM'}</td>
-                    <td className="px-3 py-2">{item.plat || '-'}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                        {item.category === 'BBM' ? (
+                            <div className="flex items-center gap-2">
+                                <span className={item.plat === 'Tidak diketahui' ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
+                                    {item.plat}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => openPlatEditor(item)}
+                                    className="text-red-600 dark:text-red-400 hover:underline text-xs flex-none"
+                                >
+                                    Atur Plat
+                                </button>
+                            </div>
+                        ) : (item.plat || '-')}
+                    </td>
                     <td className="px-3 py-2">{item.jenis}</td>
                     <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2">
@@ -649,6 +709,41 @@ const RekapanUnitBisnis = () => {
                                     className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
                                 >
                                     Simpan Split Custom
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                )}
+                {isEditingPlat && (
+                    <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
+                        <td colSpan={8} className="px-3 py-3">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                Set/koreksi nomor plat baris ini -- setelah disimpan, otomatis tergabung ke plat yang
+                                sama (dinormalisasi) di tabel "BBM -- Liter per Plat Nomor", tidak mengubah dokumen
+                                pengajuan aslinya.
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={platEditDraft}
+                                    onChange={(e) => setPlatEditDraft(e.target.value)}
+                                    placeholder="mis. DD 1273 XBO"
+                                    className="flex-1 max-w-xs text-sm border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setPlatEditKey(null)}
+                                    className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => savePlatOverride(item)}
+                                    disabled={savingItemKey === item.key}
+                                    className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+                                >
+                                    {savingItemKey === item.key ? 'Menyimpan...' : 'Simpan Plat'}
                                 </button>
                             </div>
                         </td>

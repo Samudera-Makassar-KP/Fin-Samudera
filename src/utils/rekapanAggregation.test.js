@@ -1,4 +1,4 @@
-import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels, listCategoryLineItems } from './rekapanAggregation'
+import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels, listCategoryLineItems, listBbmLineItems } from './rekapanAggregation'
 
 const MJS = 'PT Makassar Jaya Samudera'
 const SAG = 'PT Samudera Agencies Indonesia'
@@ -84,6 +84,59 @@ describe('aggregateBbm - default (belum diklasifikasi)', () => {
 
         expect(result.byJenis['BBM Pertalite'][MJS][2]).toBe(1000000)
         expect(result.byPlat['DD 1234 AB'].biaya[2]).toBe(1000000)
+    })
+})
+
+describe('aggregateBbm - platOverride (Bagian AG)', () => {
+    const makeReimbursement = (id, unit, biaya, plat) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis: 'BBM Pertalite', biaya, liter: 10, plat, tanggal: '2026-03-15' }
+        ]
+    })
+
+    test('plat kosong/tidak diketahui -> masuk bucket "Tidak diketahui" seperti biasa tanpa platOverride', () => {
+        const docs = [makeReimbursement('doc1', MJS, 500000, '')]
+        const result = aggregateBbm(docs, [], { year: 2026 })
+
+        expect(Object.keys(result.byPlat)).toEqual(['Tidak diketahui'])
+    })
+
+    test('platOverride menggantikan plat mentah yang kosong -- baris masuk ke plat hasil override', () => {
+        const docs = [makeReimbursement('doc1', MJS, 500000, '')]
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: false, platOverride: 'DD 1273 XBO' }
+        }
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(Object.keys(result.byPlat)).toEqual(['DD 1273 XBO'])
+        expect(result.byPlat['DD 1273 XBO'].biaya[2]).toBe(500000)
+    })
+
+    test('platOverride digabung ke plat yang SAMA (dinormalisasi) dengan baris lain yang platnya sudah diketahui', () => {
+        const docs = [
+            makeReimbursement('doc1', MJS, 500000, ''),
+            makeReimbursement('doc2', MJS, 300000, 'DD1273XBO')
+        ]
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: false, platOverride: 'dd 1273 xbo' }
+        }
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(Object.keys(result.byPlat)).toEqual(['DD 1273 XBO'])
+        expect(result.byPlat['DD 1273 XBO'].biaya[2]).toBe(800000)
+    })
+
+    test('platOverride TIDAK memengaruhi totals per unit (cuma memengaruhi pengelompokan byPlat)', () => {
+        const docs = [makeReimbursement('doc1', MJS, 500000, '')]
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: false, platOverride: 'DD 1273 XBO' }
+        }
+        const result = aggregateBbm(docs, [], { year: 2026, sharingClassification: classification })
+
+        expect(result.totals[MJS][2]).toBe(500000)
     })
 })
 
@@ -525,5 +578,37 @@ describe('listCategoryLineItems', () => {
 
         expect(result[0].itemIndex).toBe(1)
         expect(result[0].key).toBe('reimbursement_r1_1')
+    })
+})
+
+describe('listBbmLineItems - platOverride (Bagian AG)', () => {
+    const makeReimbursement = (id, unit, plat) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis: 'BBM Pertalite', biaya: 500000, plat, tanggal: '2026-01-10' }
+        ]
+    })
+
+    test('tanpa sharingClassification, plat kosong tampil "Tidak diketahui" seperti biasa', () => {
+        const result = listBbmLineItems([makeReimbursement('doc1', MJS, '')], [], { year: 2026 })
+        expect(result[0].plat).toBe('Tidak diketahui')
+    })
+
+    test('platOverride yang tersimpan ditampilkan (bukan "Tidak diketahui") begitu ada di sharingClassification', () => {
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: false, platOverride: 'DD 1273 XBO' }
+        }
+        const result = listBbmLineItems([makeReimbursement('doc1', MJS, '')], [], { year: 2026, sharingClassification: classification })
+        expect(result[0].plat).toBe('DD 1273 XBO')
+    })
+
+    test('platOverride tetap diformat ulang (normalisasi spasi) sama seperti plat mentah biasa', () => {
+        const classification = {
+            [buildBbmItemKey('reimbursement', 'doc1', 0)]: { dibagi: false, platOverride: 'dd1273xbo' }
+        }
+        const result = listBbmLineItems([makeReimbursement('doc1', MJS, '')], [], { year: 2026, sharingClassification: classification })
+        expect(result[0].plat).toBe('DD 1273 XBO')
     })
 })

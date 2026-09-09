@@ -284,7 +284,13 @@ export function aggregateBbm(reimbursementDocs, lpjDocs, { year, units, sharingC
             if (!byJenis[jenisLabel][unit]) byJenis[jenisLabel][unit] = emptyMonths()
             byJenis[jenisLabel][unit][month] += biayaTotal
 
-            const platKey = formatPlatDisplay(normalizePlatKey(plat)) || 'Tidak diketahui'
+            // Bagian AG: `classification.platOverride` (diset manual Admin lewat
+            // "Atur Plat" saat plat aslinya kosong/"Tidak diketahui" -- transaksi
+            // lama yang platnya diketik bebas di field jenis, bukan field plat
+            // khusus) MENANG di atas `plat` mentah -- begitu diset, baris ini
+            // otomatis tergabung ke grup plat yang sama (dinormalisasi sama
+            // seperti plat asli) di `byPlat`, bukan nyangkut di "Tidak diketahui".
+            const platKey = formatPlatDisplay(normalizePlatKey(classification?.platOverride || plat)) || 'Tidak diketahui'
             if (!byPlat[platKey]) byPlat[platKey] = { liter: emptyMonths(), biaya: emptyMonths() }
             byPlat[platKey].liter[month] += liter
             byPlat[platKey].biaya[month] += biayaTotal
@@ -372,15 +378,25 @@ export function aggregateBbm(reimbursementDocs, lpjDocs, { year, units, sharingC
 /**
  * Daftar MENTAH (bukan agregat) semua baris/item BBM dari reimbursement+lpj
  * yang Disetujui, TIDAK difilter per unit (Admin perlu lihat semua unit untuk
- * mengklasifikasi) -- dipakai panel "Kelola Sharing BBM" di RekapanUnitBisnis.jsx
+ * mengklasifikasi) -- dipakai panel "Kelola Sharing" di RekapanUnitBisnis.jsx
  * supaya Admin/Super Admin bisa tandai satu-satu baris mana yang genuinely
  * dibagi ke unit lain. `key` di tiap item = buildBbmItemKey(...), cocok
  * dengan doc ID di koleksi Firestore `rekapanBbmSharing`.
  *
+ * `sharingClassification` (opsional, Bagian AG): dipakai untuk menampilkan
+ * `platOverride` (kalau ada) sebagai `plat`, bukan plat mentah/"Tidak
+ * diketahui" -- lihat "Atur Plat" di RekapanUnitBisnis.jsx & catatan platKey
+ * di aggregateBbm.
+ *
  * @returns {Array<{ key: string, docType: string, docId: string, itemIndex: number, unit: string, month: number, jenis: string, plat: string, biayaTotal: number }>}
  */
-export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
+export function listBbmLineItems(reimbursementDocs, lpjDocs, { year, sharingClassification } = {}) {
     const items = []
+
+    const resolvePlat = (key, rawPlat) => {
+        const override = sharingClassification?.[key]?.platOverride
+        return formatPlatDisplay(normalizePlatKey(override || rawPlat)) || 'Tidak diketahui'
+    }
 
     ;(reimbursementDocs || []).forEach((doc) => {
         if (doc.status !== 'Disetujui') return
@@ -390,8 +406,9 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
             if (!isBbmValue(item.jenis)) return
             const dateParts = resolveReimbursementItemDate(item, doc)
             if (!dateParts || dateParts.year !== year) return
+            const key = buildBbmItemKey('reimbursement', doc.id, itemIndex)
             items.push({
-                key: buildBbmItemKey('reimbursement', doc.id, itemIndex),
+                key,
                 docType: 'reimbursement',
                 docId: doc.id,
                 itemIndex,
@@ -399,7 +416,7 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
                 month: dateParts.month,
                 category: 'BBM',
                 jenis: item.jenis,
-                plat: formatPlatDisplay(normalizePlatKey(item.plat)) || 'Tidak diketahui',
+                plat: resolvePlat(key, item.plat),
                 biayaTotal: item.biaya || 0
             })
         })
@@ -415,8 +432,9 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
             if (!isBbmValue(item.namaItem)) return
             const liter = Number(item.jumlah) || 0
             const biayaTotal = item.jumlahBiaya ?? (Number(item.biaya) || 0) * liter
+            const key = buildBbmItemKey('lpj', doc.id, itemIndex)
             items.push({
-                key: buildBbmItemKey('lpj', doc.id, itemIndex),
+                key,
                 docType: 'lpj',
                 docId: doc.id,
                 itemIndex,
@@ -424,7 +442,7 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year } = {}) {
                 month: dateParts.month,
                 category: 'BBM',
                 jenis: item.namaItem,
-                plat: formatPlatDisplay(normalizePlatKey(item.plat)) || 'Tidak diketahui',
+                plat: resolvePlat(key, item.plat),
                 biayaTotal
             })
         })

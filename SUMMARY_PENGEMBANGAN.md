@@ -1611,3 +1611,28 @@ User minta tabel "BBM -- Total Biaya" dihapus karena merasa sudah tergantikan ol
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "BBM -- Total Biaya" SUDAH TIDAK ADA di bundle live, "BBM -- Liter per Plat Nomor" masih ada
 - [ ] Tes manual: dropdown "Tampilkan Rekapan" tidak lagi ada opsi "BBM -- Total Biaya", tabelnya juga tidak tampil di halaman
 - [ ] Tes manual: kalau ada kategori (custom atau bawaan) yang di-share ke PPNP lewat "Kelola Sharing", konfirmasi baris PPNP muncul di tabel kategori itu (bukan cuma di tabel BBM lama)
+
+---
+
+# BAGIAN AG — "Atur Plat": Koreksi Plat "Tidak Diketahui" & Auto-Gabung (2026-09-09)
+
+## 43.1 Permintaan User
+
+Di modal drill-down "BBM -- Liter per Plat Nomor", banyak baris transaksi lama menampilkan Plat "Tidak diketahui" (padahal nomor platnya sebenarnya ADA, cuma diketik bebas di field "Jenis" -- mis. "BBM DD 1273 XBO 04/01" -- bukan di field Plat khusus yang baru ada belakangan, lihat Bagian E). User minta ada cara mengatur/mengoreksi plat baris seperti itu, dan begitu diatur, baris itu otomatis tergabung ke plat yang sama di tabel "BBM -- Liter per Plat Nomor" (bukan nyangkut sendiri di "Tidak diketahui").
+
+## 43.2 Implementasi
+
+- **`rekapanAggregation.js`**: `sharingClassification[key]` (dokumen Firestore `rekapanBbmSharing/{key}` yang sama, dipakai bareng dibagi/dikecualikan/splitMode) sekarang bisa punya field opsional `platOverride: string`. `aggregateBbm` -- saat menghitung `byPlat`, `platOverride` (kalau ada) MENANG di atas `plat` mentah SEBELUM dinormalisasi/diformat (`formatPlatDisplay(normalizePlatKey(classification?.platOverride || plat))`) -- otomatis tergabung ke plat yang sama persis dengan baris lain yang kebetulan sudah punya nomor plat itu di field asli. `listBbmLineItems` menerima param baru `sharingClassification` (opsional) supaya kolom "Plat" di tabel klasifikasi/drill-down ikut menampilkan hasil override, bukan "Tidak diketahui" lagi begitu sudah diatur.
+- **`RekapanUnitBisnis.jsx`**: tombol **"Atur Plat"** baru di kolom Plat (khusus baris kategori BBM) di `renderClassificationRow` -- membuka editor inline (mirip "Atur Split") berisi 1 text input nomor plat + tombol Simpan/Batal. Tersimpan ke dokumen `rekapanBbmSharing/{key}` yang SAMA (field `platOverride`), TIDAK menyentuh dokumen `reimbursement`/`lpj` aslinya sama sekali. `setItemStatus`/`saveCustomSplit`/`applyDefaultPoolSplit` diperbaiki supaya SEMUA ikut membawa `platOverride` yang sudah ada saat menyimpan perubahan lain (Status/Split) -- sebelumnya field ini akan HILANG kalau field lain diedit setelahnya, karena `setDoc` (bukan `updateDoc`) mengganti seluruh dokumen.
+- `firestore.rules`: tidak ada perubahan LOGIC (field `platOverride` string bebas, tidak divalidasi ketat -- cukup gate `isAdminRole()` yang sudah ada), cuma update komentar dokumentasi.
+
+## 43.3 Task Development — Bagian AG
+
+- [x] `aggregateBbm`: `platOverride` menggantikan `plat` mentah sebelum normalisasi saat menghitung `byPlat` (tidak memengaruhi `totals`)
+- [x] `listBbmLineItems`: param baru `sharingClassification`, kolom `plat` menampilkan hasil override
+- [x] `RekapanUnitBisnis.jsx`: tombol & editor inline "Atur Plat", `setItemStatus`/`saveCustomSplit`/`applyDefaultPoolSplit` mempertahankan `platOverride` yang sudah ada
+- [x] Test baru: 4 test `aggregateBbm` platOverride + 3 test `listBbmLineItems` platOverride -- total 92 test frontend, semua PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules, rules cuma perubahan komentar tapi ikut dideploy biar sinkron)
+- [ ] Tes manual: buka drill-down BBM, klik "Atur Plat" di baris "Tidak diketahui", ketik nomor plat yang sudah ada di tabel "BBM -- Liter per Plat Nomor" (mis. "DD 1273 XBO"), simpan -- konfirmasi baris itu HILANG dari "Tidak diketahui" dan angkanya (liter+biaya) ikut menambah ke baris plat "DD 1273 XBO" yang sudah ada
+- [ ] Tes manual: setelah "Atur Plat" tersimpan, ubah Status baris itu jadi "Dibagi ke unit lain" lalu simpan split -- konfirmasi plat override TIDAK hilang (masih tergabung ke plat yang benar), bukan balik ke "Tidak diketahui"

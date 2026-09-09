@@ -431,10 +431,13 @@ service cloud.firestore {
         && validStringList(request.resource.data.names, 200);
     }
 
-    // Klasifikasi per-baris BBM (Bagian U): baris mana yang genuinely "dibagi"
-    // ke unit lain, ditentukan MANUAL satu-satu oleh Admin/Super Admin lewat
-    // panel "Kelola Sharing BBM" -- BUKAN aturan otomatis blanket. Dokumen ID =
-    // buildBbmItemKey() dari rekapanAggregation.js (docType_docId_itemIndex).
+    // Klasifikasi per-baris (Bagian U, diperluas ke semua kategori di Bagian AE):
+    // baris mana yang genuinely "dibagi" ke unit lain, ditentukan MANUAL satu-satu
+    // oleh Admin/Super Admin lewat panel "Kelola Sharing" -- BUKAN aturan otomatis
+    // blanket. Dokumen ID = buildBbmItemKey() dari rekapanAggregation.js
+    // (docType_docId_itemIndex). Field opsional `platOverride` (Bagian AG, string)
+    // -- koreksi manual nomor plat BBM yang aslinya kosong/"Tidak diketahui" --
+    // tidak divalidasi khusus di sini (string bebas, cuma Admin yang bisa nulis).
     match /rekapanBbmSharing/{itemKey} {
       allow read: if isRekapanRole();
       allow write: if isAdminRole()
