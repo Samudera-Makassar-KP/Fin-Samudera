@@ -51,10 +51,15 @@ const CATEGORY_ORDER = [
     'Lainnya'
 ]
 
-// Key sentinel untuk tabel "BBM -- Liter per Plat Nomor" (bukan kategori dinamis
-// dari data) supaya bisa ikut difilter lewat dropdown "Tampilkan Rekapan" yang
-// sama. Tabel "BBM -- Total Biaya" dihapus di Bagian AF (user sudah punya grup
-// kategori custom sendiri lewat "Kelola Kategori" untuk kebutuhan itu).
+// Key sentinel untuk 2 tabel BBM (bukan kategori dinamis dari data) supaya bisa
+// ikut difilter lewat dropdown "Tampilkan Rekapan" yang sama. Bagian AF sempat
+// menghapus "BBM -- Total Biaya" (dianggap redundan dengan grup kategori custom
+// "Kelola Kategori"), tapi ternyata itu BLIND SPOT: grup "Kelola Kategori" cuma
+// bisa berisi item NON-BBM (lihat isBbmValue), jadi pengajuan BBM baru lewat
+// form BBM resmi tidak akan PERNAH tampil di mana pun kalau tabel ini hilang.
+// Bagian AH: dimunculkan lagi, judulnya diperjelas + diberi catatan supaya
+// tidak disangka redundan dengan kategori custom lagi.
+const BBM_TOTAL_KEY = '__BBM_TOTAL__'
 const BBM_LITER_KEY = '__BBM_LITER__'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -860,16 +865,13 @@ const RekapanUnitBisnis = () => {
     const [tableSearchText, setTableSearchText] = useState('')
 
     // Bagian AD: breakdown per jenis BBM (Pertalite/Pertamax/dst sebagai tabel
-    // terpisah) dihilangkan dari tampilan. Bagian AF: tabel "BBM -- Total Biaya"
-    // juga dihapus (user sudah punya grup kategori custom sendiri lewat "Kelola
-    // Kategori" yang menggantikan kebutuhan itu -- lihat SUMMARY_PENGEMBANGAN.md
-    // untuk peringatan bahwa "BBM -- Total Biaya" & kategori custom hasil "Kelola
-    // Kategori" adalah 2 SUMBER DATA BERBEDA yang tidak saling tumpang tindih,
-    // keputusan hapus ini SENGAJA & sudah dikonfirmasi user). `bbmData.byJenis`
-    // & `bbmData.totals` tetap dihitung di aggregateBbm (tidak diutak-atik, cuma
-    // tidak dipakai di sini) supaya datanya tetap tersedia kalau suatu saat perlu
-    // dimunculkan lagi.
+    // terpisah) dihilangkan dari tampilan (`bbmData.byJenis` tetap dihitung di
+    // aggregateBbm, cuma tidak dipakai di sini). Bagian AF sempat menghapus
+    // "BBM -- Total Biaya" juga, tapi dimunculkan lagi di Bagian AH karena itu
+    // satu-satunya tempat pengajuan BBM lewat FORM RESMI terlihat per Unit
+    // Bisnis -- lihat catatan di BBM_TOTAL_KEY di atas.
     const tableFilterOptions = useMemo(() => [
+        { value: BBM_TOTAL_KEY, label: 'BBM (Form Resmi) -- Total Biaya per Unit Bisnis' },
         { value: BBM_LITER_KEY, label: 'BBM -- Liter per Plat Nomor' },
         ...orderedCategories.map((c) => ({ value: c, label: c }))
     ], [orderedCategories])
@@ -928,8 +930,11 @@ const RekapanUnitBisnis = () => {
     // Bagian AE: drill-down berlaku untuk SEMUA tabel kategori (bukan cuma BBM
     // Total Biaya lagi) -- `categoryKey` default ke `title` (title === nama
     // kategori untuk tabel non-BBM), override eksplisit untuk "BBM -- Total
-    // Biaya" (titlenya bukan nama kategori asli "BBM").
-    const renderCategoryTable = (title, rowsData, extraUnits = [], categoryKey = title) => {
+    // Biaya" (titlenya bukan nama kategori asli "BBM"). `note` (Bagian AH,
+    // opsional) -- teks kecil di atas tabel, dipakai buat menjelaskan sumber
+    // data tabel "BBM (Form Resmi)" supaya tidak disangka sama/redundan dengan
+    // kategori custom hasil "Kelola Kategori".
+    const renderCategoryTable = (title, rowsData, extraUnits = [], categoryKey = title, note = null) => {
         // rowsData: { [unit]: number[12] }. extraUnits: unit "virtual" tambahan
         // (mis. PPNP, bukan Unit Bisnis resmi aplikasi) yang cuma relevan untuk
         // tabel ini -- ditambahkan setelah displayUnits, bukan menggantikannya.
@@ -937,6 +942,9 @@ const RekapanUnitBisnis = () => {
         const colCount = 1 + visibleMonthIndexes.length + 1
         return (
             <div key={title} className="mb-6">
+                {note && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{note}</p>
+                )}
                 <div className="flex justify-end mb-2">
                     <button
                         type="button"
@@ -1346,12 +1354,20 @@ const RekapanUnitBisnis = () => {
                 </div>
             ) : (
                 <>
+                    {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable(
+                        'BBM (Form Resmi) -- Total Biaya per Unit Bisnis',
+                        bbmData.totals,
+                        sharingExtraUnits,
+                        'BBM',
+                        'Semua biaya BBM dari form BBM resmi (RBS BBM/Operasional/Umum, LPJ) -- terpisah dari kategori custom apa pun yang dibuat lewat "Kelola Kategori" (yang cuma bisa berisi item non-BBM, tidak bisa menggantikan tabel ini).'
+                    )}
                     {isTableVisible(BBM_LITER_KEY) && renderBbmLiterTable()}
                     {orderedCategories
                         .filter((category) => isTableVisible(category))
                         .map((category) => renderCategoryTable(category, categoryData[category], sharingExtraUnits))}
 
                     {tableFilter.length > 0 &&
+                        !isTableVisible(BBM_TOTAL_KEY) &&
                         !isTableVisible(BBM_LITER_KEY) &&
                         orderedCategories.filter((category) => isTableVisible(category)).length === 0 && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow text-gray-500 dark:text-gray-400">

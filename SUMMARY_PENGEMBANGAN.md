@@ -1636,3 +1636,27 @@ Di modal drill-down "BBM -- Liter per Plat Nomor", banyak baris transaksi lama m
 - [x] Deploy ke produksi (hosting + firestore rules) — sukses 2026-09-09, diverifikasi teks "Atur Plat" ada di bundle live
 - [ ] Tes manual: buka drill-down BBM, klik "Atur Plat" di baris "Tidak diketahui", ketik nomor plat yang sudah ada di tabel "BBM -- Liter per Plat Nomor" (mis. "DD 1273 XBO"), simpan -- konfirmasi baris itu HILANG dari "Tidak diketahui" dan angkanya (liter+biaya) ikut menambah ke baris plat "DD 1273 XBO" yang sudah ada
 - [ ] Tes manual: setelah "Atur Plat" tersimpan, ubah Status baris itu jadi "Dibagi ke unit lain" lalu simpan split -- konfirmasi plat override TIDAK hilang (masih tergabung ke plat yang benar), bukan balik ke "Tidak diketahui"
+
+---
+
+# BAGIAN AH — Munculkan Lagi "BBM (Form Resmi) -- Total Biaya" (2026-09-09)
+
+## 44.1 Masalah yang Ditemukan
+
+Bagian AF menghapus tabel "BBM -- Total Biaya" atas permintaan user (dianggap redundan dengan grup kategori custom "BBM RANDIS" hasil "Kelola Kategori"), disertai peringatan eksplisit sebelum eksekusi bahwa keduanya sumber data yang beda. Setelah dipikir ulang: peringatan itu ternyata menunjuk masalah nyata, bukan cuma teoretis -- "Kelola Kategori" (`listCategoryRawLabels`/`aggregateByCategory`) secara STRUKTURAL mengecualikan SEMUA item yang prefix-nya "BBM " (`isBbmValue`), jadi grup custom APA PUN yang dibuat lewat "Kelola Kategori" TIDAK PERNAH BISA berisi pengajuan BBM asli dari form resmi. Begitu "BBM -- Total Biaya" dihapus, pengajuan BBM baru lewat form resmi (RBS BBM/Operasional/Umum, LPJ) jadi TIDAK TAMPIL di rekap per Unit Bisnis MANA PUN -- blind spot nyata, bukan cuma redundansi kosmetik.
+
+## 44.2 Solusi
+
+Opsi yang dipertimbangkan: (a) izinkan item BBM ikut masuk grup "Kelola Kategori" (butuh ubah struktur pemisahan aggregateBbm/aggregateByCategory yang sudah stabil & teruji, risiko lebih tinggi), (b) munculkan lagi tabelnya dengan judul & catatan yang lebih jelas supaya tidak disangka redundan lagi. Dipilih **opsi (b)** -- paling sederhana, tidak berisiko (`aggregateBbm` tidak pernah diubah dari Bagian AF, cuma renderingnya yang dihapus lalu dimunculkan lagi), dan langsung menutup blind spot tanpa perlu eksekusi manual berkala oleh user.
+
+- `RekapanUnitBisnis.jsx`: tabel dimunculkan lagi dengan judul baru **"BBM (Form Resmi) -- Total Biaya per Unit Bisnis"** (bukan cuma "BBM -- Total Biaya" polos) + catatan kecil di atas tabelnya: *"Semua biaya BBM dari form BBM resmi (RBS BBM/Operasional/Umum, LPJ) -- terpisah dari kategori custom apa pun yang dibuat lewat 'Kelola Kategori' (yang cuma bisa berisi item non-BBM, tidak bisa menggantikan tabel ini)."* -- supaya jelas dari judulnya sendiri ini BUKAN duplikat kategori custom manapun, tidak butuh baca dokumentasi terpisah untuk paham bedanya.
+- `renderCategoryTable` sekarang menerima parameter opsional ke-5, `note` -- teks kecil di atas tabel, dipakai khusus untuk klarifikasi ini (tabel lain tidak perlu catatan serupa).
+- Tidak ada perubahan di `rekapanAggregation.js` sama sekali -- `aggregateBbm`/`bbmData.totals` tidak pernah disentuh sejak Bagian AF, murni pengembalian rendering + penjelasan.
+
+## 44.3 Task Development — Bagian AH
+
+- [x] Munculkan lagi render "BBM -- Total Biaya" dengan judul & catatan baru yang lebih jelas
+- [x] `renderCategoryTable`: parameter opsional `note` untuk teks klarifikasi di atas tabel
+- [x] `CI=true npm run build` sukses, 92 test frontend tetap PASS (tidak ada perubahan util agregasi)
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: tabel "BBM (Form Resmi) -- Total Biaya per Unit Bisnis" tampil lagi dengan catatan penjelas di atasnya, dropdown "Tampilkan Rekapan" juga punya opsinya lagi
