@@ -1608,6 +1608,6 @@ User minta tabel "BBM -- Total Biaya" dihapus karena merasa sudah tergantikan ol
 - [x] Hapus render + entry dropdown "BBM -- Total Biaya"
 - [x] Generalisasi `bbmSharingExtraUnits` -> `sharingExtraUnits`, dipasang ke semua tabel kategori (bukan cuma yang dihapus)
 - [x] `CI=true npm run build` sukses, 85 test frontend tetap PASS (tidak ada perubahan util agregasi)
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "BBM -- Total Biaya" SUDAH TIDAK ADA di bundle live, "BBM -- Liter per Plat Nomor" masih ada
 - [ ] Tes manual: dropdown "Tampilkan Rekapan" tidak lagi ada opsi "BBM -- Total Biaya", tabelnya juga tidak tampil di halaman
 - [ ] Tes manual: kalau ada kategori (custom atau bawaan) yang di-share ke PPNP lewat "Kelola Sharing", konfirmasi baris PPNP muncul di tabel kategori itu (bukan cuma di tabel BBM lama)
