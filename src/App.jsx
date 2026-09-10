@@ -39,8 +39,18 @@ const AppContent = () => {
                     <Route path="/" element={<Login />} />
 
                     {/* Dashboard Routes */}
+                    {/* Bagian AS: 'Super Admin' sebelumnya TIDAK ADA di daftar ini --
+                        satu-satunya route di file ini yang lupa menyertakannya (semua
+                        route lain konsisten selalu mengizinkan Super Admin). Setiap kali
+                        Super Admin mengedit pengajuan orang lain lewat BsCheck.jsx/
+                        ReimbursementCheck.jsx/LpjBsCheck.jsx/ReportExport.jsx lalu form-nya
+                        navigate('/dashboard') setelah berhasil simpan (FormBs.jsx,
+                        FormRbsBbm/Operasional/Umum.jsx, FormLpjUmum/Marketing.jsx),
+                        ProtectedRoute menolak & melempar ke /404 -- data SUDAH tersimpan
+                        (toast sukses sempat tampil), tapi user melihatnya seolah gagal
+                        total karena langsung diarahkan ke halaman kosong. */}
                     <Route path="/dashboard" element={
-                        <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee']}>
+                        <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee', 'Super Admin']}>
                             <Dashboard />
                         </ProtectedRoute>
                     } />

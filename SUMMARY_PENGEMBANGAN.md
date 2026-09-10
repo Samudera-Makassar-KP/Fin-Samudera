@@ -1974,4 +1974,32 @@ Bukti transfer OCTO CIMB Niaga (dan bukti transfer format Inggris pada umumnya) 
 - [x] 4 test baru di `functions/test/pengembalianMatcher.test.js`, total 12 test PASS (8 lama + 4 baru), tidak ada regresi
 - [x] `cd functions && npx jest` -- 23 test functions total PASS (3 suite)
 - [x] Deploy ke produksi (`firebase deploy --only functions:validatePengembalianBukti`) — sukses 2026-09-10 ("Successful update operation")
-- [ ] Tes manual: Reza Rahmat upload ulang bukti transfer OCTO yang sama (email CIMB Niaga, "IDR 190,200.00") ke LPJ yang sama, konfirmasi sekarang berstatus valid (bukan lagi "Nominal di bukti tidak sesuai")
+- [x] Tes manual: Reza Rahmat upload ulang bukti transfer OCTO yang sama (email CIMB Niaga, "IDR 190,200.00") ke LPJ yang sama — **dikonfirmasi user berhasil**, bukti diterima valid (bukan lagi "Nominal di bukti tidak sesuai")
+
+---
+
+# BAGIAN AS — Route /dashboard Tidak Mengizinkan Super Admin, Redirect ke 404 (2026-09-10)
+
+## 55.1 Permintaan User
+
+Setelah bukti pengembalian berhasil diupload, Super Admin mengedit LPJ yang sama (LPJ.GAU.SMDR.260910.0001) lewat halaman `/lpj/umum` (form edit dipicu dari panel admin). Setelah klik Submit, halaman malah pindah ke `https://smdr-mks.com/404` ("Halaman Tidak Ditemukan") -- user melaporkan "tidak dapat ter-edit atau ter-submit".
+
+## 55.2 Investigasi & Akar Masalah
+
+`ProtectedRoute.jsx` melempar ke `/404` kalau `userRole` yang login TIDAK ADA di daftar `allowedRoles` route tujuan. Ditelusuri SEMUA definisi route di `App.jsx` (18 route berpagar `allowedRoles`) -- **`/dashboard` adalah SATU-SATUNYA route yang lupa menyertakan `'Super Admin'`** di daftarnya (`['Admin', 'Reviewer', 'Validator', 'Employee']`), padahal 17 route lain semuanya konsisten selalu mengizinkan Super Admin (baik yang terbuka untuk banyak role, maupun yang KHUSUS Super Admin saja).
+
+`FormLpjUmum.jsx` (dan 5 form lain yang polanya sama: `FormBs.jsx`, `FormRbsBbm/Operasional/Umum.jsx`, `FormLpjMarketing.jsx`) memanggil `navigate('/dashboard')` setelah `updateDoc()` berhasil di cabang edit -- data LPJ-nya **SUDAH tersimpan dengan benar** (toast "LPJ Umum berhasil diperbarui!" sempat tampil), tapi begitu navigasi ke `/dashboard` dievaluasi `ProtectedRoute` dengan role `'Super Admin'`, langsung ditolak & dialihkan ke `/404` -- user melihatnya seolah submit gagal total, padahal sebenarnya cuma redirect tujuannya yang salah.
+
+## 55.3 Perbaikan
+
+- **`App.jsx`**: `allowedRoles` untuk route `/dashboard` ditambah `'Super Admin'` -- konsisten dengan semua route lain. `Dashboard.jsx` sendiri dicek dulu (tidak ada logic yang bergantung pada whitelist role tertentu, cuma query Firestore berdasar `uid` yang login) jadi aman dibuka untuk Super Admin, tidak ada risiko crash/tampilan salah.
+- Perbaikan 1 baris ini otomatis menutup bug yang sama untuk SEMUA form (BS/RBS/LPJ) yang di-edit Super Admin, bukan cuma LPJ Umum -- akar masalahnya di route guard, bukan di form manapun.
+
+## 55.4 Task Development — Bagian AS
+
+- [x] `App.jsx`: tambah `'Super Admin'` ke `allowedRoles` route `/dashboard`
+- [x] Audit semua 18 route berpagar `allowedRoles` di `App.jsx` -- dikonfirmasi `/dashboard` satu-satunya yang bermasalah, tidak ada route lain yang kena celah serupa
+- [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: Super Admin edit LPJ/BS/RBS siapa pun, submit, konfirmasi berhasil & diarahkan ke Dashboard (bukan 404)
