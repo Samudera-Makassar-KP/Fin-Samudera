@@ -319,10 +319,24 @@ service cloud.firestore {
         && data.lastResetYear.size() == 4;
     }
 
+    // Bagian AL: kalau dokumen counter LAMA (resource.data, sebelum tulisan
+    // ini) ternyata punya lastNumber yang bukan int bersih -- mis. dari entri
+    // manual di Firebase Console sebelum validasi ini ada, atau tersisa dari
+    // migrasi data lama -- perbandingan `>=` di bawah dievaluasi TERHADAP tipe
+    // yang salah dan rule GAGAL TOTAL (bukan sekadar clause itu yang false),
+    // membuat transaksi generate nomor dokumen permission-denied untuk SEMUA
+    // unit bisnis yang kebetulan punya counter rusak seperti ini -- ditemukan
+    // saat Bon Sementara untuk PT Samudera Agencies Indonesia gagal terus
+    // padahal unit lain normal. request.resource.data (nilai BARU yang mau
+    // ditulis) tetap WAJIB lolos validCounterFields di atas (harus int bersih)
+    // apa pun kondisi data lama -- jadi employee tetap TIDAK BISA menulis
+    // lastNumber tidak valid lewat rule ini, celah keamanan yang jadi alasan
+    // rule ini dibuat (Bagian C/13.7) tetap tertutup.
     function validCounterUpdate() {
       return validCounterFields(request.resource.data)
         && (
           request.resource.data.lastResetYear != resource.data.lastResetYear
+          || !(resource.data.lastNumber is int)
           || request.resource.data.lastNumber >= resource.data.lastNumber
         );
     }

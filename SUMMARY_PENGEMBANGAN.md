@@ -1765,3 +1765,40 @@ Jadi untuk BBM yang disubmit lewat RBS Umum/Operasional/LPJ (bukan form BBM khus
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-10, diverifikasi teks "tidak ada keterangan" ada di bundle live
 - [ ] Tes manual: buka drill-down "BBM -- Total Biaya" untuk unit/bulan yang ada transaksi dari RBS Umum/Operasional/LPJ, konfirmasi kolom "Keterangan" terisi teks yang diketik user aslinya (bukan kosong), cukup jelas untuk memutuskan pembagian unit
+
+---
+
+# BAGIAN AL — Fix Submit BS Gagal Khusus PT Samudera Agencies Indonesia (2026-09-10)
+
+## 48.1 Latar Belakang
+
+Bagian AI (auto-logout saat sesi Firebase Auth invalid) sudah di-deploy, tapi Reza Rahmat melaporkan errornya TETAP SAMA persis setelah hard refresh + login ulang -- membuktikan diagnosis Bagian AI (sesi stale) SALAH untuk kasus ini, karena kalau memang sesi invalid, fix itu seharusnya memicu toast "Sesi Anda telah berakhir" & redirect otomatis, bukan diam di form yang sama.
+
+User lalu melakukan uji coba sendiri yang jadi kunci: submit BS untuk Unit Bisnis lain (kode `035`, PT Samudera Makassar Logistik) **BERHASIL**, tapi submit BS untuk **PT Samudera Agencies Indonesia** (kode `SAI`) **GAGAL** dengan error generik yang sama -- di akun & sesi browser yang SAMA, langsung berurutan. Ini membuktikan bug-nya BUKAN soal sesi/login sama sekali, melainkan sesuatu yang spesifik ke Unit Bisnis `SAI`.
+
+## 48.2 Investigasi
+
+Ditelusuri jalur `handleSubmit` di `FormBs.jsx` (`runTransaction` yang generate nomor BS + tulis 3 dokumen sekaligus: `bonSementara/{id}`, `businessUnitCounters/{kodeUnitBisnis}`, `displayIdOwners/{nomorBS}`) dan `firestore.rules`-nya satu per satu:
+
+- Tulisan `displayIdOwners` (`{uid: userData.uid}`, rule mensyaratkan `uid == request.auth.uid`) -- **tidak unit-spesifik**, dan sudah terbukti jalan normal di unit `035` pada sesi yang sama, jadi ini bisa dieliminasi sebagai penyebab (sekaligus meruntuhkan total teori "sesi stale" dari Bagian AI untuk kasus ini).
+- Data `bonSementaraData.user` (reviewer1/reviewer2 dibungkus array, bankName/uid dari `userData`) -- struktur sama persis apa pun unit yang dipilih, tidak ada percabangan kode per unit.
+- `BS_UNIT_CODES`/`RBS_LPJ_UNIT_CODES` di `businessUnits.js` -- `SAI` terdaftar dengan benar, tidak hilang dari peta.
+- **Ditemukan celah di `validCounterUpdate()`** (fungsi rule untuk `businessUnitCounters`, dipakai transaksi generate nomor BS): klausanya membandingkan `request.resource.data.lastNumber >= resource.data.lastNumber` -- yaitu nilai BARU dibandingkan ke nilai counter LAMA yang sudah tersimpan. Validasi tipe (`data.lastNumber is int`) HANYA diterapkan ke `request.resource.data` (nilai baru), TIDAK PERNAH ke `resource.data` (nilai lama/existing). Kalau dokumen counter `businessUnitCounters/SAI` yang sudah ada di Firestore punya `lastNumber` yang bukan tipe int bersih (mis. tersisa dari entri manual di Console sebelum validasi ini dibuat, atau migrasi data lama) -- perbandingan `>=` itu dievaluasi terhadap tipe yang salah dan Firestore Rules menggagalkan SELURUH ekspresi (bukan cuma klausa itu jadi `false`), sehingga permission-denied untuk transaksi APA PUN yang menyentuh counter itu -- termasuk 2 tulisan lain dalam transaksi yang SAMA (transaksi Firestore atomik: kalau satu bagian ditolak rule, semuanya gagal).
+
+Ini menjelaskan kenapa errornya generik & konsisten: BUKAN soal siapa yang submit atau sesinya, tapi kondisi 1 dokumen counter spesifik (`businessUnitCounters/SAI`) yang kemungkinan sudah tercemar tipe data sejak sebelum validasi ketat ini ada.
+
+## 48.3 Perbaikan
+
+- **`firestore.rules`**: `validCounterUpdate()` ditambah guard `!(resource.data.lastNumber is int)` sebagai klausa OR tambahan -- kalau nilai LAMA ternyata bukan int bersih, syarat "tidak boleh turun" itu dilewati (dianggap tidak ada patokan yang valid untuk dibandingkan), TAPI `validCounterFields(request.resource.data)` (nilai BARU yang mau ditulis) TETAP WAJIB int bersih apa pun kondisinya -- jadi celah keamanan asli yang jadi alasan rule ini dibuat (Bagian C/13.7, employee biasa reset/turunkan counter picu nomor dokumen duplikat) TETAP TERTUTUP, karena employee tetap tidak bisa MENULIS nilai tidak valid lewat rule ini, cuma pembacaan nilai lama yang rusak yang sekarang tidak lagi menggagalkan seluruh transaksi.
+- **`FormBs.jsx`**: `console.error` di blok catch `handleSubmit` diperjelas -- log `error.code` & `error.message` terpisah (bukan cuma object `error` yang di Chrome DevTools kadang collapsed/kurang informatif), supaya insiden permission-denied berikutnya (unit mana pun) bisa langsung ketahuan kodenya dari console tanpa perlu bongkar data Firestore manual.
+- Akses langsung ke data Firestore produksi (mis. `firebase auth:export` untuk cek akun Reza) SENGAJA TIDAK dipakai untuk debugging ini -- diblokir otomatis oleh classifier keamanan karena sifatnya bulk-export data seluruh user (bukan cuma 1 dokumen). Diagnosis di atas murni dari analisis kode + rules + bukti uji-banding unit yang diberikan user, tanpa perlu membaca data user secara langsung.
+
+## 48.4 Task Development — Bagian AL
+
+- [x] `firestore.rules`: `validCounterUpdate()` -- guard tipe data lama non-int, nilai baru tetap wajib divalidasi ketat
+- [x] `FormBs.jsx`: log `error.code`/`error.message` terpisah di catch block `handleSubmit`
+- [x] `CI=true npm test -- --watchAll=false` -- 103 test tetap PASS (tidak ada test baru, perubahan di rules & logging tidak tercakup Jest)
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (rules + hosting)
+- [ ] Tes manual: Reza Rahmat/Utami Soebagyo coba submit BS untuk PT Samudera Agencies Indonesia lagi, konfirmasi berhasil
+- [ ] Kalau MASIH gagal setelah deploy ini: klik panah "▶ Error submitting bon sementara" di Console untuk expand, catat `error.code` yang sekarang ikut ter-log -- itu akan mempersempit ke penyebab lain di luar teori counter ini

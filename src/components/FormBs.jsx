@@ -662,7 +662,11 @@ const FormBs = () => {
                 setIsSubmitting(false)
             }
         } catch (error) {
-            console.error('Error submitting bon sementara:', error)
+            // Bagian AL: log code & message terpisah (bukan cuma object error
+            // yang di Chrome kadang collapsed/tidak informatif) supaya insiden
+            // permission-denied berikutnya bisa langsung ketahuan penyebabnya
+            // dari console tanpa perlu bongkar data Firestore manual.
+            console.error('Error submitting bon sementara:', error?.code, error?.message, error)
             toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
             setIsSubmitting(false)
         }
