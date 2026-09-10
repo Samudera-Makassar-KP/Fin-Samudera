@@ -1733,3 +1733,35 @@ Diklarifikasi lewat 3 pertanyaan sebelum eksekusi: (1) panel BARU terpisah dari 
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-10, diverifikasi teks "Tinjau Item BBM Ambigu" ada di bundle live
 - [ ] Tes manual: buka "Tinjau Item BBM Ambigu", konfirmasi item yang sudah masuk grup "BBM RANDIS" TIDAK muncul lagi di sini (sudah terkurasi), sementara item RTG/ATK lain yang menyebut "bbm" tapi belum pernah digabung MUNCUL dengan keterangan di-highlight kuning
 - [ ] Tes manual: tandai 1 item di panel ini "Dibagi ke unit lain" ke Unit Bisnis tertentu, konfirmasi tabel kategori ASLINYA (bukan tabel BBM) yang berubah menampilkan porsi share tersebut
+
+---
+
+# BAGIAN AK — Kolom "Keterangan" di Rincian Transaksi (2026-09-10)
+
+## 47.1 Permintaan User
+
+Di modal rincian transaksi (drill-down "BBM -- Total Biaya", panel "Kelola Sharing", panel "Tinjau Item BBM Ambigu"), user cuma melihat kolom Jenis (mis. "BBM Pertalite" atau teks lama "BBM DD 1412 XBO 28/02/26") tanpa konteks tambahan -- diminta ada kolom keterangan/item supaya tahu KE MANA harus membagi biaya itu (mis. lokasi SPBU, tujuan kegiatan).
+
+## 47.2 Temuan
+
+Field deskriptif TERNYATA sudah ada di data, cuma tidak pernah ditarik/ditampilkan di Rekapan:
+- **RBS BBM** (`FormRbsBbm.jsx`): TIDAK punya field keterangan/item sama sekali -- cuma `jenis`, `biaya`, `plat`, `liter`, `tanggal`.
+- **RBS Umum** (`FormRbsUmum.jsx`): field `item` (nama item, wajib diisi) + `keterangan` (opsional, teks bebas).
+- **RBS Operasional** (`FormRbsOperasional.jsx`): field `kebutuhan` (nama kebutuhan, wajib) + `keterangan` (opsional).
+- **LPJ Umum/Marketing**: `keterangan` PER BARIS + `aktivitas` di level DOKUMEN (1 aktivitas berlaku untuk semua baris di 1 pengajuan LPJ yang sama).
+
+Jadi untuk BBM yang disubmit lewat RBS Umum/Operasional/LPJ (bukan form BBM khusus) -- termasuk kasus lama yang jenis-nya ketikan bebas -- sebenarnya ADA konteks tambahan yang selama ini tidak pernah disertakan ke Rekapan.
+
+## 47.3 Implementasi
+
+- **`rekapanAggregation.js`**: helper baru `buildItemKeterangan(item, doc)` -- gabungkan `item.item` / `item.kebutuhan` / `item.keterangan` / `doc.aktivitas` (field mana pun yang ADA, sisanya dilewati) jadi 1 teks dipisah " -- ". Dipakai di `listBbmLineItems`, `listCategoryLineItems`, DAN `listAmbiguousBbmMentions` sekaligus (field baru `keterangan` ditambahkan ke tiap item yang dikembalikan ketiga fungsi itu) -- konsisten di semua jalur listing, bukan cuma BBM.
+- **`RekapanUnitBisnis.jsx`**: kolom baru **"Keterangan"** ditambahkan ke `renderClassificationRow` (dipakai bareng oleh panel "Kelola Sharing", modal drill-down, DAN panel "Tinjau Item BBM Ambigu" -- otomatis muncul di ketiganya) -- di antara kolom Jenis & Biaya. Tampil "-- tidak ada keterangan --" (abu-abu, italic) kalau memang tidak ada field apa pun yang terisi (mis. item BBM dari form BBM resmi).
+
+## 47.4 Task Development — Bagian AK
+
+- [x] `rekapanAggregation.js`: `buildItemKeterangan`, field `keterangan` ditambahkan ke `listBbmLineItems`/`listCategoryLineItems`/`listAmbiguousBbmMentions`
+- [x] `RekapanUnitBisnis.jsx`: kolom "Keterangan" baru di `renderClassificationRow` + 3 tabel header (Kelola Sharing, drill-down, Tinjau Item BBM Ambigu)
+- [x] Test baru: 5 test `keterangan`/konteks tambahan (RBS Umum/Operasional gabung item+keterangan, LPJ gabung keterangan+aktivitas, RBS BBM null, konsisten di listCategoryLineItems & listAmbiguousBbmMentions) -- total 103 test frontend, semua PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: buka drill-down "BBM -- Total Biaya" untuk unit/bulan yang ada transaksi dari RBS Umum/Operasional/LPJ, konfirmasi kolom "Keterangan" terisi teks yang diketik user aslinya (bukan kosong), cukup jelas untuk memutuskan pembagian unit

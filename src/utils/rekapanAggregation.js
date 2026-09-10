@@ -64,6 +64,21 @@ const canonicalJenisLabel = (jenis) => {
 // tidak, tanpa menyentuh dokumen reimbursement/lpj aslinya sama sekali.
 export const buildBbmItemKey = (docType, docId, itemIndex) => `${docType}_${docId}_${itemIndex}`
 
+// Konteks tambahan per baris (Bagian AK) -- field-field deskriptif di luar
+// `jenis`/`namaItem` (kategori) & `plat`, supaya Admin tahu KE MANA harus
+// membagi/atribusi sebuah baris tanpa perlu buka dokumen aslinya satu-satu.
+// Nama field-nya BEDA-BEDA per form (tidak pernah disatukan sejak awal):
+//   - RBS BBM (FormRbsBbm.jsx): TIDAK PUNYA field ini sama sekali.
+//   - RBS Umum (FormRbsUmum.jsx): `item` (nama item, wajib) + `keterangan` (opsional).
+//   - RBS Operasional (FormRbsOperasional.jsx): `kebutuhan` (nama kebutuhan, wajib) + `keterangan` (opsional).
+//   - LPJ Umum/Marketing (FormLpjUmum/Marketing.jsx): `keterangan` per baris + `aktivitas` di level DOKUMEN
+//     (1 aktivitas untuk semua baris di 1 pengajuan LPJ yang sama).
+// Digabung jadi 1 teks tampilan, bagian yang kosong dilewati begitu saja.
+const buildItemKeterangan = (item, doc) => {
+    const parts = [item?.item, item?.kebutuhan, item?.keterangan, doc?.aktivitas]
+    return parts.filter((part) => typeof part === 'string' && part.trim().length > 0).join(' -- ') || null
+}
+
 /**
  * Rekap per kategori (ATK, RTG, RTK, Entertaint, Parkir, Meals Lembur, Meals Meeting, Toll,
  * Lainnya, dst) dari `reimbursement` dan `lpj` -- item berjenis BBM dikecualikan di sini,
@@ -417,6 +432,7 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year, sharingClas
                 category: 'BBM',
                 jenis: item.jenis,
                 plat: resolvePlat(key, item.plat),
+                keterangan: buildItemKeterangan(item, doc),
                 biayaTotal: item.biaya || 0
             })
         })
@@ -443,6 +459,7 @@ export function listBbmLineItems(reimbursementDocs, lpjDocs, { year, sharingClas
                 category: 'BBM',
                 jenis: item.namaItem,
                 plat: resolvePlat(key, item.plat),
+                keterangan: buildItemKeterangan(item, doc),
                 biayaTotal
             })
         })
@@ -497,6 +514,7 @@ export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, catego
                 category,
                 jenis: item.jenis,
                 plat: null,
+                keterangan: buildItemKeterangan(item, doc),
                 biayaTotal: item.biaya || 0
             })
         })
@@ -523,6 +541,7 @@ export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, catego
                 category,
                 jenis: item.namaItem,
                 plat: null,
+                keterangan: buildItemKeterangan(item, doc),
                 biayaTotal: jumlahBiaya
             })
         })
@@ -586,6 +605,7 @@ export function listAmbiguousBbmMentions(reimbursementDocs, lpjDocs, { year, cat
                 category: item.jenis,
                 jenis: item.jenis,
                 plat: null,
+                keterangan: buildItemKeterangan(item, doc),
                 biayaTotal: item.biaya || 0
             })
         })
@@ -610,6 +630,7 @@ export function listAmbiguousBbmMentions(reimbursementDocs, lpjDocs, { year, cat
                 category: item.namaItem,
                 jenis: item.namaItem,
                 plat: null,
+                keterangan: buildItemKeterangan(item, doc),
                 biayaTotal: jumlahBiaya
             })
         })

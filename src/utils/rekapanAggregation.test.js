@@ -613,6 +613,75 @@ describe('listBbmLineItems - platOverride (Bagian AG)', () => {
     })
 })
 
+describe('keterangan/konteks tambahan per baris (Bagian AK)', () => {
+    test('listBbmLineItems: field "item"/"kebutuhan" + "keterangan" (RBS Umum/Operasional) digabung jadi 1 teks', () => {
+        const docs = [{
+            id: 'doc1',
+            status: 'Disetujui',
+            user: { unit: MJS },
+            reimbursements: [
+                { jenis: 'BBM Pertalite', biaya: 500000, tanggal: '2026-01-10', item: 'Isi BBM mobil dinas', keterangan: 'Kunjungan ke SPBU Pertamina Pettarani, Makassar' }
+            ]
+        }]
+        const result = listBbmLineItems(docs, [], { year: 2026 })
+        expect(result[0].keterangan).toBe('Isi BBM mobil dinas -- Kunjungan ke SPBU Pertamina Pettarani, Makassar')
+    })
+
+    test('listBbmLineItems: LPJ menggabung keterangan per baris + aktivitas level dokumen', () => {
+        const docs = [{
+            id: 'doc1',
+            status: 'Disetujui',
+            user: { unit: MJS },
+            tanggalPengajuan: '2026-01-10',
+            aktivitas: 'TRUPUT Januari 2026',
+            lpj: [
+                { namaItem: 'BBM Solar', biaya: 10000, jumlah: 20, keterangan: 'SPBU Ahmad Yani, Pare-Pare' }
+            ]
+        }]
+        const result = listBbmLineItems([], docs, { year: 2026 })
+        expect(result[0].keterangan).toBe('SPBU Ahmad Yani, Pare-Pare -- TRUPUT Januari 2026')
+    })
+
+    test('listBbmLineItems: RBS BBM (tanpa field item/keterangan sama sekali) -> keterangan null', () => {
+        const docs = [{
+            id: 'doc1',
+            status: 'Disetujui',
+            user: { unit: MJS },
+            reimbursements: [
+                { jenis: 'BBM Pertalite', biaya: 500000, tanggal: '2026-01-10', plat: 'DD 1234 AB' }
+            ]
+        }]
+        const result = listBbmLineItems(docs, [], { year: 2026 })
+        expect(result[0].keterangan).toBeNull()
+    })
+
+    test('listCategoryLineItems ikut membawa keterangan yang sama (RTK biasa)', () => {
+        const docs = [{
+            id: 'doc1',
+            status: 'Disetujui',
+            user: { unit: MJS },
+            reimbursements: [
+                { jenis: 'RTK', biaya: 100000, tanggal: '2026-01-10', item: 'Beli suku cadang', keterangan: 'Perbaikan AC kantor' }
+            ]
+        }]
+        const categoryResult = listCategoryLineItems(docs, [], { year: 2026 })
+        expect(categoryResult[0].keterangan).toBe('Beli suku cadang -- Perbaikan AC kantor')
+    })
+
+    test('listAmbiguousBbmMentions ikut membawa keterangan yang sama (jenis menyebut "bbm")', () => {
+        const docs = [{
+            id: 'doc1',
+            status: 'Disetujui',
+            user: { unit: MJS },
+            reimbursements: [
+                { jenis: '3.BIAYA LOGISTIK & BBM', biaya: 100000, tanggal: '2026-01-10', item: 'Biaya logistik', keterangan: 'Untuk BBM randis Makassar' }
+            ]
+        }]
+        const triageResult = listAmbiguousBbmMentions(docs, [], { year: 2026 })
+        expect(triageResult[0].keterangan).toBe('Biaya logistik -- Untuk BBM randis Makassar')
+    })
+})
+
 describe('listAmbiguousBbmMentions (Bagian AJ)', () => {
     const makeReimbursement = (id, unit, biaya, jenis) => ({
         id,

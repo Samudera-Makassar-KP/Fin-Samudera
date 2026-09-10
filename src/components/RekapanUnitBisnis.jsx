@@ -670,6 +670,13 @@ const RekapanUnitBisnis = () => {
                             </span>
                         ) : item.jenis}
                     </td>
+                    <td className="px-3 py-2 min-w-[220px] max-w-xs">
+                        {item.keterangan ? (
+                            <span className="text-gray-700 dark:text-gray-200">{item.keterangan}</span>
+                        ) : (
+                            <span className="text-gray-400 dark:text-gray-500 italic">-- tidak ada keterangan --</span>
+                        )}
+                    </td>
                     <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2">
                         <select
@@ -702,7 +709,7 @@ const RekapanUnitBisnis = () => {
                 </tr>
                 {isEditingCustom && (
                     <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
-                        <td colSpan={8} className="px-3 py-3">
+                        <td colSpan={9} className="px-3 py-3">
                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                 Centang Unit Bisnis tujuan -- persentase terisi otomatis proporsional (bisa diedit manual kalau perlu).
                             </p>
@@ -762,7 +769,7 @@ const RekapanUnitBisnis = () => {
                 )}
                 {isEditingPlat && (
                     <tr className="border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40">
-                        <td colSpan={8} className="px-3 py-3">
+                        <td colSpan={9} className="px-3 py-3">
                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                 Set/koreksi nomor plat baris ini -- setelah disimpan, otomatis tergabung ke plat yang
                                 sama (dinormalisasi) di tabel "BBM -- Liter per Plat Nomor", tidak mengubah dokumen
@@ -1623,6 +1630,7 @@ const RekapanUnitBisnis = () => {
                                                 <th className="px-3 py-2 text-left">Kategori</th>
                                                 <th className="px-3 py-2 text-left">Plat</th>
                                                 <th className="px-3 py-2 text-left">Jenis</th>
+                                                <th className="px-3 py-2 text-left">Keterangan</th>
                                                 <th className="px-3 py-2 text-right">Biaya</th>
                                                 <th className="px-3 py-2 text-left">Status</th>
                                                 <th className="px-3 py-2 text-left">Split</th>
@@ -1631,7 +1639,7 @@ const RekapanUnitBisnis = () => {
                                         <tbody>
                                             {pagedShareableLineItems.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                    <td colSpan={9} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
                                                         Tidak ada baris untuk filter ini.
                                                     </td>
                                                 </tr>
@@ -1864,6 +1872,7 @@ const RekapanUnitBisnis = () => {
                                                 <th className="px-3 py-2 text-left">Kategori</th>
                                                 <th className="px-3 py-2 text-left">Plat</th>
                                                 <th className="px-3 py-2 text-left">Jenis</th>
+                                                <th className="px-3 py-2 text-left">Keterangan</th>
                                                 <th className="px-3 py-2 text-right">Biaya</th>
                                                 <th className="px-3 py-2 text-left">Status</th>
                                                 <th className="px-3 py-2 text-left">Split</th>
@@ -1872,7 +1881,7 @@ const RekapanUnitBisnis = () => {
                                         <tbody>
                                             {pagedAmbiguousBbmItems.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                    <td colSpan={9} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
                                                         Tidak ada item untuk filter ini.
                                                     </td>
                                                 </tr>
@@ -1944,6 +1953,7 @@ const RekapanUnitBisnis = () => {
                                             <th className="px-3 py-2 text-left">Kategori</th>
                                             <th className="px-3 py-2 text-left">Plat</th>
                                             <th className="px-3 py-2 text-left">Jenis</th>
+                                            <th className="px-3 py-2 text-left">Keterangan</th>
                                             <th className="px-3 py-2 text-right">Biaya</th>
                                             <th className="px-3 py-2 text-left">Status</th>
                                             <th className="px-3 py-2 text-left">Split</th>
@@ -1952,7 +1962,7 @@ const RekapanUnitBisnis = () => {
                                     <tbody>
                                         {drillDownItems.length === 0 && (
                                             <tr>
-                                                <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                <td colSpan={9} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
                                                     Tidak ada transaksi.
                                                 </td>
                                             </tr>
