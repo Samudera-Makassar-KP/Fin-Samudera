@@ -1867,3 +1867,31 @@ Saat menelusuri fitur di atas, ditemukan 2 bug lama yang tidak terlihat dari lua
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi teks "Riwayat Edit", "Hapus Permanen", "Catatan Perubahan", "Disetujui/Ditolak/Dibatalkan" ada di bundle live
 - [ ] Tes manual: buka "Ekspor Laporan Pengajuan", konfirmasi status Ditolak muncul & tombol Hapus untuk Reimbursement benar-benar menghapus dari Firestore (bukan cuma dari tampilan)
 - [ ] Tes manual: Admin edit 1 pengajuan (via BsCheck/ReimbursementCheck/LpjBsCheck), isi Catatan Perubahan, konfirmasi kartu "Riwayat Edit" muncul di halaman Detail dengan nama editor yang BENAR (bukan nama pengaju), lalu cetak PDF dan konfirmasi blok Riwayat Edit ikut muncul di situ
+
+---
+
+# BAGIAN AO — Submit BS PT Samudera Agencies Indonesia Masih Gagal Setelah Bagian AL (2026-09-10)
+
+## 51.1 Latar Belakang
+
+Setelah Bagian AL (guard tipe data lama di `validCounterUpdate()`) di-deploy, user konfirmasi submit BS untuk PT Samudera Agencies Indonesia (kode `SAI`) MASIH GAGAL, sementara unit lain tetap normal. Teori Bagian AL (counter dengan tipe data rusak) TERBUKTI SALAH atau TIDAK CUKUP -- perlu investigasi lebih dalam sesuai permintaan user ("cek menyeluruh, mungkin ada triggernya di bagian lain").
+
+## 51.2 Investigasi Lebih Lanjut
+
+Ditemukan petunjuk kunci di `functions/index.js`: callable `backfillDisplayIdOwners` (dipicu tombol "Sinkronkan Kepemilikan Dokumen" di Manage User) membaca SEMUA dokumen `bonSementara`/`reimbursement`/`lpj` yang sudah ada dan menautkan `displayId`-nya masing-masing ke `/displayIdOwners/{displayId}` lewat `set(..., {merge:true})` -- TANPA pernah ikut memajukan `/businessUnitCounters/{kode}` yang cocok. Kalau ADA dokumen BS lama untuk unit SAI yang displayId-nya kebetulan sama dengan nomor yang dihasilkan counter SAAT INI (mis. counter SAI belum pernah dipakai sejak sistem counter atomik ini ada, jadi selalu mulai dari 501, sementara nomor "501" itu ternyata sudah dipakai dokumen lama & sudah ditautkan lewat backfill) -- transaksi generate nomor BS baru akan SELALU mencoba menulis ulang `displayIdOwners/{nomor-yang-sama}` yang sudah ada. Rule koleksi itu `allow update: if false` (tidak bisa diubah sama sekali, cuma create pertama kali yang boleh) -- jadi permission-denied, DAN karena transaksinya gagal total, counter TIDAK PERNAH maju, sehingga percobaan berikutnya menghasilkan nomor yang PERSIS SAMA lagi -- terjebak loop gagal permanen, khusus untuk unit yang punya kondisi ini.
+
+Ini konsisten dengan SEMUA bukti yang ada: gagal permanen & konsisten (bukan sekali-kali), spesifik ke 1 unit bisnis, tidak terkait sesi/akun (user yang sama berhasil di unit lain), dan tidak diperbaiki oleh guard tipe data di Bagian AL (yang menyasar masalah berbeda). **Tidak bisa dipastikan 100% tanpa akses baca langsung ke Firestore produksi** (dicoba lewat script kecil pakai firebase-admin, tapi gagal karena tidak ada Application Default Credentials tersedia di lingkungan ini, dan tidak dipaksakan lewat cara lain supaya tidak melanggar batasan akses yang ada) -- tapi perbaikan di bawah aman diterapkan terlepas benar-tidaknya teori ini, karena sifatnya defensif murni.
+
+## 51.3 Perbaikan
+
+- **`FormBs.jsx`**: transaksi generate nomor BS baru (di `handleSubmit`, cabang bukan-edit) sekarang MENGECEK langsung ke `/displayIdOwners/{nomor-kandidat}` sebelum mengklaim nomor itu -- kalau sudah ada pemiliknya, otomatis lompat ke nomor berikutnya (maksimal 50 percobaan) sampai ketemu yang benar-benar belum dipakai. Ini membuat transaksi bisa "menyembuhkan diri sendiri" dari kondisi counter-tidak-sinkron seperti di atas, alih-alih terjebak retry nomor yang sama selamanya. Perilaku normal (tidak ada bentrokan) TIDAK BERUBAH -- loop langsung berhenti di percobaan pertama seperti sebelumnya.
+- Perbaikan ini SENGAJA HANYA diterapkan ke `FormBs.jsx` (sesuai laporan bug), belum ke RBS/LPJ (`FormRbsBbm.jsx` dkk) -- counter RBS/LPJ pakai skema ID counter berbeda (`{kode}_RBS_BBM` dst, bukan `{kode}` polos) yang kemungkinan besar tidak terpapar riwayat backfill yang sama, tapi kalau gejala serupa muncul di RBS/LPJ, pola perbaikan yang sama bisa diterapkan di sana juga.
+
+## 51.4 Task Development — Bagian AO
+
+- [x] `FormBs.jsx`: transaksi generate nomor BS cek benturan ke `displayIdOwners` & lompati nomor yang sudah dipakai
+- [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: submit BS untuk PT Samudera Agencies Indonesia lagi, konfirmasi berhasil dengan nomor BARU (kemungkinan besar BUKAN lagi "...SAI0000501" kalau memang nomor itu sudah kepakai dokumen lama)
+- [ ] Kalau MASIH gagal: sekarang errornya seharusnya BEDA (bukan lagi permission-denied berulang di nomor yang sama) -- kirim `error.code`/`error.message` yang ter-log untuk diagnosis lanjutan

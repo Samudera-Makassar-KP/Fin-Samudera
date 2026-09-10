@@ -638,20 +638,46 @@ const FormBs = () => {
                     const month = (today.getMonth() + 1).toString().padStart(2, '0')
                     const tanggalKode = `${year.slice(-2)}${month}`
 
-                    let newLastNumber
+                    let candidateNumber
                     if (!counterDoc.exists() || counterDoc.data().lastResetYear !== year) {
-                        newLastNumber = 501
+                        candidateNumber = 501
                     } else {
-                        newLastNumber = counterDoc.data().lastNumber + 1
+                        candidateNumber = counterDoc.data().lastNumber + 1
+                    }
+
+                    // Bagian AO: counter TIDAK SELALU sinkron dengan nomor yang
+                    // benar-benar sudah terpakai -- mis. dokumen lama dari
+                    // sebelum sistem counter atomik ini ada, yang sudah
+                    // ditautkan ke /displayIdOwners lewat callable
+                    // backfillDisplayIdOwners() (functions/index.js) tapi TANPA
+                    // ikut memajukan businessUnitCounters. Kalau counter
+                    // dipercaya buta, nomor yang dihasilkan bisa bentrok dengan
+                    // displayIdOwners yang sudah ada -- rule-nya
+                    // `allow update: if false` untuk koleksi itu, jadi
+                    // transaksi gagal permission-denied TERUS-MENERUS dengan
+                    // nomor yang SAMA setiap retry (counter tidak pernah maju
+                    // karena transaksinya sendiri gagal). Cek langsung ke
+                    // displayIdOwners & lompati nomor yang sudah dipakai
+                    // supaya transaksi ini bisa menyembuhkan diri sendiri dari
+                    // kondisi itu, bukan terjebak loop gagal selamanya.
+                    let nomorBS
+                    let ownerDoc
+                    const MAX_ATTEMPTS = 50
+                    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                        const sequence = candidateNumber.toString().padStart(7, '0')
+                        nomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`
+                        ownerDoc = await transaction.get(doc(db, 'displayIdOwners', nomorBS))
+                        if (!ownerDoc.exists()) break
+                        candidateNumber++
+                    }
+                    if (ownerDoc?.exists()) {
+                        throw new Error(`Tidak menemukan nomor BS yang tersedia untuk unit ${kodeUnitBisnis} setelah ${MAX_ATTEMPTS} percobaan`)
                     }
 
                     transaction.set(counterRef, {
-                        lastNumber: newLastNumber,
+                        lastNumber: candidateNumber,
                         lastResetYear: year
                     })
-
-                    const sequence = newLastNumber.toString().padStart(7, '0')
-                    const nomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`
 
                     // Dicatat di transaksi yang sama supaya storage.rules bisa memvalidasi
                     // kepemilikan lampiran/PDF lewat firestore.get() cross-service (lihat 18.6)
