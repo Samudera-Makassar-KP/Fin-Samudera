@@ -1945,6 +1945,6 @@ Setelah bug submit BS beres, user minta: semua pengajuan yang Ditolak maupun Dib
 - [x] `LpjBsTable.jsx`: sama (Draft tidak terpengaruh)
 - [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.514bd6c2.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka masing-masing list (BS/RBS/LPJ) milik user yang punya riwayat Ditolak/Dibatalkan, konfirmasi baris itu TIDAK MUNCUL lagi, sementara di "Cek Bon Sementara"/"Cek Reimbursement"/"Cek LPJ Bon Sementara" (Super Admin) & "Ekspor Laporan Pengajuan" datanya TETAP ADA
 - [ ] Tes manual: batalkan 1 pengajuan aktif, konfirmasi baris itu langsung hilang dari list SEKETIKA tanpa perlu reload halaman
