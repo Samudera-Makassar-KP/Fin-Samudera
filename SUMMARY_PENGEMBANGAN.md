@@ -2003,3 +2003,36 @@ Setelah bukti pengembalian berhasil diupload, Super Admin mengedit LPJ yang sama
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.9553ddee.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: Super Admin edit LPJ/BS/RBS siapa pun, submit, konfirmasi berhasil & diarahkan ke Dashboard (bukan 404)
+
+**Update:** meski Bagian AS sudah deploy, user melaporkan edit LPJ tetap "hasilnya nihil" (Validator/Reviewer yang diganti tidak berubah) walau 3x dicoba dengan Catatan Perubahan berbeda -- lihat Bagian AT untuk akar masalah yang jauh lebih signifikan yang ditemukan dari laporan ini.
+
+---
+
+# BAGIAN AT — Edit Validator/Reviewer Tidak Pernah Tersimpan di 6 Form (2026-09-10)
+
+## 56.1 Latar Belakang
+
+Super Admin mengedit LPJ Reza Rahmat 3x berturut-turut (catatan tiap kali: "Validator dan Reviwer Salah", "Reveiwer dan Validator salah", "Volodator dan Review Salah" -- jelas mencoba memperbaiki Validator/Reviewer yang salah tertaut). Kartu "Riwayat Edit (3x)" di halaman Detail menunjukkan ketiga percobaan itu TERCATAT (statusHistory berhasil bertambah), tapi status LPJ tetap "Diajukan (Menunggu validasi Erlangga Putra)" -- validator yang sama seperti semula, TIDAK PERNAH benar-benar berubah walau sudah diedit berkali-kali.
+
+## 56.2 Investigasi & Akar Masalah
+
+Ditelusuri payload `updateDoc()`/`updateData` di cabang edit SEMUA 6 form (`FormBs.jsx`, `FormRbsBbm/Operasional/Umum.jsx`, `FormLpjUmum/Marketing.jsx`) -- **field `user` (berisi `validator`/`reviewer1`/`reviewer2`/`unit`/dll) TIDAK PERNAH disertakan di objek yang dikirim ke Firestore saat edit**, cuma field seperti `lpj`/`reimbursements`/`bonSementara` (rincian item), `totalBiaya`, `statusHistory`, dst. Padahal dropdown Validator/Reviewer 1/Reviewer 2 di form TETAP bisa diklik & diganti saat mode edit (cuma di-disable kalau `isSingleUnit`, bukan berdasarkan `isEditMode`) -- jadi Super Admin BISA memilih Validator/Reviewer baru di UI, form-nya KELIHATAN menerima perubahan itu, tapi begitu disimpan, perubahan itu dibuang diam-diam karena memang tidak pernah masuk ke payload `updateDoc()`. Satu-satunya efek yang benar-benar tersimpan dari tiap percobaan edit adalah entri `statusHistory` baru (makanya Riwayat Edit menunjukkan 3x) -- data intinya sendiri tidak pernah berubah.
+
+Dicek `firestore.rules` `keepsWorkflowIdentity()` -- cuma mensyaratkan `user.uid` (identitas pemilik) dan `displayId` tetap sama antara sebelum & sesudah update, TIDAK melarang perubahan pada field lain di dalam map `user` seperti `validator`/`reviewer1`/`reviewer2`. Jadi ini murni bug di kode form (field lupa disertakan), BUKAN pembatasan yang disengaja di rules.
+
+Selain itu, ditemukan efek samping dari bug lama yang sama di Bagian AN: di mode edit, `userData.uid` yang dipakai form untuk keperluan lain (termasuk `useFormDraft` hook di form LPJ) sengaja diisi dari `editData.user.uid` (uid PENGAJU ASLI, dipakai buat auto-fill), BUKAN uid editor yang login. `useFormDraft` menggunakannya untuk membentuk ID dokumen draft (`{uid}_{draftType}_{draftId}`) dan mengecek keberadaannya lewat `getDoc()` setiap form dimuat -- tapi rule `/drafts/{draftId}` mensyaratkan ID-nya diawali `request.auth.uid` (uid editor yang BENAR-BENAR login), jadi pengecekan draft ini SELALU `permission-denied` saat form dibuka dalam mode edit oleh siapa pun selain pemilik aslinya (muncul di Console user sebagai "Uncaught (in promise) FirebaseError: Missing or insufficient permissions." di `useFormDraft.js`). Bukan penyebab bug utama (draft memang tidak relevan untuk mode edit dokumen yang sudah ada), tapi noise yang mengganggu & layak dibersihkan sekalian.
+
+## 56.3 Perbaikan
+
+- **6 form** (`FormBs.jsx`, `FormRbsBbm/Operasional/Umum.jsx`, `FormLpjUmum/Marketing.jsx`): field `user` (nilai TERBARU hasil pilihan Validator/Reviewer/Unit di form, bukan data lama) ditambahkan ke payload `updateDoc()`/`updateData` cabang edit. Sekarang perubahan Validator/Reviewer/Unit Bisnis yang dipilih Super Admin saat edit BENAR-BENAR tersimpan.
+- **`useFormDraft.js`**: parameter baru `enabled` (default `true`) -- kalau `false`, hook TIDAK melakukan pengecekan draft sama sekali (skip `checkExistingDraft` di `useEffect`). `FormLpjUmum.jsx`/`FormLpjMarketing.jsx` (satu-satunya 2 form yang punya fitur draft) sekarang memanggil dengan `enabled: !isEditMode` -- draft memang cuma relevan untuk BIKIN BARU, bukan mengedit dokumen yang sudah ada, jadi tidak ada lagi percobaan baca draft yang pasti gagal permission-denied saat form dibuka dalam mode edit.
+
+## 56.4 Task Development — Bagian AT
+
+- [x] `FormBs.jsx`/`FormRbsBbm.jsx`/`FormRbsOperasional.jsx`/`FormRbsUmum.jsx`/`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`: tambah field `user` ke payload update cabang edit
+- [x] `useFormDraft.js`: parameter `enabled`, skip cek draft kalau `false`
+- [x] `FormLpjUmum.jsx`/`FormLpjMarketing.jsx`: panggil `useFormDraft(..., !isEditMode)`
+- [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: Super Admin edit LPJ Reza Rahmat (LPJ.GAU.SMDR.260910.0001) sekali lagi, ganti Validator ke yang benar, submit, konfirmasi status berubah jadi menunggu validasi Validator BARU (bukan Erlangga Putra lagi), dan tidak ada lagi error permission-denied di Console saat form dibuka

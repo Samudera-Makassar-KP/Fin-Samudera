@@ -604,6 +604,14 @@ const FormBs = () => {
                 const editorRole = localStorage.getItem('userRole') || 'Admin'
                 const bsRef = doc(db, 'bonSementara', editData.id)
                 await updateDoc(bsRef, {
+                    // Bagian AT: sebelumnya `user` (unit/reviewer1/reviewer2)
+                    // TIDAK PERNAH ikut disertakan di sini -- dropdown
+                    // Reviewer 1/2 tetap bisa diklik & diganti saat edit,
+                    // tapi perubahannya SELALU dibuang diam-diam saat
+                    // disimpan. firestore.rules keepsWorkflowIdentity() cuma
+                    // menjaga user.uid & displayId tetap sama -- reviewer1/
+                    // reviewer2 di dalam map user memang boleh berubah.
+                    user: bonSementaraData.user,
                     bonSementara: bonSementaraData.bonSementara,
                     statusHistory: arrayUnion({
                         status: `Data Diubah oleh ${editorRole}`,

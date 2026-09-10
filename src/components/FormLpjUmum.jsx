@@ -740,6 +740,20 @@ const FormLpjUmum = () => {
 
                 // Siapkan data yang akan di-update
                 const updateData = {
+                    // Bagian AT: sebelumnya `user` (unit/validator/reviewer1/
+                    // reviewer2) TIDAK PERNAH ikut disertakan di sini --
+                    // dropdown Validator/Reviewer di form tetap bisa diklik &
+                    // diganti saat edit, tapi perubahannya SELALU dibuang diam-
+                    // diam saat disimpan (updateDoc cuma menulis field yang ada
+                    // di object ini). Admin yang berkali-kali "memperbaiki"
+                    // Validator/Reviewer yang salah lewat form edit tidak
+                    // pernah benar-benar berhasil -- statusHistory-nya
+                    // tercatat (makanya Riwayat Edit menunjukkan beberapa kali
+                    // edit), tapi data intinya tidak pernah berubah.
+                    // firestore.rules keepsWorkflowIdentity() cuma menjaga
+                    // user.uid & displayId tetap sama -- validator/reviewer1/
+                    // reviewer2 di dalam map user memang boleh berubah.
+                    user: lpjData.user,
                     lpj: lpjData.lpj,
                     nomorBS: lpjData.nomorBS,
                     jumlahBS: lpjData.jumlahBS,
@@ -945,7 +959,9 @@ const FormLpjUmum = () => {
     // mau dikerjakan. Dengan ini, setiap nomor BS punya slot draft sendiri-sendiri
     // (${uid}_lpj-umum_${nomorBS}), jadi "Load Draft"/auto-load hanya aktif kalau
     // memang ada draft tersimpan untuk nomor BS yang sedang dikerjakan saat ini.
-    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS || 'baru')
+    // Bagian AT: enabled=!isEditMode -- draft cuma relevan untuk bikin baru,
+    // bukan mengedit dokumen orang lain (lihat catatan di useFormDraft.js)
+    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-umum', nomorBS || 'baru', !isEditMode)
 
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {

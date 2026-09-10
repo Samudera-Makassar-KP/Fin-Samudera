@@ -660,6 +660,15 @@ const RbsOperasionalForm = () => {
                 const editorRole = localStorage.getItem('userRole') || 'Admin'
 
                 let updateData = {
+                    // Bagian AT: sebelumnya `user` (unit/validator/reviewer1/
+                    // reviewer2) TIDAK PERNAH ikut disertakan di sini --
+                    // dropdown Validator/Reviewer tetap bisa diklik & diganti
+                    // saat edit, tapi perubahannya SELALU dibuang diam-diam
+                    // saat disimpan. firestore.rules keepsWorkflowIdentity()
+                    // cuma menjaga user.uid & displayId tetap sama --
+                    // validator/reviewer1/reviewer2 di dalam map user memang
+                    // boleh berubah.
+                    user: reimbursementData.user,
                     reimbursements: reimbursementData.reimbursements,
                     totalBiaya: reimbursementData.totalBiaya,
                     statusHistory: arrayUnion({

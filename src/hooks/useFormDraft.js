@@ -2,7 +2,17 @@ import { useState, useCallback, useEffect } from 'react'
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore'
 import { toast } from 'react-toastify'
 
-const useFormDraft = (db, userData, draftType, draftId = '') => {
+// Bagian AT: `enabled` (default true) -- di mode edit, `userData.uid` yang
+// dikirim pemanggil sengaja diisi dari uid PENGAJU ASLI (bukan editor yang
+// login, dipakai untuk auto-fill data pengaju di form), jadi draftRef yang
+// dibentuk di sini (`{uid}_{draftType}_{draftId}`) TIDAK PERNAH cocok dengan
+// `request.auth.uid` editor yang sebenarnya login -- firestore.rules
+// `/drafts/{draftId}` mensyaratkan `draftId.matches(request.auth.uid + '_.*')`,
+// jadi checkExistingDraft() di useEffect bawah SELALU permission-denied kalau
+// dipanggil saat edit (bukan bug baru, tapi noise di Console yang bisa
+// dihindari -- draft memang cuma relevan untuk BIKIN BARU, bukan mengedit
+// dokumen yang sudah ada). Form pemanggil kirim `enabled: !isEditMode`.
+const useFormDraft = (db, userData, draftType, draftId = '', enabled = true) => {
     const [hasDraft, setHasDraft] = useState(false)
 
     const getDraftRef = useCallback(() => {
@@ -86,9 +96,12 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
     }, [getDraftRef])
 
     useEffect(() => {
+        if (!enabled) return
+
         const checkExistingDraft = async () => {
             if (!userData.uid) return
             const draftRef = getDraftRef()
+            if (!draftRef) return
             const draftSnap = await getDoc(draftRef)
             setHasDraft(draftSnap.exists())
             console.log(`🔍 Cek Laci Draft ID [${draftRef.id}] -> ${draftSnap.exists() ? 'ADA ISINYA ✅' : 'KOSONG ❌'}`)
@@ -99,7 +112,7 @@ const useFormDraft = (db, userData, draftType, draftId = '') => {
         }, 500)
 
         return () => clearTimeout(timeoutId)
-    }, [getDraftRef, userData.uid])
+    }, [getDraftRef, userData.uid, enabled])
 
     return {
         hasDraft,

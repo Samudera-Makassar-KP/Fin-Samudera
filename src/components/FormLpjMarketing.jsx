@@ -746,6 +746,15 @@ const FormLpjMarketing = () => {
                 const editorRole = localStorage.getItem('userRole') || 'Admin'
 
                 const updateData = {
+                    // Bagian AT: sebelumnya `user` (unit/validator/reviewer1/
+                    // reviewer2) TIDAK PERNAH ikut disertakan di sini --
+                    // dropdown Validator/Reviewer tetap bisa diklik & diganti
+                    // saat edit, tapi perubahannya SELALU dibuang diam-diam
+                    // saat disimpan. firestore.rules keepsWorkflowIdentity()
+                    // cuma menjaga user.uid & displayId tetap sama --
+                    // validator/reviewer1/reviewer2 di dalam map user memang
+                    // boleh berubah.
+                    user: lpjData.user,
                     lpj: lpjData.lpj,
                     nomorBS: lpjData.nomorBS,
                     jumlahBS: lpjData.jumlahBS,
@@ -953,7 +962,9 @@ const FormLpjMarketing = () => {
     // PENTING: draftId diikat ke nomorBS, BUKAN string statis 'draft' -- lihat
     // catatan yang sama di FormLpjUmum.jsx. Tanpa ini, draft LPJ untuk satu BS
     // bisa tertimpa/salah muat oleh draft BS lain karena semua berbagi 1 slot.
-    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-marketing', nomorBS || 'baru');
+    // Bagian AT: enabled=!isEditMode -- draft cuma relevan untuk bikin baru,
+    // bukan mengedit dokumen orang lain (lihat catatan di useFormDraft.js)
+    const { hasDraft, saveDraft, loadDraft, clearDraft } = useFormDraft(db, userData, 'lpj-marketing', nomorBS || 'baru', !isEditMode);
 
     const handleSaveDraft = async () => {
         const filePromises = attachmentFiles.map((file) => {
