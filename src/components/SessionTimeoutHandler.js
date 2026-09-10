@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
+import { signOut, onAuthStateChanged } from 'firebase/auth';
+import { toast } from 'react-toastify';
 import { auth } from '../firebaseConfig';
 
 const SessionTimeoutHandler = ({ children, timeoutDuration }) => {
@@ -67,7 +68,37 @@ const SessionTimeoutHandler = ({ children, timeoutDuration }) => {
             clearInterval(intervalId);
         };
     }, [navigate, timeoutDuration, checkForInactivity]);
-    
+
+    // Bagian AI: deteksi sesi Firebase Auth yang sudah tidak valid lagi (token
+    // expired & gagal refresh, akun dihapus/dinonaktifkan, dll) padahal
+    // localStorage.userUid masih ada. Sebelumnya kondisi ini TIDAK terdeteksi --
+    // ProtectedRoute cuma cek localStorage (bukan status Auth yang sebenarnya),
+    // jadi UI tetap tampil "normal" & form tetap bisa diisi, tapi SEMUA panggilan
+    // Firestore (baca maupun tulis) gagal diam-diam dengan "Missing or
+    // insufficient permissions" karena request.auth null di server -- user cuma
+    // lihat pesan generik "Terjadi kesalahan saat menyimpan data" tanpa tahu
+    // solusinya, padahal solusinya simpel: login ulang. onAuthStateChanged
+    // dijamin Firebase baru terpanggil SETELAH status sesi selesai diperiksa
+    // (bukan placeholder loading), jadi begitu ini melaporkan null sementara
+    // localStorage masih menganggap sudah login, itu sudah pasti sesi yang
+    // genuinely tidak valid -- bukan false positive dari kondisi race saat app
+    // baru dimuat.
+    useEffect(() => {
+        const userUid = localStorage.getItem('userUid');
+        if (!userUid) return;
+
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (!user && localStorage.getItem('userUid')) {
+                localStorage.removeItem('userUid');
+                localStorage.removeItem('userRole');
+                toast.error('Sesi Anda telah berakhir. Silakan login kembali.');
+                navigate('/', { replace: true });
+            }
+        });
+
+        return () => unsubscribe();
+    }, [navigate]);
+
     return <>{children}</>;
 };
 

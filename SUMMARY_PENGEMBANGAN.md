@@ -1660,3 +1660,43 @@ Opsi yang dipertimbangkan: (a) izinkan item BBM ikut masuk grup "Kelola Kategori
 - [x] `CI=true npm run build` sukses, 92 test frontend tetap PASS (tidak ada perubahan util agregasi)
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-09, diverifikasi teks "BBM (Form Resmi)" ada di bundle live
 - [ ] Tes manual: tabel "BBM (Form Resmi) -- Total Biaya per Unit Bisnis" tampil lagi dengan catatan penjelas di atasnya, dropdown "Tampilkan Rekapan" juga punya opsinya lagi
+
+---
+
+# BAGIAN AI — Fix Kritis: Sesi Auth Tidak Valid Diam-diam Bikin Semua Aksi Gagal (2026-09-10)
+
+## 45.1 Insiden
+
+Dua user berbeda (Utami Soebagyo, lalu Reza Rahmat) melaporkan gagal submit Bon Sementara dengan pesan generik "Terjadi kesalahan saat menyimpan data." Console browser Reza Rahmat (disertakan user) menunjukkan akar masalah sebenarnya:
+```
+Error fetching announcement: FirebaseError: Missing or insufficient permissions.
+Error fetching alerts: FirebaseError: Missing or insufficient permissions.
+Error fetching drafts: FirebaseError: Missing or insufficient permissions.
+Error getting current counter: FirebaseError: Missing or insufficient permissions.
+Failed to load resource: the server responded with a status of 403 () -- firestore.googleapis.../documents:commit
+Error submitting bon sementara: FirebaseError: Missing or insufficient permissions.
+```
+`announcements` dan `alerts` di firestore.rules cuma dijaga `signedIn()` (`request.auth != null`) -- kalau bacaan sesimpel itu SAMA-SAMA gagal "Missing or insufficient permissions", satu-satunya penjelasan yang konsisten adalah `request.auth` benar-benar `null` di server, padahal UI aplikasi tetap tampil normal (form terisi, avatar user muncul).
+
+## 45.2 Root Cause
+
+`ProtectedRoute.jsx` cuma mengecek `localStorage.getItem('userUid')` untuk memutuskan apakah user "sudah login" -- TIDAK PERNAH memvalidasi terhadap status Firebase Auth yang sesungguhnya. Kalau sesi Firebase Auth browser itu jadi tidak valid (token expired & gagal di-refresh otomatis, akun di-disable/dihapus lewat Manage Users, dll) SEMENTARA `localStorage.userUid` masih tersimpan dari login sebelumnya, aplikasi tetap merender seluruh UI seolah-olah user login penuh (form bisa diisi, navigasi jalan) -- tapi SETIAP panggilan Firestore (baca maupun tulis) ditolak server karena `request.auth` null, dan user cuma melihat pesan error generik tanpa tahu solusinya (login ulang).
+
+## 45.3 Perbaikan
+
+`SessionTimeoutHandler.js` (sudah membungkus SELURUH route terproteksi di `App.jsx`) ditambah `useEffect` baru: `onAuthStateChanged(auth, ...)` -- begitu Firebase Auth melaporkan TIDAK ADA user yang valid (`user` null) SEMENTARA `localStorage.userUid` masih ada, aplikasi otomatis:
+1. Bersihkan `localStorage` (`userUid`, `userRole`)
+2. Tampilkan toast jelas: "Sesi Anda telah berakhir. Silakan login kembali."
+3. Redirect ke halaman login
+
+`onAuthStateChanged` dijamin Firebase baru terpanggil SETELAH status sesi selesai diperiksa (bukan placeholder loading sesaat), jadi tidak ada risiko false-positive nge-logout user yang sebenarnya masih valid saat app pertama dimuat.
+
+**Solusi jangka pendek untuk user yang sudah kena** (sebelum fix ini live): logout manual lalu login ulang -- ini menghapus token lama yang sudah tidak valid & mengambil token baru yang valid.
+
+## 45.4 Task Development — Bagian AI
+
+- [x] `SessionTimeoutHandler.js`: `useEffect` baru dengan `onAuthStateChanged` -- deteksi sesi Auth invalid & localStorage stale, auto logout + redirect + toast informatif
+- [x] `CI=true npm run build` sukses, 92 test frontend tetap PASS (perubahan di luar util agregasi, tidak ada test baru untuk komponen ini -- SessionTimeoutHandler.js belum ada test file, sama seperti sebelumnya)
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: kalau memungkinkan, simulasikan sesi invalid (mis. hapus lalu buat ulang akun user tes di Manage Users, biarkan browser lama tetap login) -- konfirmasi muncul toast "Sesi Anda telah berakhir" & redirect otomatis ke login, BUKAN silent failure seperti insiden ini
+- [ ] Follow-up dengan Utami Soebagyo & Reza Rahmat: minta logout manual + login ulang kalau belum, konfirmasi submit BS sudah normal setelah itu
