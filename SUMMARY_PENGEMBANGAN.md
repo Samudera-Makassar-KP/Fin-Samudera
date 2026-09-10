@@ -1730,6 +1730,6 @@ Diklarifikasi lewat 3 pertanyaan sebelum eksekusi: (1) panel BARU terpisah dari 
 - [x] `renderClassificationRow`: parameter opsional `options.highlightJenis` untuk badge kuning di kolom Jenis
 - [x] Test baru: 6 test `listAmbiguousBbmMentions` (deteksi kata "bbm", case-insensitive, exclude item BBM asli, exclude yang tidak menyebut bbm, exclude yang sudah masuk grup kategori, format key konsisten) -- total 98 test frontend, semua PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-10, diverifikasi teks "Tinjau Item BBM Ambigu" ada di bundle live
 - [ ] Tes manual: buka "Tinjau Item BBM Ambigu", konfirmasi item yang sudah masuk grup "BBM RANDIS" TIDAK muncul lagi di sini (sudah terkurasi), sementara item RTG/ATK lain yang menyebut "bbm" tapi belum pernah digabung MUNCUL dengan keterangan di-highlight kuning
 - [ ] Tes manual: tandai 1 item di panel ini "Dibagi ke unit lain" ke Unit Bisnis tertentu, konfirmasi tabel kategori ASLINYA (bukan tabel BBM) yang berubah menampilkan porsi share tersebut
