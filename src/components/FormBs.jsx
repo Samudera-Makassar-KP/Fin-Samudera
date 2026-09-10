@@ -628,73 +628,98 @@ const FormBs = () => {
                 // runTransaction, Firestore akan otomatis retry transaksi jika terjadi
                 // konflik baca-tulis pada counter, sehingga tidak mungkin dua submit
                 // mendapat nomor akhir yang sama.
-                const newDocRef = doc(collection(db, 'bonSementara'))
                 const counterRef = doc(db, 'businessUnitCounters', kodeUnitBisnis)
 
-                const finalNomorBS = await runTransaction(db, async (transaction) => {
-                    const counterDoc = await transaction.get(counterRef)
-                    const today = new Date()
-                    const year = today.getFullYear().toString()
-                    const month = (today.getMonth() + 1).toString().padStart(2, '0')
-                    const tanggalKode = `${year.slice(-2)}${month}`
+                // Bagian AO/AP: counter TIDAK SELALU sinkron dengan nomor yang
+                // benar-benar sudah terpakai -- mis. dokumen lama dari sebelum
+                // sistem counter atomik ini ada, yang sudah ditautkan ke
+                // /displayIdOwners lewat callable backfillDisplayIdOwners()
+                // (functions/index.js) tapi TANPA ikut memajukan
+                // businessUnitCounters. Kalau nomor yang dihasilkan counter
+                // ternyata sudah dipakai, transaction.set() ke
+                // displayIdOwners dievaluasi sebagai "update" (dokumennya
+                // sudah ada) -- rule koleksi itu `allow update: if false`,
+                // jadi transaksi gagal permission-denied dengan nomor yang
+                // SAMA setiap kali (counter tidak pernah maju karena
+                // transaksinya sendiri gagal, jadi baca ulang counter di
+                // percobaan berikutnya menghasilkan angka yang sama lagi).
+                //
+                // Percobaan sebelumnya (Bagian AO) mencoba CEK LEBIH DULU ke
+                // displayIdOwners pakai transaction.get() -- ternyata rule
+                // koleksi itu JUGA melarang get/list (`allow get, list: if
+                // false`, cuma create yang boleh, murni blind-write by
+                // design), jadi cek itu sendiri yang kena permission-denied.
+                // Solusi yang benar: TIDAK membaca displayIdOwners sama
+                // sekali -- coba tulis, kalau transaksi ditolak karena nomor
+                // itu ternyata sudah dipakai, tangkap error-nya DI LUAR
+                // transaksi lalu ulangi dengan offset nomor berikutnya
+                // (counter dibaca ulang tiap percobaan, tapi offset manual
+                // yang menjamin progres walau counter tersimpan tidak maju).
+                // Begitu 1 percobaan berhasil, counter otomatis "sembuh"
+                // (tersimpan sama dengan nomor yang benar-benar terpakai).
+                const attemptGenerateBs = async (offset) => {
+                    const newDocRef = doc(collection(db, 'bonSementara'))
+                    return runTransaction(db, async (transaction) => {
+                        const counterDoc = await transaction.get(counterRef)
+                        const today = new Date()
+                        const year = today.getFullYear().toString()
+                        const month = (today.getMonth() + 1).toString().padStart(2, '0')
+                        const tanggalKode = `${year.slice(-2)}${month}`
 
-                    let candidateNumber
-                    if (!counterDoc.exists() || counterDoc.data().lastResetYear !== year) {
-                        candidateNumber = 501
-                    } else {
-                        candidateNumber = counterDoc.data().lastNumber + 1
-                    }
+                        let baseNumber
+                        if (!counterDoc.exists() || counterDoc.data().lastResetYear !== year) {
+                            baseNumber = 501
+                        } else {
+                            baseNumber = counterDoc.data().lastNumber + 1
+                        }
+                        const candidateNumber = baseNumber + offset
 
-                    // Bagian AO: counter TIDAK SELALU sinkron dengan nomor yang
-                    // benar-benar sudah terpakai -- mis. dokumen lama dari
-                    // sebelum sistem counter atomik ini ada, yang sudah
-                    // ditautkan ke /displayIdOwners lewat callable
-                    // backfillDisplayIdOwners() (functions/index.js) tapi TANPA
-                    // ikut memajukan businessUnitCounters. Kalau counter
-                    // dipercaya buta, nomor yang dihasilkan bisa bentrok dengan
-                    // displayIdOwners yang sudah ada -- rule-nya
-                    // `allow update: if false` untuk koleksi itu, jadi
-                    // transaksi gagal permission-denied TERUS-MENERUS dengan
-                    // nomor yang SAMA setiap retry (counter tidak pernah maju
-                    // karena transaksinya sendiri gagal). Cek langsung ke
-                    // displayIdOwners & lompati nomor yang sudah dipakai
-                    // supaya transaksi ini bisa menyembuhkan diri sendiri dari
-                    // kondisi itu, bukan terjebak loop gagal selamanya.
-                    let nomorBS
-                    let ownerDoc
-                    const MAX_ATTEMPTS = 50
-                    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
                         const sequence = candidateNumber.toString().padStart(7, '0')
-                        nomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`
-                        ownerDoc = await transaction.get(doc(db, 'displayIdOwners', nomorBS))
-                        if (!ownerDoc.exists()) break
-                        candidateNumber++
-                    }
-                    if (ownerDoc?.exists()) {
-                        throw new Error(`Tidak menemukan nomor BS yang tersedia untuk unit ${kodeUnitBisnis} setelah ${MAX_ATTEMPTS} percobaan`)
-                    }
+                        const nomorBS = `BS${tanggalKode}${kodeUnitBisnis}${sequence}`
 
-                    transaction.set(counterRef, {
-                        lastNumber: candidateNumber,
-                        lastResetYear: year
+                        transaction.set(counterRef, {
+                            lastNumber: candidateNumber,
+                            lastResetYear: year
+                        })
+
+                        // Dicatat di transaksi yang sama supaya storage.rules bisa memvalidasi
+                        // kepemilikan lampiran/PDF lewat firestore.get() cross-service (lihat 18.6)
+                        transaction.set(doc(db, 'displayIdOwners', nomorBS), { uid: userData.uid })
+
+                        transaction.set(newDocRef, {
+                            ...bonSementaraData,
+                            id: newDocRef.id,
+                            displayId: nomorBS,
+                            bonSementara: bonSementaraData.bonSementara.map((item) => ({
+                                ...item,
+                                nomorBS
+                            }))
+                        })
+
+                        return nomorBS
                     })
+                }
 
-                    // Dicatat di transaksi yang sama supaya storage.rules bisa memvalidasi
-                    // kepemilikan lampiran/PDF lewat firestore.get() cross-service (lihat 18.6)
-                    transaction.set(doc(db, 'displayIdOwners', nomorBS), { uid: userData.uid })
-
-                    transaction.set(newDocRef, {
-                        ...bonSementaraData,
-                        id: newDocRef.id,
-                        displayId: nomorBS,
-                        bonSementara: bonSementaraData.bonSementara.map((item) => ({
-                            ...item,
-                            nomorBS
-                        }))
-                    })
-
-                    return nomorBS
-                })
+                let finalNomorBS = null
+                let lastCollisionError = null
+                const MAX_ATTEMPTS = 50
+                for (let offset = 0; offset < MAX_ATTEMPTS; offset++) {
+                    try {
+                        finalNomorBS = await attemptGenerateBs(offset)
+                        break
+                    } catch (attemptError) {
+                        // permission-denied di titik ini SANGAT mungkin karena
+                        // nomor kandidat sudah dipakai (lihat catatan di atas) --
+                        // coba nomor berikutnya. Error jenis LAIN (mis. memang
+                        // sesi tidak valid) langsung dilempar, tidak perlu
+                        // diulang 50x percuma.
+                        if (attemptError?.code !== 'permission-denied') throw attemptError
+                        lastCollisionError = attemptError
+                    }
+                }
+                if (finalNomorBS === null) {
+                    throw lastCollisionError || new Error(`Tidak menemukan nomor BS yang tersedia untuk unit ${kodeUnitBisnis} setelah ${MAX_ATTEMPTS} percobaan`)
+                }
 
                 toast.success(`Bon Sementara berhasil diajukan! Nomor: ${finalNomorBS}`)
 

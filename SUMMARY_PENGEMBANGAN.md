@@ -1895,3 +1895,28 @@ Ini konsisten dengan SEMUA bukti yang ada: gagal permanen & konsisten (bukan sek
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi teks "Tidak menemukan nomor BS yang tersedia" ada di bundle live
 - [ ] Tes manual: submit BS untuk PT Samudera Agencies Indonesia lagi, konfirmasi berhasil dengan nomor BARU (kemungkinan besar BUKAN lagi "...SAI0000501" kalau memang nomor itu sudah kepakai dokumen lama)
 - [ ] Kalau MASIH gagal: sekarang errornya seharusnya BEDA (bukan lagi permission-denied berulang di nomor yang sama) -- kirim `error.code`/`error.message` yang ter-log untuk diagnosis lanjutan
+
+---
+
+# BAGIAN AP — Fix Bagian AO Sendiri Bikin Bug Baru (batchGet Ditolak) (2026-09-10)
+
+## 52.1 Latar Belakang
+
+User coba lagi setelah Bagian AO deploy -- MASIH gagal, tapi console sekarang menunjukkan pola BARU: `Failed to load resource ... documents:batchGet:1` (403) dan "Error getting current counter" ikut permission-denied juga (sebelumnya cuma error di `:commit`). `batchGet` adalah operasi BACA (dipakai `transaction.get()`), bukan tulis -- ini petunjuk langsung bahwa perbaikan Bagian AO sendiri yang jadi biang kegagalan BARU.
+
+## 52.2 Analisis
+
+Bagian AO menambahkan `transaction.get(doc(db, 'displayIdOwners', nomorBS))` untuk CEK LEBIH DULU apakah nomor kandidat sudah dipakai, sebelum mengklaimnya. Ternyata **rule koleksi `/displayIdOwners` melarang TOTAL operasi baca**: `allow get, list: if false;` -- HANYA `create` yang diizinkan (murni blind-write by design, lihat komentar lama di firestore.rules soal storage.rules cross-service `firestore.get()` yang gagal di produksi). Jadi justru CEK yang saya tambahkan di Bagian AO itu sendiri yang kena permission-denied duluan, sebelum sempat mengecek apa pun -- kegagalannya jadi lebih awal/berbeda tapi tetap gagal. "Error getting current counter" yang ikut kena kemungkinan besar cuma kena imbas (Firestore SDK bisa menggabungkan beberapa `getDoc()`/`transaction.get()` yang dipanggil berdekatan jadi 1 request `batchGet`, jadi 1 baca yang ditolak rule bisa membuat seluruh batch itu gagal, termasuk baca lain yang sebenarnya sah).
+
+## 52.3 Perbaikan
+
+- **`FormBs.jsx`**: pendekatan "cek dulu baru klaim" (Bagian AO) DIHAPUS SELURUHNYA -- diganti "coba tulis, kalau ditolak karena nomor sudah dipakai baru coba nomor berikutnya" (retry di LUAR `runTransaction`, bukan di dalam). Setiap percobaan adalah transaksi Firestore baru: baca counter (boleh, `allow read: if signedIn()`), hitung `candidateNumber = baseNumber + offset` (offset manual dari 0, memastikan progres walau nilai counter tersimpan belum maju karena percobaan sebelumnya gagal & rollback), lalu langsung coba tulis ke `displayIdOwners` & `bonSementara`. Kalau transaksi gagal dengan `error.code === 'permission-denied'` (indikasi nomor itu sudah dipakai), otomatis diulang dengan `offset+1`, maksimal 50 kali. Error jenis LAIN (mis. sesi benar-benar invalid) langsung dilempar tanpa diulang percuma. TIDAK ADA pembacaan `displayIdOwners` sama sekali di pendekatan ini -- selaras dengan rule yang memang melarangnya.
+
+## 52.4 Task Development — Bagian AP
+
+- [x] `FormBs.jsx`: ganti pendekatan cek-dulu (baca displayIdOwners, DILARANG rule) jadi coba-tulis-lalu-retry-di-luar-transaksi (tidak baca displayIdOwners sama sekali)
+- [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: submit BS untuk PT Samudera Agencies Indonesia lagi -- kalau teori benturan displayIdOwners ini benar, seharusnya BERHASIL sekarang (nomor otomatis lompat ke yang belum terpakai)
+- [ ] Kalau MASIH gagal: kirim `error.code`/`error.message` baru dari Console -- kalau bukan lagi soal displayIdOwners, kemungkinan besar bukan soal nomor dokumen sama sekali, perlu ditelusuri dari sudut lain (mis. field lain di `bonSementaraData` yang gagal validasi rule `validWorkflowCreate`)
