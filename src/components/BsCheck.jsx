@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { collection, query, where, getDocs, getDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import Modal from './Modal'
 import Select from 'react-select'
@@ -10,7 +10,7 @@ import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
+import { faPenToSquare, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { getStatusBadgeClass } from '../utils/statusBadge'
 
 const SUPER_ADMIN_STATUS_OPTIONS = [
@@ -28,7 +28,7 @@ const SUPER_ADMIN_STATUS_OPTIONS = [
 // komponen ini, tetap pakai tab lama di BsCheck di bawah.
 const SuperAdminAllStatusTable = ({
     allData, statusFilter, setStatusFilter, search, setSearch, loading,
-    selectStyles, handleApprove, handleReject, handleEditClick, formatDate
+    selectStyles, handleApprove, handleReject, handleEditClick, handleDelete, formatDate
 }) => {
     const ACTIONABLE_STATUSES = ['Diajukan', 'Diproses']
 
@@ -147,6 +147,13 @@ const SuperAdminAllStatusTable = ({
                                                         </button>
                                                     </>
                                                 )}
+                                                <button
+                                                    className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-700 border-[1px] border-red-700 flex items-center justify-center w-8 h-8"
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Hapus Permanen"
+                                                >
+                                                    <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -418,6 +425,30 @@ const BsCheck = () => {
         });
     };
 
+    // Bagian AM: hapus permanen (Super Admin saja) -- firestore.rules sudah
+    // mengizinkan `allow delete: if isSuperAdmin()` di /bonSementara/{docId}
+    // sejak awal, cuma belum ada tombolnya di UI. Dipakai untuk membersihkan
+    // pengajuan test/keliru (status apa pun, tidak dibatasi ACTIONABLE_STATUSES)
+    // -- BEDA dari "Batalkan" (ubah status jadi 'Dibatalkan', tetap tersimpan
+    // untuk jejak audit) yang dipakai user biasa di BsTable.jsx.
+    const handleDelete = (item) => {
+        openModal({
+            title: 'Konfirmasi Hapus',
+            message: `Apakah Anda yakin ingin MENGHAPUS PERMANEN Bon Sementara ${item.displayId}? Data yang sudah dihapus tidak bisa dikembalikan.`,
+            onConfirm: async () => {
+                try {
+                    await deleteDoc(doc(db, 'bonSementara', item.id))
+                    setAllSuperAdminData((prev) => prev.filter((r) => r.id !== item.id))
+                    toast.success('Bon Sementara berhasil dihapus.')
+                    closeModal()
+                } catch (error) {
+                    console.error('Error deleting bon sementara:', error?.code, error?.message, error)
+                    toast.error('Gagal menghapus Bon Sementara.')
+                }
+            }
+        })
+    }
+
     // Handle Approve
     const handleApprove = (item) => {
         openModal({
@@ -522,7 +553,7 @@ const BsCheck = () => {
                         closeModal()
                     }
                 } catch (error) {
-                    console.error('Error approving Bon Sementara:', error)
+                    console.error('Error approving Bon Sementara:', error?.code, error?.message, error)
                     toast.error('Gagal menyetujui Bon Sementara')
                 }
             }
@@ -636,7 +667,7 @@ const BsCheck = () => {
             toast.success('Bon Sementara berhasil ditolak')
             handleCloseRejectModal()
         } catch (error) {
-            console.error('Error rejecting bon sementara:', error)
+            console.error('Error rejecting bon sementara:', error?.code, error?.message, error)
             toast.error('Gagal menolak Bon Sementara')
         }
     }
@@ -813,6 +844,7 @@ const BsCheck = () => {
                         handleApprove={handleApprove}
                         handleReject={handleReject}
                         handleEditClick={handleEditClick}
+                        handleDelete={handleDelete}
                         formatDate={formatDate}
                     />
                 ) : (

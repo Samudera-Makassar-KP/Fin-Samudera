@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { collection, query, where, getDocs, getDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import Modal from './Modal'
 import Select from 'react-select'
@@ -10,7 +10,7 @@ import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
+import { faPenToSquare, faTrash } from '@fortawesome/free-solid-svg-icons'
 import { getStatusBadgeClass } from '../utils/statusBadge'
 
 const SUPER_ADMIN_STATUS_OPTIONS = [
@@ -29,7 +29,7 @@ const SUPER_ADMIN_STATUS_OPTIONS = [
 // komponen ini, tetap pakai tab lama di LpjBsCheck di bawah.
 const SuperAdminAllStatusTable = ({
     allData, statusFilter, setStatusFilter, search, setSearch, loading,
-    selectStyles, handleApprove, handleReject, handleEditClick, formatDate
+    selectStyles, handleApprove, handleReject, handleEditClick, handleDelete, formatDate
 }) => {
     const ACTIONABLE_STATUSES = ['Diajukan', 'Divalidasi', 'Diproses']
 
@@ -150,6 +150,13 @@ const SuperAdminAllStatusTable = ({
                                                         </button>
                                                     </>
                                                 )}
+                                                <button
+                                                    className="rounded-full p-1 bg-red-200 hover:bg-red-300 text-red-700 border-[1px] border-red-700 flex items-center justify-center w-8 h-8"
+                                                    onClick={() => handleDelete(item)}
+                                                    title="Hapus Permanen"
+                                                >
+                                                    <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -475,6 +482,29 @@ const LpjBsCheck = () => {
         });
     };
 
+    // Bagian AM: hapus permanen (Super Admin saja) -- firestore.rules sudah
+    // mengizinkan `allow delete: if isSuperAdmin()` di /lpj/{docId} sejak
+    // awal, cuma belum ada tombolnya di UI. Status apa pun (tidak dibatasi
+    // ACTIONABLE_STATUSES) -- BEDA dari "Batalkan" (ubah status jadi
+    // 'Dibatalkan', tetap tersimpan untuk jejak audit).
+    const handleDelete = (item) => {
+        openModal({
+            title: 'Konfirmasi Hapus',
+            message: `Apakah Anda yakin ingin MENGHAPUS PERMANEN LPJ ${item.displayId}? Data yang sudah dihapus tidak bisa dikembalikan.`,
+            onConfirm: async () => {
+                try {
+                    await deleteDoc(doc(db, 'lpj', item.id))
+                    setAllSuperAdminData((prev) => prev.filter((r) => r.id !== item.id))
+                    toast.success('LPJ berhasil dihapus.')
+                    closeModal()
+                } catch (error) {
+                    console.error('Error deleting lpj:', error?.code, error?.message, error)
+                    toast.error('Gagal menghapus LPJ.')
+                }
+            }
+        })
+    }
+
     // Handle Approve
     const handleApprove = (item) => {
         openModal({
@@ -604,7 +634,7 @@ const LpjBsCheck = () => {
                         closeModal()
                     }
                 } catch (error) {
-                    console.error('Error approving lpj:', error)
+                    console.error('Error approving lpj:', error?.code, error?.message, error)
                     toast.error('Gagal menyetujui LPJ Bon Sementara')
                 }
             }
@@ -777,7 +807,7 @@ const LpjBsCheck = () => {
             toast.success('LPJ Bon Sementara berhasil ditolak')
             handleCloseRejectModal()
         } catch (error) {
-            console.error('Error rejecting lpj:', error)
+            console.error('Error rejecting lpj:', error?.code, error?.message, error)
             toast.error('Gagal menolak LPJ Bon Sementara')
         }
     }
@@ -956,6 +986,7 @@ const LpjBsCheck = () => {
                         handleApprove={handleApprove}
                         handleReject={handleReject}
                         handleEditClick={handleEditClick}
+                        handleDelete={handleDelete}
                         formatDate={formatDate}
                     />
                 ) : (

@@ -315,7 +315,7 @@ const BsTable = () => {
             // Menutup modal setelah pembatalan
             handleCloseModal()
         } catch (error) {
-            console.error('Error cancelling bon sementara:', error)
+            console.error('Error cancelling bon sementara:', error?.code, error?.message, error)
             toast.error('Gagal membatalkan bon sementara. Silakan coba lagi.')
         }
     }

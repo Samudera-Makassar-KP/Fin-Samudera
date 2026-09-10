@@ -244,7 +244,7 @@ const LpjBsTable = () => {
             // Menutup modal setelah pembatalan
             handleCloseModal()
         } catch (error) {
-            console.error('Error cancelling lpj:', error)
+            console.error('Error cancelling lpj:', error?.code, error?.message, error)
             toast.error('Gagal membatalkan lpj. Silakan coba lagi.')
         }
     }

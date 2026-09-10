@@ -1802,3 +1802,31 @@ Ini menjelaskan kenapa errornya generik & konsisten: BUKAN soal siapa yang submi
 - [ ] Deploy ke produksi (rules + hosting)
 - [ ] Tes manual: Reza Rahmat/Utami Soebagyo coba submit BS untuk PT Samudera Agencies Indonesia lagi, konfirmasi berhasil
 - [ ] Kalau MASIH gagal setelah deploy ini: klik panah "▶ Error submitting bon sementara" di Console untuk expand, catat `error.code` yang sekarang ikut ter-log -- itu akan mempersempit ke penyebab lain di luar teori counter ini
+
+---
+
+# BAGIAN AM — Tombol Hapus Admin & Logging Error Approval/Pembatalan (2026-09-10)
+
+## 49.1 Permintaan User
+
+Setelah mencoba membatalkan pengajuan BS test (BS26090350000501) dan gagal dengan error generik "Gagal membatalkan bon sementara. Silakan coba lagi.", user minta: (1) tombol **Hapus** di panel admin Cek RBS/Cek BS/Cek LPJ, (2) perbaiki tombol approval & pembatalan, (3) alternatif: kalau dibatalkan, langsung hilang dari list.
+
+## 49.2 Investigasi Bug Pembatalan
+
+Ditelusuri `canCancelOwnWorkflow()`/`ownerCancelKeysOnly()` di `firestore.rules` serta `handleSubmitCancel` di `BsTable.jsx`/`ReimbursementTable.jsx`/`LpjBsTable.jsx` -- SEMUA syarat rule (owner, status awal 'Diajukan', field yang diubah cuma status/cancelReason/statusHistory) sudah terpenuhi secara struktural oleh kode, tidak ditemukan celah serupa Bagian AL (validasi tipe data lama) di jalur ini. Karena user belum sempat expand detail error di Console untuk kasus pembatalan ini (beda dari kasus submit BS di Bagian AL yang sudah ada bukti "Missing or insufficient permissions" eksplisit), root cause PASTI belum bisa dipastikan sekarang -- BUKAN diperbaiki dengan tebakan rule lagi seperti Bagian AL (yang punya bukti kuat), supaya tidak boros 1 siklus deploy kalau tebakannya salah.
+
+## 49.3 Implementasi
+
+- **Logging error diperjelas** (`error.code`, `error.message` terpisah, bukan cuma object `error` yang collapsed di Chrome) di SEMUA handler approval & pembatalan: `handleSubmitCancel` (`BsTable.jsx`, `ReimbursementTable.jsx`, `LpjBsTable.jsx`), `handleApprove`/`handleSubmitReject` (`BsCheck.jsx`, `ReimbursementCheck.jsx`, `LpjBsCheck.jsx`). Insiden berikutnya (approval ATAU pembatalan, modul mana pun) langsung ketahuan kode errornya dari Console tanpa perlu investigasi kode dari nol.
+- **Tombol Hapus Permanen** (ikon tempat sampah merah) ditambahkan ke tabel "Semua Status" Super Admin di `BsCheck.jsx`/`ReimbursementCheck.jsx`/`LpjBsCheck.jsx` -- rule `allow delete: if isSuperAdmin()` SUDAH ADA di firestore.rules untuk ketiga koleksi (`bonSementara`/`reimbursement`/`lpj`) sejak awal, cuma belum pernah ada tombolnya di UI. Tersedia untuk status APA PUN (tidak dibatasi `ACTIONABLE_STATUSES`), pakai modal konfirmasi yang sama dengan Approve/Reject.
+- **Soal "kalau dibatalkan langsung hilang dari list"**: SENGAJA TIDAK diimplementasikan sebagai hard-delete otomatis saat cancel -- ini aplikasi approval finansial, riwayat "Dibatalkan" perlu tetap tersimpan untuk jejak audit (dan memang sudah ada tab/filter status "Dibatalkan" di panel admin untuk tujuan itu). Tombol Hapus Permanen (Super Admin) di atas sudah menutupi kebutuhan "benar-benar hilang" itu tanpa mengorbankan audit trail untuk kasus normal.
+
+## 49.4 Task Development — Bagian AM
+
+- [x] Logging `error.code`/`error.message` di 6 handler (3 cancel + 3 approve/reject) lintas modul BS/RBS/LPJ
+- [x] Tombol "Hapus Permanen" (Super Admin) di tabel Semua Status `BsCheck.jsx`/`ReimbursementCheck.jsx`/`LpjBsCheck.jsx`
+- [x] `CI=true npm test -- --watchAll=false` -- 103 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: Super Admin coba Hapus 1 pengajuan test di masing-masing modul (BS/RBS/LPJ), konfirmasi hilang dari list & dari Firestore
+- [ ] Tes manual: coba ulang pembatalan yang gagal sebelumnya (BS26090350000501 atau buat pengajuan test baru), kalau MASIH gagal, expand "▶ Error cancelling..." di Console dan kirim `error.code`/`error.message` yang sekarang ter-log supaya bisa didiagnosis pasti

@@ -213,7 +213,7 @@ const ReimbursementTable = () => {
             toast.success('Reimbursement berhasil dibatalkan.')
             handleCloseModal()
         } catch (error) {
-            console.error('Error cancelling reimbursement:', error)
+            console.error('Error cancelling reimbursement:', error?.code, error?.message, error)
             toast.error('Gagal membatalkan reimbursement. Silakan coba lagi.')
         }
     }
