@@ -30,6 +30,9 @@ const FormLpjMarketing = () => {
     })
 
     const [isSubmitting, setIsSubmitting] = useState(false)
+    // Bagian AN: catatan wajib diisi editor saat mengedit pengajuan milik
+    // orang lain -- jejak "kesalahan apa yang diperbaiki" di statusHistory.
+    const [editNote, setEditNote] = useState('')
 
     const initialLpjState = {
         nomorBS: '',
@@ -651,6 +654,8 @@ const FormLpjMarketing = () => {
                 missingFields.push('File Lampiran')
             }
 
+            if (isEditMode && !editNote.trim()) missingFields.push('Catatan Perubahan')
+
             if (missingFields.length > 0) {
                 missingFields.forEach((field) => {
                     toast.warning(
@@ -731,8 +736,15 @@ const FormLpjMarketing = () => {
             }
 
             if (isEditMode) {
-                // --- LOGIKA UPDATE (SUPER ADMIN) ---
+                // --- LOGIKA UPDATE ---
                 const lpjRef = doc(db, 'lpj', editData.id)
+
+                // Bagian AN: userData.uid di mode edit adalah uid PENGAJU ASLI,
+                // bukan uid editor yang login -- pakai localStorage langsung
+                // supaya statusHistory mencatat siapa sebenarnya yang mengedit.
+                const editorUid = localStorage.getItem('userUid')
+                const editorRole = localStorage.getItem('userRole') || 'Admin'
+
                 const updateData = {
                     lpj: lpjData.lpj,
                     nomorBS: lpjData.nomorBS,
@@ -748,10 +760,10 @@ const FormLpjMarketing = () => {
                     sisaKurang: lpjData.sisaKurang,
                     updatedAt: new Date().toISOString(),
                     statusHistory: arrayUnion({
-                        status: 'Data Diubah oleh Super Admin',
+                        status: `Data Diubah oleh ${editorRole}`,
                         timestamp: new Date().toISOString(),
-                        actor: userData.uid,
-                        reason: 'Super Admin mengedit detail form LPJ Marketing'
+                        actor: editorUid,
+                        reason: editNote.trim()
                     })
                 };
 
@@ -1518,6 +1530,20 @@ const FormLpjMarketing = () => {
                     </div>
                 )}
 
+                {isEditMode && (
+                    <div className="mt-4">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                            Catatan Perubahan (Alasan Edit) <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-20 px-4 py-2"
+                            placeholder="Jelaskan kesalahan/perubahan yang diperbaiki pada pengajuan ini"
+                            value={editNote}
+                            onChange={(e) => setEditNote(e.target.value)}
+                        />
+                    </div>
+                )}
+
                 <div className="flex flex-col-reverse xl:flex-row justify-end mt-6 gap-4">
                     <button
                         className={`w-full xl:w-fit rounded py-3 px-16 text-red-600 bg-transparent hover:bg-red-50 hover:text-red-800 border border-red-600 hover:border-red-800
@@ -1528,7 +1554,7 @@ const FormLpjMarketing = () => {
                     </button>
 
                     <button
-                        className={`w-full xl:w-fit rounded text-white py-3 
+                        className={`w-full xl:w-fit rounded text-white py-3
                         ${isSubmitting ? 'px-8 bg-red-700 cursor-not-allowed' : 'px-16 bg-red-600 hover:bg-red-700 hover:text-gray-200'}
                         flex items-center justify-center relative`}
                         onClick={handleSubmit}

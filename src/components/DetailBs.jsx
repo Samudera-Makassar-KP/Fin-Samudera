@@ -9,6 +9,7 @@ import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { getEditHistoryEntries } from '../utils/editHistory'
 
 const DetailBs = () => {
     const [userData, setUserData] = useState(null)
@@ -17,6 +18,10 @@ const DetailBs = () => {
     const [, setError] = useState(null)
     const [isLoading, setIsLoading] = useState(false)
     const [isLpjApproved, setIsLpjApproved] = useState(false)
+    // Bagian AN: riwayat edit (siapa mengedit, kapan, alasannya) -- dipakai
+    // Super Admin/reviewer untuk lihat berapa kali & kenapa pengajuan ini
+    // pernah diperbaiki setelah dibuat.
+    const [editHistoryWithNames, setEditHistoryWithNames] = useState([])
 
     const { id } = useParams()
     const navigate = useNavigate()
@@ -117,6 +122,36 @@ const DetailBs = () => {
 
         checkLpjStatus()
     }, [bonSementaraDetail, userData])
+
+    // Bagian AN: resolve nama editor (uid -> nama) untuk tiap entri riwayat
+    // edit di statusHistory, supaya tidak cuma tampilkan uid mentah.
+    useEffect(() => {
+        const resolveEditHistoryNames = async () => {
+            const entries = getEditHistoryEntries(bonSementaraDetail?.statusHistory)
+            if (entries.length === 0) {
+                setEditHistoryWithNames([])
+                return
+            }
+
+            const withNames = await Promise.all(
+                entries.map(async (entry) => {
+                    let actorName = 'N/A'
+                    try {
+                        const actorDocRef = doc(db, 'userDirectory', entry.actor)
+                        const actorSnapshot = await getDoc(actorDocRef)
+                        if (actorSnapshot.exists()) actorName = actorSnapshot.data().nama
+                    } catch (error) {
+                        console.error('Error fetching editor name:', error)
+                    }
+                    return { ...entry, actorName }
+                })
+            )
+
+            setEditHistoryWithNames(withNames)
+        }
+
+        resolveEditHistoryNames()
+    }, [bonSementaraDetail])
 
     // Fungsi untuk mendapatkan status dengan informasi reviewer berikutnya
     const getStatusWithNextReviewer = (bonSementara, reviewerNames) => {
@@ -544,6 +579,31 @@ const DetailBs = () => {
                         <p>: {getDetailedApprovalStatus(bonSementaraDetail, reviewers)}</p>
                     </div>
                 </div>
+
+                {/* Bagian AN: Riwayat Edit -- hanya tampil kalau pengajuan ini
+                    pernah diedit ADMIN setelah dibuat (isEditMode di form). */}
+                {editHistoryWithNames.length > 0 && (
+                    <div className="mb-8 p-4 border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                        <p className="font-medium text-amber-800 dark:text-amber-300 mb-2">
+                            Riwayat Edit ({editHistoryWithNames.length}x)
+                        </p>
+                        <ul className="space-y-2 text-sm">
+                            {editHistoryWithNames.map((entry, index) => (
+                                <li key={index} className="text-gray-700 dark:text-gray-200">
+                                    <span className="font-medium">
+                                        {new Date(entry.timestamp).toLocaleString('id-ID', {
+                                            day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                        })}
+                                    </span>
+                                    {' -- '}{entry.actorName} ({entry.status.replace('Data Diubah oleh ', '')})
+                                    {entry.reason && (
+                                        <span className="block text-gray-600 dark:text-gray-400 italic">"{entry.reason}"</span>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* Responsive table wrapper */}
                 <div className="mb-8 overflow-x-auto -mx-4 md:mx-0">

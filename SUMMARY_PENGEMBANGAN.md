@@ -1830,3 +1830,40 @@ Ditelusuri `canCancelOwnWorkflow()`/`ownerCancelKeysOnly()` di `firestore.rules`
 - [ ] Deploy ke produksi (hosting)
 - [ ] Tes manual: Super Admin coba Hapus 1 pengajuan test di masing-masing modul (BS/RBS/LPJ), konfirmasi hilang dari list & dari Firestore
 - [ ] Tes manual: coba ulang pembatalan yang gagal sebelumnya (BS26090350000501 atau buat pengajuan test baru), kalau MASIH gagal, expand "▶ Error cancelling..." di Console dan kirim `error.code`/`error.message` yang sekarang ter-log supaya bisa didiagnosis pasti
+
+---
+
+# BAGIAN AN — Ekspor Laporan Lengkap & Riwayat Edit (2026-09-10)
+
+## 50.1 Permintaan User
+
+1. Halaman "Ekspor Laporan Pengajuan" tampilkan juga status Ditolak (sebelumnya cuma Disetujui/Dibatalkan) supaya admin gampang menghapus data itu juga.
+2. Setiap data yang diedit tampilkan kapan diedit, dan ini juga tampil di PDF, supaya kelihatan berapa kali seseorang minta dokumennya diedit dan kesalahannya apa saja.
+
+## 50.2 Temuan Tambahan (Bug Lama)
+
+Saat menelusuri fitur di atas, ditemukan 2 bug lama yang tidak terlihat dari luar:
+
+1. **Tombol Hapus di "Ekspor Laporan Pengajuan" untuk baris Reimbursement TIDAK PERNAH benar-benar menghapus data.** `handleDelete(docId, collectionName)` dipanggil dengan `'reimbursements'` (plural, nama KEY di state lokal) padahal koleksi Firestore aslinya `'reimbursement'` (tunggal). `deleteDoc()` Firestore tidak error kalau path dokumennya tidak ada (operasi idempotent), jadi UI selalu menampilkan "Dokumen berhasil dihapus!" dan baris hilang dari tabel, TAPI dokumen aslinya tetap ada di Firestore. Diperbaiki dengan map eksplisit key-state -> nama-koleksi-asli.
+2. **`actor` di entri statusHistory "Data Diubah oleh Super Admin" selalu salah.** Di mode edit, `userData.uid` diisi dari `editData.user` (uid PENGAJU ASLI, lihat useEffect auto-fill di tiap form), BUKAN uid admin/reviewer yang sedang login dan benar-benar melakukan perubahan. Akibatnya entri edit selalu tercatat seolah-olah pengaju mengedit pengajuannya sendiri -- padahal karyawan biasa tidak pernah punya akses ke form dalam mode edit (`isEditMode` cuma dipicu dari halaman admin: `BsCheck.jsx`/`ReimbursementCheck.jsx`/`LpjBsCheck.jsx`/`ReportExport.jsx`). Diperbaiki dengan `localStorage.getItem('userUid')` langsung di titik penyimpanan. Label status juga diubah dari hardcode "Super Admin" jadi dinamis `Data Diubah oleh ${role}` (Admin/Validator/Reviewer/Super Admin bisa saja yang mengedit, bukan cuma Super Admin).
+
+## 50.3 Implementasi
+
+- **`ReportExport.jsx`**: query `or(...)` untuk reimbursement/bonSementara/lpj ditambah `where('status','==','Ditolak')`. Header kolom & label Excel diubah dari "Tanggal/Oleh Disetujui/Dibatalkan" jadi "...Disetujui/Ditolak/Dibatalkan". Badge status pindah pakai `getStatusBadgeClass` (sudah ada, dipakai di BsCheck.jsx dkk) supaya Ditolak tampil merah, bukan cuma hijau/abu-abu. Bug tombol Hapus reimbursement diperbaiki (lihat 50.2).
+- **`src/utils/editHistory.js`** (BARU): `getEditHistoryEntries(statusHistory)` -- filter entri statusHistory berprefix `'Data Diubah oleh '`, terbaru duluan. Tidak butuh field Firestore baru, murni derive dari statusHistory yang sudah ada. 5 test baru, semua PASS.
+- **6 form** (`FormBs.jsx`, `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx`): tambah field **Catatan Perubahan (Alasan Edit)** -- textarea WAJIB diisi kalau `isEditMode`, disimpan sebagai `reason` di entri statusHistory (menggantikan teks generik "Super Admin mengedit detail form ..."). Sekaligus perbaiki bug `actor` & label status (lihat 50.2).
+- **3 halaman Detail** (`DetailBs.jsx`, `DetailRbs.jsx`, `DetailLpj.jsx`): kartu **"Riwayat Edit (Nx)"** (border kuning) tampil di bawah info pengajuan kalau ada entri edit -- tanggal, nama editor (resolve uid->nama lewat `userDirectory`), peran, dan catatan/alasan tiap edit.
+- **3 file PDF** (`BsPdf.jsx`, `ReimbursementPdf.jsx`, `LpjPdf.jsx`): blok **"Riwayat Edit (Nx)"** ditambahkan di footer, HANYA muncul kalau dokumen pernah diedit (dokumen yang tidak pernah diedit tetap ringkas seperti sebelumnya). Nama editor di-resolve async SEBELUM render (`getEditHistoryWithNames`, pola sama dengan `getApprovedReviewerNames` yang sudah ada).
+
+## 50.4 Task Development — Bagian AN
+
+- [x] `ReportExport.jsx`: tambah status Ditolak ke query, badge & label diperjelas, fix bug tombol Hapus reimbursement
+- [x] `src/utils/editHistory.js` + 5 test baru
+- [x] 6 form: field Catatan Perubahan wajib di mode edit + fix bug actor/label status
+- [x] 3 halaman Detail: kartu Riwayat Edit
+- [x] 3 file PDF: blok Riwayat Edit di footer (kondisional)
+- [x] `CI=true npm test -- --watchAll=false` -- 108 test PASS (103 lama + 5 baru)
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: buka "Ekspor Laporan Pengajuan", konfirmasi status Ditolak muncul & tombol Hapus untuk Reimbursement benar-benar menghapus dari Firestore (bukan cuma dari tampilan)
+- [ ] Tes manual: Admin edit 1 pengajuan (via BsCheck/ReimbursementCheck/LpjBsCheck), isi Catatan Perubahan, konfirmasi kartu "Riwayat Edit" muncul di halaman Detail dengan nama editor yang BENAR (bukan nama pengaju), lalu cetak PDF dan konfirmasi blok Riwayat Edit ikut muncul di situ

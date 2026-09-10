@@ -9,6 +9,7 @@ import Skeleton from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css';
 import EmptyState from '../assets/images/EmptyState.png';
 import * as XLSX from 'xlsx';
+import { getStatusBadgeClass } from '../utils/statusBadge';
 
 const ReportExport = () => {
     const { theme } = useTheme();
@@ -72,12 +73,18 @@ const ReportExport = () => {
         const fetchApprovedDocuments = async () => {
             setLoading(true);
             try {
+                // Bagian AN: sebelumnya cuma status Disetujui/Dibatalkan -- Ditolak
+                // TIDAK PERNAH muncul di halaman ini sama sekali, padahal admin
+                // butuh lihat & hapus pengajuan yang ditolak juga (data test/keliru
+                // yang tidak lolos approval tetap menumpuk di Firestore tanpa cara
+                // gampang untuk dibersihkan).
                 // Fetch reimbursements
                 const reimbursementSnapshot = await getDocs(query(
                     collection(db, 'reimbursement'),
                     or(
                         where('status', '==', 'Disetujui'),
-                        where('status', '==', 'Dibatalkan')
+                        where('status', '==', 'Dibatalkan'),
+                        where('status', '==', 'Ditolak')
                     )
                 ));
 
@@ -86,7 +93,8 @@ const ReportExport = () => {
                     collection(db, 'bonSementara'),
                     or(
                         where('status', '==', 'Disetujui'),
-                        where('status', '==', 'Dibatalkan')
+                        where('status', '==', 'Dibatalkan'),
+                        where('status', '==', 'Ditolak')
                     )
                 ));
 
@@ -95,7 +103,8 @@ const ReportExport = () => {
                     collection(db, 'lpj'),
                     or(
                         where('status', '==', 'Disetujui'),
-                        where('status', '==', 'Dibatalkan')
+                        where('status', '==', 'Dibatalkan'),
+                        where('status', '==', 'Ditolak')
                     )
                 ));
 
@@ -152,6 +161,22 @@ const ReportExport = () => {
         filterDocuments();
     }, [filters, data]);
 
+    // Bagian AN: `collectionName` yang dikirim tombol Hapus sebenarnya nama KEY
+    // di state `data` ('reimbursements', 'bonSementara', 'lpj'), BUKAN nama
+    // koleksi Firestore asli -- untuk 'reimbursements' dua nama itu BEDA
+    // (koleksi aslinya 'reimbursement', tunggal). Sebelumnya deleteDoc() dipanggil
+    // langsung pakai 'reimbursements' (plural) yang TIDAK PERNAH ada sebagai
+    // koleksi -- deleteDoc() Firestore tidak error kalau dokumennya tidak ada
+    // (operasi idempotent), jadi tombol Hapus untuk baris Reimbursement selama
+    // ini menampilkan "Dokumen berhasil dihapus!" dan menghilang dari tabel,
+    // TAPI dokumen aslinya di koleksi 'reimbursement' TIDAK PERNAH benar-benar
+    // terhapus. Map eksplisit di bawah memperbaiki ini.
+    const STATE_KEY_TO_COLLECTION = {
+        reimbursements: 'reimbursement',
+        bonSementara: 'bonSementara',
+        lpj: 'lpj'
+    }
+
     // --- PERUBAHAN 2: Fungsi untuk menghapus dokumen ---
     const handleDelete = async (docId, collectionName) => {
         // Tampilkan dialog konfirmasi sebelum menghapus
@@ -159,8 +184,10 @@ const ReportExport = () => {
 
         if (isConfirmed) {
             try {
-                // Hapus dokumen dari Firestore
-                await deleteDoc(doc(db, collectionName, docId));
+                // Hapus dokumen dari Firestore -- pakai nama koleksi ASLI, bukan
+                // key state (lihat catatan STATE_KEY_TO_COLLECTION di atas)
+                const firestoreCollection = STATE_KEY_TO_COLLECTION[collectionName] || collectionName
+                await deleteDoc(doc(db, firestoreCollection, docId));
 
                 // Perbarui state lokal untuk menghapus item dari UI secara real-time
                 setData(prevData => {
@@ -174,7 +201,7 @@ const ReportExport = () => {
                 alert("Dokumen berhasil dihapus!");
 
             } catch (error) {
-                console.error("Error deleting document: ", error);
+                console.error("Error deleting document: ", error?.code, error?.message, error);
                 alert("Gagal menghapus dokumen. Silakan coba lagi.");
             }
         }
@@ -230,8 +257,8 @@ const ReportExport = () => {
         'Kategori': item.kategori,
         'Total Biaya': item.totalBiaya,
         'Tanggal Pengajuan': formatDate(item.tanggalPengajuan),
-        'Tanggal Disetujui/Dibatalkan': formatDate(item.statusHistory[item.statusHistory.length - 1].timestamp),
-        'Disetujui/Dibatalkan Oleh': getApproverName(item.statusHistory),
+        'Tanggal Disetujui/Ditolak/Dibatalkan': formatDate(item.statusHistory[item.statusHistory.length - 1].timestamp),
+        'Disetujui/Ditolak/Dibatalkan Oleh': getApproverName(item.statusHistory),
         'Status': item.status
     }));
 
@@ -243,8 +270,8 @@ const ReportExport = () => {
             'Kategori': bs.kategori,
             'Jumlah BS': bs.jumlahBS,
             'Tanggal Pengajuan': formatDate(doc.tanggalPengajuan),
-            'Tanggal Disetujui/Dibatalkan': formatDate(doc.statusHistory[doc.statusHistory.length - 1].timestamp),
-            'Disetujui/Dibatalkan Oleh': getApproverName(doc.statusHistory),
+            'Tanggal Disetujui/Ditolak/Dibatalkan': formatDate(doc.statusHistory[doc.statusHistory.length - 1].timestamp),
+            'Disetujui/Ditolak/Dibatalkan Oleh': getApproverName(doc.statusHistory),
             'Status': doc.status
         }))
     );
@@ -256,8 +283,8 @@ const ReportExport = () => {
         'Kategori': item.kategori,
         'Total Biaya': item.totalBiaya,
         'Tanggal Pengajuan': formatDate(item.tanggalPengajuan),
-        'Tanggal Disetujui/Dibatalkan': formatDate(item.statusHistory[item.statusHistory.length - 1].timestamp),
-        'Disetujui/Dibatalkan Oleh': getApproverName(item.statusHistory),
+        'Tanggal Disetujui/Ditolak/Dibatalkan': formatDate(item.statusHistory[item.statusHistory.length - 1].timestamp),
+        'Disetujui/Ditolak/Dibatalkan Oleh': getApproverName(item.statusHistory),
         'Status': item.status
     }));
 
@@ -301,8 +328,8 @@ const ReportExport = () => {
             { wch: 15 }, // Kategori
             { wch: 15 }, // Total Biaya
             { wch: 20 }, // Tanggal Pengajuan
-            { wch: 20 }, // Tanggal Disetujui/Dibatalkan
-            { wch: 25 }, // Disetujui/Dibatalkan Oleh
+            { wch: 20 }, // Tanggal Disetujui/Ditolak/Dibatalkan
+            { wch: 25 }, // Disetujui/Ditolak/Dibatalkan Oleh
             { wch: 15 }  // Status
         ];
 
@@ -840,8 +867,8 @@ const ReportExport = () => {
                                                         <th className="px-4 py-2 border dark:border-gray-600">Kategori</th>
                                                         <th className="px-4 py-2 border dark:border-gray-600">Total Biaya</th>
                                                         <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
-                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Dibatalkan</th>
-                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Dibatalkan Oleh</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Ditolak/Dibatalkan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Ditolak/Dibatalkan Oleh</th>
                                                         <th className="p-2 border dark:border-gray-600 text-center">Status</th>
                                                         {/* Kolom Aksi */}
                                                         <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
@@ -877,10 +904,7 @@ const ReportExport = () => {
                                                                 {getApproverName(item.statusHistory)}
                                                             </td>
                                                             <td className="p-2 border dark:border-gray-600 text-center">
-                                                                <span className={`px-4 py-1 rounded-full text-xs font-medium ${item.status === 'Disetujui'
-                                                                    ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
-                                                                    : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
-                                                                    }`}>
+                                                                <span className={`px-4 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(item.status)}`}>
                                                                     {item.status}
                                                                 </span>
                                                             </td>
@@ -941,8 +965,8 @@ const ReportExport = () => {
                                                         <th className="px-4 py-2 border dark:border-gray-600">Kategori</th>
                                                         <th className="px-4 py-2 border dark:border-gray-600">Jumlah BS</th>
                                                         <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
-                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Dibatalkan</th>
-                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Dibatalkan Oleh</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Ditolak/Dibatalkan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Ditolak/Dibatalkan Oleh</th>
                                                         <th className="p-2 border dark:border-gray-600 text-center">Status</th>
                                                         <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
                                                     </tr>
@@ -977,10 +1001,7 @@ const ReportExport = () => {
                                                                 {getApproverName(bs.statusHistory)}
                                                             </td>
                                                             <td className="p-2 border dark:border-gray-600 text-center">
-                                                                <span className={`px-4 py-1 rounded-full text-xs font-medium ${bs.status === 'Disetujui'
-                                                                    ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
-                                                                    : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
-                                                                    }`}>
+                                                                <span className={`px-4 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(bs.status)}`}>
                                                                     {bs.status}
                                                                 </span>
                                                             </td>
@@ -1041,8 +1062,8 @@ const ReportExport = () => {
                                                         <th className="px-4 py-2 border dark:border-gray-600">Kategori</th>
                                                         <th className="px-4 py-2 border dark:border-gray-600">Total Biaya</th>
                                                         <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
-                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Dibatalkan</th>
-                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Dibatalkan Oleh</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Tanggal Disetujui/Ditolak/Dibatalkan</th>
+                                                        <th className="px-4 py-2 border dark:border-gray-600">Disetujui/Ditolak/Dibatalkan Oleh</th>
                                                         <th className="p-2 border dark:border-gray-600 text-center">Status</th>
                                                         <th className="p-2 border dark:border-gray-600 text-center">Aksi</th>
                                                     </tr>
@@ -1077,10 +1098,7 @@ const ReportExport = () => {
                                                                 {getApproverName(item.statusHistory)}
                                                             </td>
                                                             <td className="p-2 border dark:border-gray-600 text-center">
-                                                                <span className={`px-4 py-1 rounded-full text-xs font-medium ${item.status === 'Disetujui'
-                                                                    ? 'bg-green-200 text-green-800 border-[1px] border-green-600'
-                                                                    : 'bg-gray-300 text-gray-700 border-[1px] border-gray-600'
-                                                                    }`}>
+                                                                <span className={`px-4 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(item.status)}`}>
                                                                     {item.status}
                                                                 </span>
                                                             </td>

@@ -7,6 +7,7 @@ import { db, storage } from '../firebaseConfig'
 import { toast, ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { uploadPdfFile } from './uploadPdfFile'
+import { getEditHistoryEntries } from './editHistory'
 
 Font.register({
     family: 'Poppins',
@@ -212,6 +213,28 @@ const getApprovedReviewerNames = async (reimbursementDetail) => {
     return { reviewer1Name, reviewer2Name }
 }
 
+// Bagian AN: resolve nama editor (uid -> nama) untuk tiap entri riwayat edit
+// di statusHistory, dipanggil sebelum render (react-pdf tidak bisa async di
+// dalam komponen Document itu sendiri).
+const getEditHistoryWithNames = async (reimbursementDetail) => {
+    const entries = getEditHistoryEntries(reimbursementDetail?.statusHistory)
+    if (entries.length === 0) return []
+
+    return Promise.all(
+        entries.map(async (entry) => {
+            let actorName = 'N/A'
+            try {
+                const actorDocRef = doc(db, 'userDirectory', entry.actor)
+                const actorSnapshot = await getDoc(actorDocRef)
+                if (actorSnapshot.exists()) actorName = actorSnapshot.data().nama
+            } catch (error) {
+                console.error('Error fetching editor name:', error)
+            }
+            return { ...entry, actorName }
+        })
+    )
+}
+
 // Detail item yang sebenarnya diminta -- sebelumnya PDF cuma menampilkan
 // `item.jenis` (kategori, mis. "E-Toll"/"ATK"), TIDAK PERNAH menampilkan detail
 // aslinya (Item/Kebutuhan yang diisi user, atau Plat+Liter untuk baris BBM),
@@ -240,7 +263,7 @@ const getItemDetailText = (item, kategori) => {
     return item.item || ''
 }
 
-const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedValidator }) => {
+const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedValidator, editHistory = [] }) => {
     if (!reimbursementDetail || reimbursementDetail.status !== 'Disetujui') {
         return null
     }
@@ -535,6 +558,23 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                                 </Text>
                             </View>
                         </View>
+
+                        {/* Bagian AN: riwayat edit -- cuma tampil kalau dokumen
+                            ini pernah diedit admin setelah dibuat. */}
+                        {editHistory.length > 0 && (
+                            <View style={{ marginTop: 8, borderTop: 1, borderTopColor: '#000', paddingTop: 4, paddingLeft: 4 }}>
+                                <Text style={{ fontWeight: 'bold', marginBottom: 2 }}>
+                                    Riwayat Edit ({editHistory.length}x):
+                                </Text>
+                                {editHistory.map((entry, index) => (
+                                    <Text key={index} style={{ marginBottom: 2 }}>
+                                        {new Date(entry.timestamp).toLocaleDateString('id-ID', {
+                                            day: '2-digit', month: '2-digit', year: 'numeric'
+                                        })} -- {entry.actorName} ({entry.status.replace('Data Diubah oleh ', '')}){entry.reason ? `: ${entry.reason}` : ''}
+                                    </Text>
+                                ))}
+                            </View>
+                        )}
                     </View>
                 </View>
             </Page>
@@ -553,6 +593,7 @@ const generateReimbursementPDF = async (reimbursementDetail) => {
         // Ambil nama reviewer sebelum PDF dirender
         const approvedReviewers = await getApprovedReviewerNames(reimbursementDetail)
         const approvedValidator = await getApprovedValidatorName(reimbursementDetail)
+        const editHistory = await getEditHistoryWithNames(reimbursementDetail)
 
         // Buat dokumen PDF
         const pdfBlob = await pdf(
@@ -560,6 +601,7 @@ const generateReimbursementPDF = async (reimbursementDetail) => {
                 reimbursementDetail={reimbursementDetail}
                 approvedReviewers={approvedReviewers}
                 approvedValidator={approvedValidator}
+                editHistory={editHistory}
             />
         ).toBlob()
 

@@ -7,6 +7,7 @@ import { db, storage } from '../firebaseConfig'
 import { toast, ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { uploadPdfFile } from './uploadPdfFile'
+import { getEditHistoryEntries } from './editHistory'
 
 Font.register({
     family: 'Poppins',
@@ -237,7 +238,29 @@ const getApprovedReviewerNames = async (lpjDetail) => {
     return { reviewer1Name, reviewer2Name }
 }
 
-const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator }) => {
+// Bagian AN: resolve nama editor (uid -> nama) untuk tiap entri riwayat edit
+// di statusHistory, dipanggil sebelum render (react-pdf tidak bisa async di
+// dalam komponen Document itu sendiri).
+const getEditHistoryWithNames = async (lpjDetail) => {
+    const entries = getEditHistoryEntries(lpjDetail?.statusHistory)
+    if (entries.length === 0) return []
+
+    return Promise.all(
+        entries.map(async (entry) => {
+            let actorName = 'N/A'
+            try {
+                const actorDocRef = doc(db, 'userDirectory', entry.actor)
+                const actorSnapshot = await getDoc(actorDocRef)
+                if (actorSnapshot.exists()) actorName = actorSnapshot.data().nama
+            } catch (error) {
+                console.error('Error fetching editor name:', error)
+            }
+            return { ...entry, actorName }
+        })
+    )
+}
+
+const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory = [] }) => {
     if (!lpjDetail || lpjDetail.status !== 'Disetujui') {
         return null
     }
@@ -907,6 +930,23 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator }) => {
                                 </Text>
                             </View>
                         </View>
+
+                        {/* Bagian AN: riwayat edit -- cuma tampil kalau dokumen
+                            ini pernah diedit admin setelah dibuat. */}
+                        {editHistory.length > 0 && (
+                            <View style={{ marginTop: 8, borderTop: 1, borderTopColor: '#000', paddingTop: 4 }}>
+                                <Text style={{ fontWeight: 'bold', marginBottom: 2 }}>
+                                    Riwayat Edit ({editHistory.length}x):
+                                </Text>
+                                {editHistory.map((entry, index) => (
+                                    <Text key={index} style={{ marginBottom: 2 }}>
+                                        {new Date(entry.timestamp).toLocaleDateString('id-ID', {
+                                            day: '2-digit', month: '2-digit', year: 'numeric'
+                                        })} -- {entry.actorName} ({entry.status.replace('Data Diubah oleh ', '')}){entry.reason ? `: ${entry.reason}` : ''}
+                                    </Text>
+                                ))}
+                            </View>
+                        )}
                     </View>
                 </View>
             </Page>
@@ -925,10 +965,11 @@ const generateLpjPDF = async (lpjDetail) => {
         // Ambil nama reviewer sebelum PDF dirender
         const approvedReviewers = await getApprovedReviewerNames(lpjDetail)
         const approvedValidator = await getApprovedValidatorName(lpjDetail)
+        const editHistory = await getEditHistoryWithNames(lpjDetail)
 
         // Buat dokumen PDF
         const pdfBlob = await pdf(
-            <LpjPDF lpjDetail={lpjDetail} approvedReviewers={approvedReviewers} approvedValidator={approvedValidator} />
+            <LpjPDF lpjDetail={lpjDetail} approvedReviewers={approvedReviewers} approvedValidator={approvedValidator} editHistory={editHistory} />
         ).toBlob()
 
         const sanitizedKategori = lpjDetail.kategori.replace(/\//g, '_')

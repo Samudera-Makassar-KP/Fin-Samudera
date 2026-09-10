@@ -36,6 +36,9 @@ const RbsUmumForm = () => {
     })
 
     const [isSubmitting, setIsSubmitting] = useState(false)
+    // Bagian AN: catatan wajib diisi editor saat mengedit pengajuan milik
+    // orang lain -- jejak "kesalahan apa yang diperbaiki" di statusHistory.
+    const [editNote, setEditNote] = useState('')
 
     const initialReimbursementState = {
         jenis: '',
@@ -577,6 +580,8 @@ const RbsUmumForm = () => {
                 missingFields.push('File Lampiran')
             }
 
+            if (isEditMode && !editNote.trim()) missingFields.push('Catatan Perubahan')
+
             if (missingFields.length > 0) {
                 missingFields.forEach((field) => {
                     toast.warning(
@@ -652,15 +657,20 @@ const RbsUmumForm = () => {
             if (isEditMode) {
                 // JIKA EDIT: Gunakan updateDoc
                 const reimbursementRef = doc(db, 'reimbursement', editData.id)
-                
+
+                // Bagian AN: userData.uid di mode edit adalah uid PENGAJU ASLI,
+                // bukan uid editor yang login -- pakai localStorage langsung.
+                const editorUid = localStorage.getItem('userUid')
+                const editorRole = localStorage.getItem('userRole') || 'Admin'
+
                 let updateData = {
                     reimbursements: reimbursementData.reimbursements,
                     totalBiaya: reimbursementData.totalBiaya,
                     statusHistory: arrayUnion({
-                        status: 'Data Diubah oleh Super Admin',
+                        status: `Data Diubah oleh ${editorRole}`,
                         timestamp: new Date().toISOString(),
-                        actor: userData.uid,
-                        reason: 'Super Admin mengedit detail form GA/Umum'
+                        actor: editorUid,
+                        reason: editNote.trim()
                     })
                 }
 
@@ -1111,11 +1121,25 @@ const RbsUmumForm = () => {
                     </span>
                 </div>
 
+                {isEditMode && (
+                    <div className="mt-4">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                            Catatan Perubahan (Alasan Edit) <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none h-20 px-4 py-2"
+                            placeholder="Jelaskan kesalahan/perubahan yang diperbaiki pada pengajuan ini"
+                            value={editNote}
+                            onChange={(e) => setEditNote(e.target.value)}
+                        />
+                    </div>
+                )}
+
                 <hr className="border-gray-300 dark:border-gray-600 my-6" />
 
                 <div className="flex justify-end mt-6">
                     <button
-                        className={`w-full xl:w-fit rounded text-white py-3 
+                        className={`w-full xl:w-fit rounded text-white py-3
                         ${isSubmitting ? 'px-8 bg-red-700 cursor-not-allowed' : 'px-16 bg-red-600 hover:bg-red-700 hover:text-gray-200'}
                         flex items-center justify-center relative`}
                         onClick={handleSubmit}
