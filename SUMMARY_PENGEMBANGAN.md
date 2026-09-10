@@ -1697,6 +1697,6 @@ Error submitting bon sementara: FirebaseError: Missing or insufficient permissio
 
 - [x] `SessionTimeoutHandler.js`: `useEffect` baru dengan `onAuthStateChanged` -- deteksi sesi Auth invalid & localStorage stale, auto logout + redirect + toast informatif
 - [x] `CI=true npm run build` sukses, 92 test frontend tetap PASS (perubahan di luar util agregasi, tidak ada test baru untuk komponen ini -- SessionTimeoutHandler.js belum ada test file, sama seperti sebelumnya)
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-10, diverifikasi teks "Sesi Anda telah berakhir" ada di bundle live
 - [ ] Tes manual: kalau memungkinkan, simulasikan sesi invalid (mis. hapus lalu buat ulang akun user tes di Manage Users, biarkan browser lama tetap login) -- konfirmasi muncul toast "Sesi Anda telah berakhir" & redirect otomatis ke login, BUKAN silent failure seperti insiden ini
 - [ ] Follow-up dengan Utami Soebagyo & Reza Rahmat: minta logout manual + login ulang kalau belum, konfirmasi submit BS sudah normal setelah itu
