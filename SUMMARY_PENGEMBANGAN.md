@@ -1799,7 +1799,7 @@ Ini menjelaskan kenapa errornya generik & konsisten: BUKAN soal siapa yang submi
 - [x] `FormBs.jsx`: log `error.code`/`error.message` terpisah di catch block `handleSubmit`
 - [x] `CI=true npm test -- --watchAll=false` -- 103 test tetap PASS (tidak ada test baru, perubahan di rules & logging tidak tercakup Jest)
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (rules + hosting)
+- [x] Deploy ke produksi (rules + hosting) — sukses 2026-09-10 (bareng Bagian AM/AN, satu siklus deploy)
 - [ ] Tes manual: Reza Rahmat/Utami Soebagyo coba submit BS untuk PT Samudera Agencies Indonesia lagi, konfirmasi berhasil
 - [ ] Kalau MASIH gagal setelah deploy ini: klik panah "▶ Error submitting bon sementara" di Console untuk expand, catat `error.code` yang sekarang ikut ter-log -- itu akan mempersempit ke penyebab lain di luar teori counter ini
 
@@ -1827,7 +1827,7 @@ Ditelusuri `canCancelOwnWorkflow()`/`ownerCancelKeysOnly()` di `firestore.rules`
 - [x] Tombol "Hapus Permanen" (Super Admin) di tabel Semua Status `BsCheck.jsx`/`ReimbursementCheck.jsx`/`LpjBsCheck.jsx`
 - [x] `CI=true npm test -- --watchAll=false` -- 103 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-10 (bareng Bagian AL/AN, satu siklus deploy)
 - [ ] Tes manual: Super Admin coba Hapus 1 pengajuan test di masing-masing modul (BS/RBS/LPJ), konfirmasi hilang dari list & dari Firestore
 - [ ] Tes manual: coba ulang pembatalan yang gagal sebelumnya (BS26090350000501 atau buat pengajuan test baru), kalau MASIH gagal, expand "▶ Error cancelling..." di Console dan kirim `error.code`/`error.message` yang sekarang ter-log supaya bisa didiagnosis pasti
 
@@ -1864,6 +1864,6 @@ Saat menelusuri fitur di atas, ditemukan 2 bug lama yang tidak terlihat dari lua
 - [x] 3 file PDF: blok Riwayat Edit di footer (kondisional)
 - [x] `CI=true npm test -- --watchAll=false` -- 108 test PASS (103 lama + 5 baru)
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi teks "Riwayat Edit", "Hapus Permanen", "Catatan Perubahan", "Disetujui/Ditolak/Dibatalkan" ada di bundle live
 - [ ] Tes manual: buka "Ekspor Laporan Pengajuan", konfirmasi status Ditolak muncul & tombol Hapus untuk Reimbursement benar-benar menghapus dari Firestore (bukan cuma dari tampilan)
 - [ ] Tes manual: Admin edit 1 pengajuan (via BsCheck/ReimbursementCheck/LpjBsCheck), isi Catatan Perubahan, konfirmasi kartu "Riwayat Edit" muncul di halaman Detail dengan nama editor yang BENAR (bukan nama pengaju), lalu cetak PDF dan konfirmasi blok Riwayat Edit ikut muncul di situ
