@@ -2001,5 +2001,5 @@ Setelah bukti pengembalian berhasil diupload, Super Admin mengedit LPJ yang sama
 - [x] Audit semua 18 route berpagar `allowedRoles` di `App.jsx` -- dikonfirmasi `/dashboard` satu-satunya yang bermasalah, tidak ada route lain yang kena celah serupa
 - [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.9553ddee.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: Super Admin edit LPJ/BS/RBS siapa pun, submit, konfirmasi berhasil & diarahkan ke Dashboard (bukan 404)
