@@ -1917,6 +1917,6 @@ Bagian AO menambahkan `transaction.get(doc(db, 'displayIdOwners', nomorBS))` unt
 - [x] `FormBs.jsx`: ganti pendekatan cek-dulu (baca displayIdOwners, DILARANG rule) jadi coba-tulis-lalu-retry-di-luar-transaksi (tidak baca displayIdOwners sama sekali)
 - [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.e8077bc8.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: submit BS untuk PT Samudera Agencies Indonesia lagi -- kalau teori benturan displayIdOwners ini benar, seharusnya BERHASIL sekarang (nomor otomatis lompat ke yang belum terpakai)
 - [ ] Kalau MASIH gagal: kirim `error.code`/`error.message` baru dari Console -- kalau bukan lagi soal displayIdOwners, kemungkinan besar bukan soal nomor dokumen sama sekali, perlu ditelusuri dari sudut lain (mis. field lain di `bonSementaraData` yang gagal validasi rule `validWorkflowCreate`)
