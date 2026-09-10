@@ -1,4 +1,4 @@
-import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels, listCategoryLineItems, listBbmLineItems } from './rekapanAggregation'
+import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels, listCategoryLineItems, listBbmLineItems, listAmbiguousBbmMentions } from './rekapanAggregation'
 
 const MJS = 'PT Makassar Jaya Samudera'
 const SAG = 'PT Samudera Agencies Indonesia'
@@ -610,5 +610,56 @@ describe('listBbmLineItems - platOverride (Bagian AG)', () => {
         }
         const result = listBbmLineItems([makeReimbursement('doc1', MJS, '')], [], { year: 2026, sharingClassification: classification })
         expect(result[0].plat).toBe('DD 1273 XBO')
+    })
+})
+
+describe('listAmbiguousBbmMentions (Bagian AJ)', () => {
+    const makeReimbursement = (id, unit, biaya, jenis) => ({
+        id,
+        status: 'Disetujui',
+        user: { unit },
+        reimbursements: [
+            { jenis, biaya, tanggal: '2026-01-10' }
+        ]
+    })
+
+    test('item non-BBM yang keterangannya mengandung "bbm" (case-insensitive) ikut terdaftar', () => {
+        const docs = [makeReimbursement('doc1', MJS, 200000, '3.BIAYA LOGISTIK & BBM')]
+        const result = listAmbiguousBbmMentions(docs, [], { year: 2026 })
+
+        expect(result).toHaveLength(1)
+        expect(result[0].jenis).toBe('3.BIAYA LOGISTIK & BBM')
+        expect(result[0].category).toBe('3.BIAYA LOGISTIK & BBM')
+    })
+
+    test('kata "bbm" huruf kecil/campuran tetap terdeteksi', () => {
+        const docs = [makeReimbursement('doc1', MJS, 200000, 'Biaya bensin/Bbm kendaraan dinas')]
+        const result = listAmbiguousBbmMentions(docs, [], { year: 2026 })
+        expect(result).toHaveLength(1)
+    })
+
+    test('item BBM asli (prefix "BBM ") TIDAK ikut -- itu jalur listBbmLineItems, bukan ini', () => {
+        const docs = [makeReimbursement('doc1', MJS, 200000, 'BBM Pertalite')]
+        const result = listAmbiguousBbmMentions(docs, [], { year: 2026 })
+        expect(result).toHaveLength(0)
+    })
+
+    test('item yang tidak menyebut "bbm" sama sekali tidak ikut', () => {
+        const docs = [makeReimbursement('doc1', MJS, 200000, 'ATK')]
+        const result = listAmbiguousBbmMentions(docs, [], { year: 2026 })
+        expect(result).toHaveLength(0)
+    })
+
+    test('item yang labelnya SUDAH masuk grup "Kelola Kategori" (mis. "BBM RANDIS") tidak ikut lagi -- sudah dikurasi manual', () => {
+        const docs = [makeReimbursement('doc1', MJS, 200000, '3.BIAYA LOGISTIK & BBM')]
+        const categoryGroups = [{ label: 'BBM RANDIS', members: ['3.BIAYA LOGISTIK & BBM'] }]
+        const result = listAmbiguousBbmMentions(docs, [], { year: 2026, categoryGroups })
+        expect(result).toHaveLength(0)
+    })
+
+    test('key sama formatnya dengan listBbmLineItems/listCategoryLineItems, kompatibel dengan koleksi rekapanBbmSharing yang sama', () => {
+        const docs = [makeReimbursement('doc1', MJS, 200000, 'Biaya BBM randis')]
+        const result = listAmbiguousBbmMentions(docs, [], { year: 2026 })
+        expect(result[0].key).toBe(buildBbmItemKey('reimbursement', 'doc1', 0))
     })
 })

@@ -1700,3 +1700,36 @@ Error submitting bon sementara: FirebaseError: Missing or insufficient permissio
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-09-10, diverifikasi teks "Sesi Anda telah berakhir" ada di bundle live
 - [ ] Tes manual: kalau memungkinkan, simulasikan sesi invalid (mis. hapus lalu buat ulang akun user tes di Manage Users, biarkan browser lama tetap login) -- konfirmasi muncul toast "Sesi Anda telah berakhir" & redirect otomatis ke login, BUKAN silent failure seperti insiden ini
 - [ ] Follow-up dengan Utami Soebagyo & Reza Rahmat: minta logout manual + login ulang kalau belum, konfirmasi submit BS sudah normal setelah itu
+
+---
+
+# BAGIAN AJ — Panel "Tinjau Item BBM Ambigu" (2026-09-10)
+
+## 46.1 Permintaan User
+
+Setelah paham kenapa "BBM RANDIS" (grup custom hasil "Kelola Kategori") tidak punya data Plat (Bagian AI sebelumnya, penjelasan: item itu dari RTG/ATK/GA-Umum yang cuma MENYEBUT "BBM" di keterangan, bukan pengajuan lewat form BBM resmi), user minta:
+1. Item semacam itu (RTG/ATK/LPJ lain yang keterangannya menyebut "BBM") dipisahkan/di-highlight, bukan otomatis nyampur begitu saja sebagai kategori biasa.
+2. Rekapan BBM idealnya cuma dari form BBM resmi ATAU LPJ campuran yang penulisan BBM-nya jelas.
+3. Highlight keterangan asli (lokasi/SPBU dsb) supaya gampang dibaca.
+4. Ada breakdown terpisah supaya Admin bisa meninjau satu-satu: masukkan ke Rekapan ke Unit Bisnis mana, atau tidak perlu.
+
+Diklarifikasi lewat 3 pertanyaan sebelum eksekusi: (1) panel BARU terpisah dari "Kelola Kategori" -- dipilih; (2) highlight cukup tampilkan teks keterangan asli apa adanya, TIDAK perlu parsing/ekstraksi lokasi otomatis -- dipilih; (3) grup "BBM RANDIS" yang sudah ada dipertahankan apa adanya, panel baru berlaku untuk item yang BELUM pernah digabung ke grup mana pun -- dipilih.
+
+## 46.2 Implementasi
+
+- **`rekapanAggregation.js`**: fungsi baru `listAmbiguousBbmMentions(reimbursementDocs, lpjDocs, { year, categoryGroups })` -- daftar item non-BBM (kategori apa pun) yang `item.jenis`/`item.namaItem` mengandung kata "bbm" (regex `/bbm/i`, case-insensitive) TAPI belum tergabung ke grup kategori mana pun (`canonicalizeCategoryLabel(rawLabel, categoryGroups) === rawLabel`, artinya masih kategori mentahnya sendiri). Item BBM asli (prefix "BBM ") otomatis TIDAK ikut (beda jalur, `listBbmLineItems`). `key` SAMA formatnya dengan fungsi listing lain (`buildBbmItemKey`), jadi klasifikasinya (Dibagi/Kecualikan/Custom Split) langsung dipakai `aggregateByCategory` TANPA perubahan apa pun di situ -- fungsi itu sudah generik lintas kategori sejak Bagian AE.
+- **`RekapanUnitBisnis.jsx`**: panel/modal baru **"Tinjau Item BBM Ambigu"**, tombol ke-4 di kartu "Pengaturan Rekapan" (dengan badge angka jumlah item yang BELUM ditinjau). Modalnya reuse 100% `renderClassificationRow` yang sama dipakai panel "Kelola Sharing" & drill-down (Status dropdown + checkbox split) -- cuma daftar & filter unitnya yang beda (`allAmbiguousBbmItems`/`visibleAmbiguousBbmItems`/`pagedAmbiguousBbmItems`, state `triageUnitFilter`/`showReviewedTriageItems`/`triagePage` terpisah dari panel Kelola Sharing supaya tidak saling mengganggu).
+- `renderClassificationRow` menerima parameter opsional baru `options.highlightJenis` -- kalau `true`, kolom Jenis dibungkus badge kuning (highlight visual, BUKAN parsing/ekstraksi teks) supaya keterangan asli (lokasi SPBU dsb, apa pun yang diketik user) langsung menonjol. Dipakai HANYA di panel triage ini; panel "Kelola Sharing" & drill-down tetap tampilan biasa (tidak berubah).
+- **Efek menandai status di sini**: memilih "Dibagi ke unit lain" untuk 1 item RTG di panel ini MENGALIHKAN porsi biayanya ke Unit Bisnis yang dicentang **di tabel kategori aslinya** (mis. tabel "RTG"), BUKAN masuk ke tabel "BBM (Form Resmi)" -- konsisten dengan penjelasan Bagian AH bahwa kedua sumber data itu terpisah secara struktural, TIDAK diubah oleh fitur ini.
+- Grup "BBM RANDIS" (dan grup kategori custom lain) TIDAK disentuh sama sekali -- anggotanya otomatis TIDAK muncul di panel triage baru ini (sudah dianggap terkurasi).
+
+## 46.3 Task Development — Bagian AJ
+
+- [x] `rekapanAggregation.js`: fungsi baru `listAmbiguousBbmMentions`
+- [x] `RekapanUnitBisnis.jsx`: panel/modal "Tinjau Item BBM Ambigu", tombol ke-4 + badge jumlah belum ditinjau di "Pengaturan Rekapan"
+- [x] `renderClassificationRow`: parameter opsional `options.highlightJenis` untuk badge kuning di kolom Jenis
+- [x] Test baru: 6 test `listAmbiguousBbmMentions` (deteksi kata "bbm", case-insensitive, exclude item BBM asli, exclude yang tidak menyebut bbm, exclude yang sudah masuk grup kategori, format key konsisten) -- total 98 test frontend, semua PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: buka "Tinjau Item BBM Ambigu", konfirmasi item yang sudah masuk grup "BBM RANDIS" TIDAK muncul lagi di sini (sudah terkurasi), sementara item RTG/ATK lain yang menyebut "bbm" tapi belum pernah digabung MUNCUL dengan keterangan di-highlight kuning
+- [ ] Tes manual: tandai 1 item di panel ini "Dibagi ke unit lain" ke Unit Bisnis tertentu, konfirmasi tabel kategori ASLINYA (bukan tabel BBM) yang berubah menampilkan porsi share tersebut

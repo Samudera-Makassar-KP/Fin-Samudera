@@ -530,3 +530,90 @@ export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, catego
 
     return items.sort((a, b) => a.month - b.month)
 }
+
+// Sebagian item RTG/ATK/GA-Umum/LPJ lain diisi bebas dengan kata "BBM" di
+// keterangannya (mis. "3.BIAYA LOGISTIK & BBM") -- BUKAN pengajuan lewat form
+// BBM resmi (isBbmValue mensyaratkan prefix persis "BBM ", jadi "BBM" tanpa
+// spasi tidak pernah kena), jadi selama ini nyasar begitu saja sebagai
+// kategori RTG/ATK biasa tanpa ada yang menyadari perlu ditinjau apakah itu
+// genuinely biaya BBM yang perlu ikut Rekapan BBM & ke Unit Bisnis mana.
+const BBM_MENTION_PATTERN = /bbm/i
+
+/**
+ * Daftar MENTAH item non-BBM (kategori apa pun) yang keterangannya (`item.jenis`/
+ * `item.namaItem`) mengandung kata "bbm" (case-insensitive) TAPI BELUM pernah
+ * digabung ke grup kategori mana pun lewat "Kelola Kategori" (Bagian AA) --
+ * begitu sebuah label sudah masuk grup (mis. "BBM RANDIS"), dianggap sudah
+ * dikurasi manual dan tidak perlu ditinjau ulang di sini lagi (Bagian AJ,
+ * panel "Tinjau Item BBM Ambigu" di RekapanUnitBisnis.jsx).
+ *
+ * `key` SAMA formatnya dengan `listBbmLineItems`/`listCategoryLineItems`
+ * (`buildBbmItemKey`), disimpan di koleksi Firestore YANG SAMA
+ * (`rekapanBbmSharing`) -- menandai baris di sini lewat Status
+ * (Dibagi/Kecualikan/Default) dipakai LANGSUNG oleh `aggregateByCategory`
+ * tanpa perubahan apa pun (fungsi itu sudah generik lintas kategori sejak
+ * Bagian AE), jadi menandai "Dibagi ke Unit Bisnis X" di sini otomatis
+ * mengalihkan porsi biayanya ke unit itu di tabel kategori aslinya (RTG/ATK/
+ * dst -- BUKAN masuk ke tabel "BBM (Form Resmi)" yang sumber datanya
+ * memang terpisah, lihat Bagian AH).
+ *
+ * @returns {Array<{ key: string, docType: string, docId: string, itemIndex: number, unit: string, month: number, category: string, jenis: string, plat: null, biayaTotal: number }>}
+ */
+export function listAmbiguousBbmMentions(reimbursementDocs, lpjDocs, { year, categoryGroups } = {}) {
+    const items = []
+
+    const isEligible = (rawLabel) => {
+        if (!rawLabel || isBbmValue(rawLabel)) return false
+        if (!BBM_MENTION_PATTERN.test(rawLabel)) return false
+        return canonicalizeCategoryLabel(rawLabel, categoryGroups) === rawLabel
+    }
+
+    ;(reimbursementDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        const unit = doc.user?.unit
+
+        ;(doc.reimbursements || []).forEach((item, itemIndex) => {
+            if (!isEligible(item.jenis)) return
+            const dateParts = resolveReimbursementItemDate(item, doc)
+            if (!dateParts || dateParts.year !== year) return
+            items.push({
+                key: buildBbmItemKey('reimbursement', doc.id, itemIndex),
+                docType: 'reimbursement',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                category: item.jenis,
+                jenis: item.jenis,
+                plat: null,
+                biayaTotal: item.biaya || 0
+            })
+        })
+    })
+
+    ;(lpjDocs || []).forEach((doc) => {
+        if (doc.status !== 'Disetujui') return
+        const unit = doc.user?.unit
+        const dateParts = resolveLpjDocDate(doc)
+        if (!dateParts || dateParts.year !== year) return
+
+        ;(doc.lpj || []).forEach((item, itemIndex) => {
+            if (!isEligible(item.namaItem)) return
+            const jumlahBiaya = item.jumlahBiaya ?? (Number(item.biaya) || 0) * (Number(item.jumlah) || 0)
+            items.push({
+                key: buildBbmItemKey('lpj', doc.id, itemIndex),
+                docType: 'lpj',
+                docId: doc.id,
+                itemIndex,
+                unit,
+                month: dateParts.month,
+                category: item.namaItem,
+                jenis: item.namaItem,
+                plat: null,
+                biayaTotal: jumlahBiaya
+            })
+        })
+    })
+
+    return items.sort((a, b) => a.month - b.month)
+}

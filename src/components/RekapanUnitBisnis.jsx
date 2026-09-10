@@ -17,7 +17,8 @@ import {
     aggregateBbm,
     listBbmLineItems,
     listCategoryLineItems,
-    listCategoryRawLabels
+    listCategoryRawLabels,
+    listAmbiguousBbmMentions
 } from '../utils/rekapanAggregation'
 import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from '../constants/rekapanSharing'
 
@@ -425,6 +426,39 @@ const RekapanUnitBisnis = () => {
 
     const totalSharingPages = Math.max(1, Math.ceil(visibleShareableLineItems.length / SHARING_PAGE_SIZE))
 
+    // Panel "Tinjau Item BBM Ambigu" (Bagian AJ, Admin/Super Admin only) --
+    // item RTG/ATK/GA-Umum/LPJ lain yang keterangannya menyebut "bbm" tapi
+    // BELUM pernah digabung ke grup mana pun lewat "Kelola Kategori" (grup
+    // yang sudah ada, mis. "BBM RANDIS", TETAP dipertahankan apa adanya --
+    // tidak dibongkar, lihat listAmbiguousBbmMentions). Menandai Status di
+    // sini (Tampilkan/Dibagi/Kecualikan) memakai state & fungsi PERSIS sama
+    // dengan panel "Kelola Sharing" (customEditKey, saveClassification, dst)
+    // -- cuma daftar item & filternya yang beda, supaya tidak duplikat logic.
+    const [isTriagingBbmMentions, setIsTriagingBbmMentions] = useState(false)
+    const [triageUnitFilter, setTriageUnitFilter] = useState('')
+    const [showReviewedTriageItems, setShowReviewedTriageItems] = useState(false)
+    const [triagePage, setTriagePage] = useState(1)
+
+    const allAmbiguousBbmItems = useMemo(() => {
+        return listAmbiguousBbmMentions(reimbursementDocs, lpjDocs, { year: selectedYear.value, categoryGroups })
+    }, [reimbursementDocs, lpjDocs, selectedYear, categoryGroups])
+
+    const visibleAmbiguousBbmItems = useMemo(() => {
+        return allAmbiguousBbmItems.filter((item) => {
+            if (triageUnitFilter && item.unit !== triageUnitFilter) return false
+            const isReviewed = Boolean(sharingClassification[item.key])
+            if (!showReviewedTriageItems && isReviewed) return false
+            return true
+        })
+    }, [allAmbiguousBbmItems, triageUnitFilter, showReviewedTriageItems, sharingClassification])
+
+    const pagedAmbiguousBbmItems = useMemo(() => {
+        const start = (triagePage - 1) * SHARING_PAGE_SIZE
+        return visibleAmbiguousBbmItems.slice(start, start + SHARING_PAGE_SIZE)
+    }, [visibleAmbiguousBbmItems, triagePage])
+
+    const totalTriagePages = Math.max(1, Math.ceil(visibleAmbiguousBbmItems.length / SHARING_PAGE_SIZE))
+
     const saveClassification = async (key, data) => {
         setSavingItemKey(key)
         try {
@@ -597,7 +631,8 @@ const RekapanUnitBisnis = () => {
         }
     }
 
-    const renderClassificationRow = (item) => {
+    const renderClassificationRow = (item, options = {}) => {
+        const { highlightJenis = false } = options
         const classification = sharingClassification[item.key]
         const status = getItemStatus(item)
         const isEditingCustom = customEditKey === item.key
@@ -628,7 +663,13 @@ const RekapanUnitBisnis = () => {
                             </div>
                         ) : (item.plat || '-')}
                     </td>
-                    <td className="px-3 py-2">{item.jenis}</td>
+                    <td className="px-3 py-2">
+                        {highlightJenis ? (
+                            <span className="inline-block bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded font-medium">
+                                {item.jenis}
+                            </span>
+                        ) : item.jenis}
+                    </td>
                     <td className="px-3 py-2 text-right">{item.biayaTotal.toLocaleString('id-ID')}</td>
                     <td className="px-3 py-2">
                         <select
@@ -1387,7 +1428,7 @@ const RekapanUnitBisnis = () => {
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                 Khusus Admin/Super Admin -- tidak memengaruhi tampilan Validator.
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                                 <button
                                     type="button"
                                     onClick={startEditHeadcount}
@@ -1419,6 +1460,24 @@ const RekapanUnitBisnis = () => {
                                     <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Kelola Kategori</p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                         Gabungkan label kategori yang mirip jadi 1 baris Rekapan.
+                                    </p>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsTriagingBbmMentions(true)}
+                                    disabled={isClassificationLoading}
+                                    className="text-left border dark:border-gray-600 rounded-md p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50 transition-colors"
+                                >
+                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100">
+                                        Tinjau Item BBM Ambigu
+                                        {allAmbiguousBbmItems.filter((item) => !sharingClassification[item.key]).length > 0 && (
+                                            <span className="ml-2 inline-block bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full align-middle">
+                                                {allAmbiguousBbmItems.filter((item) => !sharingClassification[item.key]).length}
+                                            </span>
+                                        )}
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Item RTG/ATK/dst yang keterangannya menyebut "BBM" tapi belum dikelompokkan/ditinjau.
                                     </p>
                                 </button>
                             </div>
@@ -1736,6 +1795,116 @@ const RekapanUnitBisnis = () => {
                                         </button>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {isTriagingBbmMentions && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setIsTriagingBbmMentions(false)} />
+                    <div className="fixed z-50 inset-0 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[85vh] overflow-hidden flex flex-col">
+                            <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">
+                                        Tinjau Item BBM Ambigu
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Item dari kategori lain (RTG/ATK/GA-Umum/LPJ) yang keterangannya menyebut kata
+                                        "BBM" tapi BUKAN pengajuan lewat form BBM resmi, dan belum pernah digabung ke
+                                        grup mana pun lewat "Kelola Kategori". Kolom Jenis di-highlight supaya
+                                        keterangan asli (lokasi/SPBU, dsb) langsung terlihat -- tandai <strong>Dibagi</strong>{' '}
+                                        ke Unit Bisnis yang benar kalau itu genuinely BBM, <strong>Kecualikan</strong>{' '}
+                                        kalau di luar scope Biaya GA, atau biarkan <strong>Tampilkan (default)</strong>{' '}
+                                        kalau memang bukan BBM (tetap tercatat di kategori aslinya, tidak berubah).
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsTriagingBbmMentions(false)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-2 flex-none"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="overflow-auto p-4">
+                                <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
+                                    <select
+                                        value={triageUnitFilter}
+                                        onChange={(e) => { setTriageUnitFilter(e.target.value); setTriagePage(1) }}
+                                        className="border dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    >
+                                        <option value="">Semua Unit Bisnis</option>
+                                        {BUSINESS_UNITS.map((u) => (
+                                            <option key={u.value} value={u.value}>{u.label}</option>
+                                        ))}
+                                    </select>
+                                    <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={showReviewedTriageItems}
+                                            onChange={(e) => { setShowReviewedTriageItems(e.target.checked); setTriagePage(1) }}
+                                            className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                        />
+                                        Tampilkan yang sudah ditinjau juga
+                                    </label>
+                                    <span className="text-gray-400">
+                                        {visibleAmbiguousBbmItems.length} baris
+                                    </span>
+                                </div>
+
+                                <div className="overflow-x-auto border dark:border-gray-600 rounded-md">
+                                    <table className="w-full text-sm border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-100 dark:bg-gray-700">
+                                                <th className="px-3 py-2 text-left">Bulan</th>
+                                                <th className="px-3 py-2 text-left">Unit Pengaju</th>
+                                                <th className="px-3 py-2 text-left">Kategori</th>
+                                                <th className="px-3 py-2 text-left">Plat</th>
+                                                <th className="px-3 py-2 text-left">Jenis</th>
+                                                <th className="px-3 py-2 text-right">Biaya</th>
+                                                <th className="px-3 py-2 text-left">Status</th>
+                                                <th className="px-3 py-2 text-left">Split</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {pagedAmbiguousBbmItems.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={8} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">
+                                                        Tidak ada item untuk filter ini.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {pagedAmbiguousBbmItems.map((item) => renderClassificationRow(item, { highlightJenis: true }))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {totalTriagePages > 1 && (
+                                    <div className="flex items-center justify-center gap-3 mt-3 text-sm">
+                                        <button
+                                            type="button"
+                                            onClick={() => setTriagePage((p) => Math.max(1, p - 1))}
+                                            disabled={triagePage === 1}
+                                            className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
+                                        >
+                                            Sebelumnya
+                                        </button>
+                                        <span className="text-gray-600 dark:text-gray-300">
+                                            Halaman {triagePage} / {totalTriagePages}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setTriagePage((p) => Math.min(totalTriagePages, p + 1))}
+                                            disabled={triagePage === totalTriagePages}
+                                            className="px-3 py-1 border dark:border-gray-600 rounded disabled:opacity-50"
+                                        >
+                                            Berikutnya
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
