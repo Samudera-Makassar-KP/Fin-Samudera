@@ -2034,5 +2034,5 @@ Selain itu, ditemukan efek samping dari bug lama yang sama di Bagian AN: di mode
 - [x] `FormLpjUmum.jsx`/`FormLpjMarketing.jsx`: panggil `useFormDraft(..., !isEditMode)`
 - [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.5d3c4bd7.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: Super Admin edit LPJ Reza Rahmat (LPJ.GAU.SMDR.260910.0001) sekali lagi, ganti Validator ke yang benar, submit, konfirmasi status berubah jadi menunggu validasi Validator BARU (bukan Erlangga Putra lagi), dan tidak ada lagi error permission-denied di Console saat form dibuka
