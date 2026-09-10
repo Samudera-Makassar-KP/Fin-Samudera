@@ -1973,5 +1973,5 @@ Bukti transfer OCTO CIMB Niaga (dan bukti transfer format Inggris pada umumnya) 
 - [x] `functions/lib/pengembalianMatcher.js`: `textContainsAmount()` bedakan pemisah ribuan vs desimal/sen sebelum parsing
 - [x] 4 test baru di `functions/test/pengembalianMatcher.test.js`, total 12 test PASS (8 lama + 4 baru), tidak ada regresi
 - [x] `cd functions && npx jest` -- 23 test functions total PASS (3 suite)
-- [ ] Deploy ke produksi (`firebase deploy --only functions:validatePengembalianBukti`)
+- [x] Deploy ke produksi (`firebase deploy --only functions:validatePengembalianBukti`) — sukses 2026-09-10 ("Successful update operation")
 - [ ] Tes manual: Reza Rahmat upload ulang bukti transfer OCTO yang sama (email CIMB Niaga, "IDR 190,200.00") ke LPJ yang sama, konfirmasi sekarang berstatus valid (bukan lagi "Nominal di bukti tidak sesuai")
