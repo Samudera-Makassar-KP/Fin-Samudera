@@ -1892,6 +1892,6 @@ Ini konsisten dengan SEMUA bukti yang ada: gagal permanen & konsisten (bukan sek
 - [x] `FormBs.jsx`: transaksi generate nomor BS cek benturan ke `displayIdOwners` & lompati nomor yang sudah dipakai
 - [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi teks "Tidak menemukan nomor BS yang tersedia" ada di bundle live
 - [ ] Tes manual: submit BS untuk PT Samudera Agencies Indonesia lagi, konfirmasi berhasil dengan nomor BARU (kemungkinan besar BUKAN lagi "...SAI0000501" kalau memang nomor itu sudah kepakai dokumen lama)
 - [ ] Kalau MASIH gagal: sekarang errornya seharusnya BEDA (bukan lagi permission-denied berulang di nomor yang sama) -- kirim `error.code`/`error.message` yang ter-log untuk diagnosis lanjutan
