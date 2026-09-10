@@ -1920,3 +1920,31 @@ Bagian AO menambahkan `transaction.get(doc(db, 'displayIdOwners', nomorBS))` unt
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.e8077bc8.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: submit BS untuk PT Samudera Agencies Indonesia lagi -- kalau teori benturan displayIdOwners ini benar, seharusnya BERHASIL sekarang (nomor otomatis lompat ke yang belum terpakai)
 - [ ] Kalau MASIH gagal: kirim `error.code`/`error.message` baru dari Console -- kalau bukan lagi soal displayIdOwners, kemungkinan besar bukan soal nomor dokumen sama sekali, perlu ditelusuri dari sudut lain (mis. field lain di `bonSementaraData` yang gagal validasi rule `validWorkflowCreate`)
+
+**Update:** dikonfirmasi user berhasil setelah Bagian AP di-deploy -- akar masalah terbukti benar (benturan nomor dengan `displayIdOwners` lama, counter tidak pernah sinkron sendiri).
+
+---
+
+# BAGIAN AQ — Sembunyikan Pengajuan Ditolak/Dibatalkan dari List Milik User (2026-09-10)
+
+## 53.1 Permintaan User
+
+Setelah bug submit BS beres, user minta: semua pengajuan yang Ditolak maupun Dibatalkan (baik dibatalkan user sendiri, maupun ditolak validator/reviewer) langsung hilang dari list tabel milik user (tempat mereka lihat pengajuan sendiri), TAPI tetap tampil untuk admin sebagai database/riwayat lengkap.
+
+## 53.2 Implementasi
+
+- **`BsTable.jsx`**, **`ReimbursementTable.jsx`**, **`LpjBsTable.jsx`** (list "Bon Sementara Diajukan"/"Reimbursement Diajukan"/"LPJ Diajukan" milik user sendiri, BUKAN panel admin): tambah konstanta `HIDDEN_STATUSES = ['Ditolak', 'Dibatalkan']`, difilter-kan (client-side, `.filter(item => !HIDDEN_STATUSES.includes(item.status))`) di SEMUA titik yang mengisi data list -- baik saat fetch awal MAUPUN saat refresh setelah user membatalkan pengajuannya sendiri (supaya item yang baru dibatalkan langsung hilang seketika, bukan nunggu reload halaman). Opsi "Ditolak"/"Dibatalkan" juga dihapus dari dropdown filter Status di ketiga tabel itu (percuma ada pilihan yang hasilnya selalu kosong).
+- **TIDAK menghapus data apa pun** dari Firestore -- cuma disembunyikan dari tampilan list user. Riwayat penuh (termasuk Ditolak/Dibatalkan) tetap 100% utuh & bisa dilihat Super Admin lewat tabel "Semua Status" di `BsCheck.jsx`/`ReimbursementCheck.jsx`/`LpjBsCheck.jsx`, dan di "Ekspor Laporan Pengajuan" (`ReportExport.jsx`, sudah mencakup status Ditolak sejak Bagian AN).
+- **TIDAK menyentuh** panel Validator/Reviewer di `BsCheck.jsx` dkk -- tab "Pengajuan Dibatalkan" yang sudah ada di situ (khusus role dengan wewenang validasi) SENGAJA dipertahankan apa adanya, itu sudah jadi tempat resmi buat role tsb meninjau riwayat pembatalan, beda konteks dari list pengajuan milik user biasa yang jadi fokus permintaan ini.
+- Draft LPJ (`status: 'Draft'`) di `LpjBsTable.jsx` TIDAK terpengaruh (bukan bagian dari `HIDDEN_STATUSES`, kategori berbeda dari status hasil approval).
+
+## 53.3 Task Development — Bagian AQ
+
+- [x] `BsTable.jsx`: filter `HIDDEN_STATUSES` di fetch awal & refresh-setelah-cancel, hapus opsi Ditolak/Dibatalkan dari filter Status
+- [x] `ReimbursementTable.jsx`: sama
+- [x] `LpjBsTable.jsx`: sama (Draft tidak terpengaruh)
+- [x] `CI=true npm test -- --watchAll=false` -- 108 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: buka masing-masing list (BS/RBS/LPJ) milik user yang punya riwayat Ditolak/Dibatalkan, konfirmasi baris itu TIDAK MUNCUL lagi, sementara di "Cek Bon Sementara"/"Cek Reimbursement"/"Cek LPJ Bon Sementara" (Super Admin) & "Ekspor Laporan Pengajuan" datanya TETAP ADA
+- [ ] Tes manual: batalkan 1 pengajuan aktif, konfirmasi baris itu langsung hilang dari list SEKETIKA tanpa perlu reload halaman

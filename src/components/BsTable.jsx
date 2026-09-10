@@ -16,6 +16,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faEnvelope, faFileCircleCheck } from '@fortawesome/free-solid-svg-icons'
 import { generateBsPDF } from '../utils/BsPdf'
 
+// Bagian AQ: status yang disembunyikan dari list milik user sendiri (lihat
+// catatan di filterOptions.status di bawah).
+const HIDDEN_STATUSES = ['Ditolak', 'Dibatalkan']
+
 const BsTable = () => {
     const { theme } = useTheme()
     const [data, setData] = useState({ bonSementara: [] })
@@ -53,13 +57,18 @@ const BsTable = () => {
     const [selectedReport, setSelectedReport] = useState(null)
     const [cancelReason, setCancelReason] = useState('')
 
+    // Bagian AQ: pengajuan Ditolak/Dibatalkan (apa pun pelakunya -- user
+    // sendiri, validator, atau reviewer) sengaja TIDAK ditampilkan lagi di
+    // list milik user sendiri -- keduanya jalan buntu tanpa aksi lanjutan,
+    // cuma menumpuk sebagai noise. Riwayatnya tetap utuh & tetap bisa dilihat
+    // Super Admin lewat "Cek Bon Sementara" (tabel Semua Status) dan "Ekspor
+    // Laporan Pengajuan" -- TIDAK dihapus dari Firestore, cuma disembunyikan
+    // dari tampilan list ini.
     const filterOptions = {
         status: [
             { value: 'Diajukan', label: 'Diajukan' },
             { value: 'Diproses', label: 'Diproses' },
-            { value: 'Disetujui', label: 'Disetujui' },
-            { value: 'Ditolak', label: 'Ditolak' },
-            { value: 'Dibatalkan', label: 'Dibatalkan' }
+            { value: 'Disetujui', label: 'Disetujui' }
         ],
         kategori: [
             { value: 'Marketing/Operasional', label: 'Marketing/Operasional' },
@@ -99,11 +108,13 @@ const BsTable = () => {
                 )
 
                 const querySnapshot = await getDocs(q)
-                const bonSementara = querySnapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    displayId: doc.data().displayId,
-                    ...doc.data()
-                }))
+                const bonSementara = querySnapshot.docs
+                    .map((doc) => ({
+                        id: doc.id,
+                        displayId: doc.data().displayId,
+                        ...doc.data()
+                    }))
+                    .filter((item) => !HIDDEN_STATUSES.includes(item.status))
 
                 const existingYears = new Set(bonSementara.map((item) => new Date(item.tanggalPengajuan).getFullYear()))
 
@@ -303,13 +314,15 @@ const BsTable = () => {
             // Refresh data
             const q = query(collection(db, 'bonSementara'), where('user.uid', '==', uid))
             const querySnapshot = await getDocs(q)
-            const bonSementara = querySnapshot.docs.map((doc) => ({
-                id: doc.id,
-                displayId: doc.data().displayId,
-                ...doc.data()
-            }))
+            const bonSementara = querySnapshot.docs
+                .map((doc) => ({
+                    id: doc.id,
+                    displayId: doc.data().displayId,
+                    ...doc.data()
+                }))
+                .filter((item) => !HIDDEN_STATUSES.includes(item.status))
 
-            setData({ bonSementara }) // Mengupdate state dengan data baru
+            setData({ bonSementara }) // Mengupdate data baru -- item yang baru dibatalkan otomatis hilang dari list (lihat HIDDEN_STATUSES)
 
             toast.success('Pengajuan Bon Sementara berhasil dibatalkan.')
             // Menutup modal setelah pembatalan

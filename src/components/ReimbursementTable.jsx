@@ -12,6 +12,10 @@ import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faMoneyBillWave, faCheckCircle } from '@fortawesome/free-solid-svg-icons'
 
+// Bagian AQ: status yang disembunyikan dari list milik user sendiri (lihat
+// catatan di filterOptions.status di bawah).
+const HIDDEN_STATUSES = ['Ditolak', 'Dibatalkan']
+
 const ReimbursementTable = () => {
     const { theme } = useTheme()
     const [data, setData] = useState({ reimbursements: [] })
@@ -39,14 +43,16 @@ const ReimbursementTable = () => {
     const [cancelReason, setCancelReason] = useState('')
 
 
+    // Bagian AQ: pengajuan Ditolak/Dibatalkan sengaja TIDAK ditampilkan lagi
+    // di list milik user sendiri -- keduanya jalan buntu tanpa aksi lanjutan.
+    // Riwayatnya tetap utuh & tetap bisa dilihat Super Admin lewat "Cek
+    // Reimbursement" (tabel Semua Status) dan "Ekspor Laporan Pengajuan".
     const filterOptions = {
         status: [
             { value: 'Diajukan', label: 'Diajukan' },
             { value: 'Divalidasi', label: 'Divalidasi' },
             { value: 'Diproses', label: 'Diproses' },
-            { value: 'Disetujui', label: 'Disetujui' },
-            { value: 'Ditolak', label: 'Ditolak' },
-            { value: 'Dibatalkan', label: 'Dibatalkan' }
+            { value: 'Disetujui', label: 'Disetujui' }
         ],
         kategori: [
             { value: 'BBM', label: 'BBM' },
@@ -84,11 +90,13 @@ const ReimbursementTable = () => {
                 const q = query(collection(db, 'reimbursement'), where('user.uid', '==', uid))
 
                 const querySnapshot = await getDocs(q)
-                const reimbursements = querySnapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    displayId: doc.data().displayId,
-                    ...doc.data()
-                }))
+                const reimbursements = querySnapshot.docs
+                    .map((doc) => ({
+                        id: doc.id,
+                        displayId: doc.data().displayId,
+                        ...doc.data()
+                    }))
+                    .filter((item) => !HIDDEN_STATUSES.includes(item.status))
 
                 // Dynamically update year options based on existing reimbursements
                 const existingYears = new Set(
@@ -200,14 +208,16 @@ const ReimbursementTable = () => {
                 statusHistory: arrayUnion(newStatusHistory)
             })
 
-            // Refresh data            
+            // Refresh data
             const q = query(collection(db, 'reimbursement'), where('user.uid', '==', uid))
             const querySnapshot = await getDocs(q)
-            const reimbursements = querySnapshot.docs.map((doc) => ({
-                id: doc.id,
-                displayId: doc.data().displayId,
-                ...doc.data()
-            }))
+            const reimbursements = querySnapshot.docs
+                .map((doc) => ({
+                    id: doc.id,
+                    displayId: doc.data().displayId,
+                    ...doc.data()
+                }))
+                .filter((item) => !HIDDEN_STATUSES.includes(item.status))
 
             setData({ reimbursements })
             toast.success('Reimbursement berhasil dibatalkan.')

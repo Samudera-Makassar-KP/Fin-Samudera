@@ -10,6 +10,11 @@ import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { useTheme } from '../context/ThemeContext'
 
+// Bagian AQ: status yang disembunyikan dari list milik user sendiri (lihat
+// catatan di filterOptions.status di bawah). TIDAK berlaku untuk 'Draft'
+// (kategori berbeda, bukan status hasil approval).
+const HIDDEN_STATUSES = ['Ditolak', 'Dibatalkan']
+
 const LpjBsTable = () => {
     const { theme } = useTheme()
     const [data, setData] = useState({ lpj: [] })
@@ -36,15 +41,17 @@ const LpjBsTable = () => {
     const [selectedReport, setSelectedReport] = useState(null)
     const [cancelReason, setCancelReason] = useState('')
 
+    // Bagian AQ: pengajuan Ditolak/Dibatalkan sengaja TIDAK ditampilkan lagi
+    // di list milik user sendiri -- keduanya jalan buntu tanpa aksi lanjutan.
+    // Riwayatnya tetap utuh & tetap bisa dilihat Super Admin lewat "Cek LPJ
+    // Bon Sementara" (tabel Semua Status) dan "Ekspor Laporan Pengajuan".
     const filterOptions = {
         status: [
             { value: 'Draft', label: 'Draft' },
             { value: 'Diajukan', label: 'Diajukan' },
             { value: 'Divalidasi', label: 'Divalidasi' },
             { value: 'Diproses', label: 'Diproses' },
-            { value: 'Disetujui', label: 'Disetujui' },
-            { value: 'Ditolak', label: 'Ditolak' },
-            { value: 'Dibatalkan', label: 'Dibatalkan' }
+            { value: 'Disetujui', label: 'Disetujui' }
         ],
         kategori: [
             { value: 'Marketing/Operasional', label: 'Marketing/Operasional' },
@@ -81,11 +88,13 @@ const LpjBsTable = () => {
                 try {
                     const qLpj = query(collection(db, 'lpj'), where('user.uid', '==', uid))
                     const snapshotLpj = await getDocs(qLpj)
-                    dataLpj = snapshotLpj.docs.map((doc) => ({
-                        id: doc.id,
-                        displayId: doc.data().displayId,
-                        ...doc.data()
-                    }))
+                    dataLpj = snapshotLpj.docs
+                        .map((doc) => ({
+                            id: doc.id,
+                            displayId: doc.data().displayId,
+                            ...doc.data()
+                        }))
+                        .filter((item) => !HIDDEN_STATUSES.includes(item.status))
                 } catch (lpjError) {
                     console.error('Error fetching lpj data:', lpjError)
                 }
@@ -232,13 +241,15 @@ const LpjBsTable = () => {
             // Refresh data
             const q = query(collection(db, 'lpj'), where('user.uid', '==', uid))
             const querySnapshot = await getDocs(q)
-            const lpj = querySnapshot.docs.map((doc) => ({
-                id: doc.id,
-                displayId: doc.data().displayId,
-                ...doc.data()
-            }))
+            const lpj = querySnapshot.docs
+                .map((doc) => ({
+                    id: doc.id,
+                    displayId: doc.data().displayId,
+                    ...doc.data()
+                }))
+                .filter((item) => !HIDDEN_STATUSES.includes(item.status))
 
-            setData({ lpj }) // Mengupdate state dengan data baru
+            setData({ lpj }) // Mengupdate data baru -- item yang baru dibatalkan otomatis hilang dari list (lihat HIDDEN_STATUSES)
 
             toast.success('LPJ berhasil dibatalkan.')
             // Menutup modal setelah pembatalan
