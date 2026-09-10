@@ -1763,5 +1763,5 @@ Jadi untuk BBM yang disubmit lewat RBS Umum/Operasional/LPJ (bukan form BBM khus
 - [x] `RekapanUnitBisnis.jsx`: kolom "Keterangan" baru di `renderClassificationRow` + 3 tabel header (Kelola Sharing, drill-down, Tinjau Item BBM Ambigu)
 - [x] Test baru: 5 test `keterangan`/konteks tambahan (RBS Umum/Operasional gabung item+keterangan, LPJ gabung keterangan+aktivitas, RBS BBM null, konsisten di listCategoryLineItems & listAmbiguousBbmMentions) -- total 103 test frontend, semua PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-09-10, diverifikasi teks "tidak ada keterangan" ada di bundle live
 - [ ] Tes manual: buka drill-down "BBM -- Total Biaya" untuk unit/bulan yang ada transaksi dari RBS Umum/Operasional/LPJ, konfirmasi kolom "Keterangan" terisi teks yang diketik user aslinya (bukan kosong), cukup jelas untuk memutuskan pembagian unit
