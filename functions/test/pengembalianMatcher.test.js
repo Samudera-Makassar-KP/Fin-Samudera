@@ -36,4 +36,26 @@ describe('textContainsAmount', () => {
         expect(textContainsAmount(null, 150000)).toBe(false)
         expect(textContainsAmount(undefined, 150000)).toBe(false)
     })
+
+    // Bagian AR: bukti transfer format Inggris (mis. email OCTO CIMB Niaga)
+    // pakai koma sebagai pemisah ribuan & titik sebagai desimal, SELALU
+    // menyertakan ".00" di akhir -- kasus nyata yang dilaporkan user.
+    test('cocok dengan nominal format Inggris + desimal ".00" (bukti transfer OCTO)', () => {
+        const text = 'Transfer Amount: IDR 190,200.00\nFee: IDR 0.00'
+        expect(textContainsAmount(text, 190200)).toBe(true)
+    })
+
+    test('cocok dengan nominal format Indonesia + sen ",00" di akhir', () => {
+        expect(textContainsAmount('Jumlah Transfer: Rp190.200,00', 190200)).toBe(true)
+    })
+
+    test('tidak cocok kalau nominal format Inggris+desimal beda dari target', () => {
+        const text = 'Transfer Amount: IDR 190,200.00'
+        expect(textContainsAmount(text, 150000)).toBe(false)
+    })
+
+    test('tetap cocok salah satu dari beberapa angka campuran format Inggris & Indonesia', () => {
+        const text = 'Reference: MB10090373337727\nTransfer Amount: IDR 190,200.00\nFee: IDR 0.00'
+        expect(textContainsAmount(text, 190200)).toBe(true)
+    })
 })

@@ -1948,3 +1948,30 @@ Setelah bug submit BS beres, user minta: semua pengajuan yang Ditolak maupun Dib
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.514bd6c2.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka masing-masing list (BS/RBS/LPJ) milik user yang punya riwayat Ditolak/Dibatalkan, konfirmasi baris itu TIDAK MUNCUL lagi, sementara di "Cek Bon Sementara"/"Cek Reimbursement"/"Cek LPJ Bon Sementara" (Super Admin) & "Ekspor Laporan Pengajuan" datanya TETAP ADA
 - [ ] Tes manual: batalkan 1 pengajuan aktif, konfirmasi baris itu langsung hilang dari list SEKETIKA tanpa perlu reload halaman
+
+---
+
+# BAGIAN AR — Fix Validasi Bukti Pengembalian Salah Baca Nominal Format Inggris/Desimal (2026-09-10)
+
+## 54.1 Permintaan User
+
+Reza Rahmat melaporkan: upload "Bukti Pengembalian Dana" untuk LPJ (sisa lebih Rp190.200) ditolak sistem dengan pesan "Nominal di bukti tidak sesuai, silakan upload ulang", padahal nominal di bukti transfer (email konfirmasi OCTO CIMB Niaga, "Transfer Amount: IDR 190,200.00") sudah benar sama dengan Rp190.200.
+
+## 54.2 Investigasi & Akar Masalah
+
+Validasi bukti pengembalian (`validatePengembalianBukti` di `functions/index.js`) membaca teks dari file lewat Google Cloud Vision OCR, lalu mencocokkan nominal `sisaLebih` LPJ ke angka-angka yang kebaca lewat `textContainsAmount()` (`functions/lib/pengembalianMatcher.js`). Fungsi itu mengekstrak run angka+titik/koma dari teks OCR, lalu **membuang SEMUA titik & koma sekaligus** tanpa membedakan perannya, dengan asumsi keduanya selalu cuma pemisah ribuan.
+
+Bukti transfer OCTO CIMB Niaga (dan bukti transfer format Inggris pada umumnya) menulis nominal sebagai `"190,200.00"` -- koma jadi pemisah RIBUAN, titik jadi pemisah DESIMAL/SEN. Dengan logika lama, `"190,200.00"` dibuang semua titik-komanya jadi `"19020000"` (BUKAN `"190200"`) -- ekor `.00` (desimal, harusnya dibuang) malah ikut dianggap 2 digit ribuan tambahan, membuat angka terbaca 100x lebih besar dari aslinya dan TIDAK PERNAH cocok dengan `sisaLebih` (190200). Bug yang sama juga kena bukti format Indonesia yang menulis sen eksplisit, mis. `"Rp190.200,00"`.
+
+## 54.3 Perbaikan
+
+- **`functions/lib/pengembalianMatcher.js`**: `textContainsAmount()` sekarang membedakan pemisah RIBUAN dari pemisah DESIMAL/SEN sebelum membuangnya. Kalau ekor angka hasil OCR berupa 1 separator diikuti PERSIS 2 digit di akhir string (pola desimal/sen -- pemisah ribuan asli SELALU diikuti 3 digit), 2 digit ekor itu dibuang dulu (aman, `sisaLebih` LPJ selalu bilangan bulat Rupiah tanpa pecahan), baru sisa pemisah ribuan yang beneran dilucuti. `"190,200.00"` dan `"Rp190.200,00"` sekarang sama-sama terbaca `190200` dengan benar.
+- **`functions/test/pengembalianMatcher.test.js`**: 4 test baru mencakup kasus nyata ini (format Inggris+desimal, format Indonesia+sen, tidak cocok kalau memang beda, campuran beberapa angka format berbeda dalam 1 teks) -- total 12 test di file ini, semua PASS. 8 test lama juga tetap PASS (tidak ada regresi ke kasus format Indonesia standar tanpa desimal yang sudah bekerja sebelumnya).
+
+## 54.4 Task Development — Bagian AR
+
+- [x] `functions/lib/pengembalianMatcher.js`: `textContainsAmount()` bedakan pemisah ribuan vs desimal/sen sebelum parsing
+- [x] 4 test baru di `functions/test/pengembalianMatcher.test.js`, total 12 test PASS (8 lama + 4 baru), tidak ada regresi
+- [x] `cd functions && npx jest` -- 23 test functions total PASS (3 suite)
+- [ ] Deploy ke produksi (`firebase deploy --only functions:validatePengembalianBukti`)
+- [ ] Tes manual: Reza Rahmat upload ulang bukti transfer OCTO yang sama (email CIMB Niaga, "IDR 190,200.00") ke LPJ yang sama, konfirmasi sekarang berstatus valid (bukan lagi "Nominal di bukti tidak sesuai")
