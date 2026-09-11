@@ -2217,5 +2217,5 @@ Console user JUGA menampilkan baris "Konten baru tersedia dan akan dipakai otoma
 - [x] Konfirmasi `Buffer` tidak dipakai di kode produksi saat ini (cuma 1 file test, tidak masuk bundle)
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-11, diverifikasi hash bundle live (`main.38c930c3.js`) cocok dengan hasil build lokal terbaru
 - [ ] Beri tahu user: hard refresh / tutup-buka tab penuh SEKALI LAGI untuk membuang bundle lama yang menyebabkan error print ini, baru toast "Versi baru tersedia" ini sendiri akan mulai terlihat mulai dari deploy BERIKUTNYA setelah ini (sesudah tab-nya sendiri sudah di versi baru)
