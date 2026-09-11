@@ -211,6 +211,9 @@ const RbsUmumForm = () => {
         { value: 'BBM Solar', label: 'BBM Solar' },
         { value: 'Meals Lembur', label: 'Meals Lembur' },
         { value: 'Meals Meeting', label: 'Meals Meeting' },
+        { value: 'CSR', label: 'CSR' },
+        { value: 'Utilitas', label: 'Utilitas' },
+        { value: 'Fasilitas', label: 'Fasilitas' },
         { value: 'Lainnya', label: 'Lainnya' }
     ]
 

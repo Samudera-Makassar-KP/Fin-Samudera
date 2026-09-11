@@ -2036,3 +2036,41 @@ Selain itu, ditemukan efek samping dari bug lama yang sama di Bagian AN: di mode
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-10, diverifikasi hash bundle live (`main.5d3c4bd7.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: Super Admin edit LPJ Reza Rahmat (LPJ.GAU.SMDR.260910.0001) sekali lagi, ganti Validator ke yang benar, submit, konfirmasi status berubah jadi menunggu validasi Validator BARU (bukan Erlangga Putra lagi), dan tidak ada lagi error permission-denied di Console saat form dibuka
+
+---
+
+# BAGIAN AU — Item GA/Umum Baru & Fitur "Tambah Rekapan" Manual (2026-09-11)
+
+## 57.1 Permintaan User
+
+1. Tambah pilihan item **CSR**, **Utilitas**, **Fasilitas** di kategori GA/Umum (RBS Umum & LPJ Umum).
+2. Menu Rekapan: tambah fitur **"Tambah Rekapan"** -- Admin punya rekapan lain di luar sistem ini (mis. tambahan ATK, tapi juga berlaku untuk BBM/plat nomor/kategori lain apa pun), perlu input MANUAL nominalnya + Unit Bisnis tujuannya. Dibuat sebagai **modal** (bukan kartu inline) supaya tampilan tetap simpel. Begitu ditambahkan, HARUS otomatis ikut terjumlah ke Unit Bisnis yang dipilih. Tambah field **Keterangan Referensi** supaya admin bisa mencatat dari mana asal nominal itu.
+
+## 57.2 Implementasi
+
+### Item GA/Umum baru
+- **`FormRbsUmum.jsx`** & **`FormLpjUmum.jsx`**: `jenisOptions` (identik di kedua file, sengaja disamakan sejak awal) ditambah `CSR`, `Utilitas`, `Fasilitas` -- disisipkan sebelum `Lainnya` (selalu paling akhir per konvensi yang sudah ada).
+
+### "Tambah Rekapan" (entri manual)
+Desain intinya: entri manual DIUBAH jadi bentuk dokumen `reimbursement` SINTETIS (status langsung `'Disetujui'`) saat dibaca, lalu dilempar ke fungsi agregasi yang **SAMA PERSIS** dipakai data RBS/LPJ asli -- supaya nominalnya otomatis ikut terhitung di SEMUA tabel Rekapan (termasuk tabel BBM/kategori mana pun, drill-down, "Kelola Sharing", dst) TANPA mengubah logika agregasi (`aggregateByCategory`/`aggregateBbm`/dst) sama sekali.
+
+- **`firestore.rules`**: koleksi baru `rekapanManualEntries/{entryId}` -- `read: isRekapanRole()` (Validator/Admin/Super Admin, sama seperti akses Rekapan lainnya), `create`/`delete: isAdminRole()` (Admin/Super Admin, sama seperti "Kelola Kategori"/"Kelola Sharing"). `update` sengaja `if false` -- kalau ada kesalahan input, alurnya hapus lalu buat ulang (bukan edit diam-diam) supaya jejak `createdBy`/`createdAt` tetap akurat mewakili siapa & kapan nominal itu genuinely dimasukkan.
+- **`src/utils/rekapanAggregation.js`**: fungsi baru `manualEntryToReimbursementDoc(entry)` -- ubah 1 dokumen `rekapanManualEntries` jadi dokumen reimbursement sintetis 1-item, `id` diberi prefix `manual_` (mustahil bentrok dengan ID dokumen reimbursement asli, auto-ID Firestore). Juga `BBM_JENIS_OPTIONS` (daftar jenis BBM lengkap dari `BBM_PRICE_PER_LITER`, dipakai dropdown "Jenis BBM" di modal). 5 test baru (konversi non-BBM, konversi BBM + plat/liter, fallback "BBM Lainnya", dan 2 test INTEGRASI yang membuktikan hasil konversi benar-benar terhitung di `aggregateByCategory`/`aggregateBbm`) -- total 62 test di file ini, semua PASS.
+- **`RekapanUnitBisnis.jsx`**:
+  - State `reimbursementDocs` (dipakai di SELURUH file, banyak titik) diubah dari state mentah jadi `useMemo` gabungan `rawReimbursementDocs` (data Firestore asli, TIDAK berubah nama variabelnya di tempat lain) + `manualEntries.map(manualEntryToReimbursementDoc)` -- satu perubahan ini otomatis membuat SEMUA pemakaian `reimbursementDocs` yang sudah ada (aggregateByCategory, aggregateBbm, listBbmLineItems, listCategoryLineItems, listCategoryRawLabels, listAmbiguousBbmMentions) ikut menghitung entri manual, tanpa perlu menyentuh titik-titik itu satu-satu.
+  - Tombol ke-5 **"+ Tambah Rekapan"** (ditonjolkan beda warna dari 4 tombol lain) di kartu "Pengaturan Rekapan" (grid disesuaikan jadi 5 kolom).
+  - Modal "Tambah Rekapan Manual": checkbox "Ini rekapan BBM?" men-switch antara field Kategori (CreatableSelect, opsi dari kategori yang sudah dikenal + bebas ketik baru) VS field Jenis BBM (dropdown) + Plat Nomor & Liter (opsional) -- lalu Unit Bisnis, Bulan, Tahun, Nominal (dengan preview format Rupiah), dan **Keterangan Referensi** (wajib). Di bawah form, daftar entri manual yang sudah ada (terbaru dulu) dengan tombol Hapus per baris.
+
+## 57.3 Task Development — Bagian AU
+
+- [x] `FormRbsUmum.jsx`/`FormLpjUmum.jsx`: tambah CSR/Utilitas/Fasilitas ke `jenisOptions`
+- [x] `firestore.rules`: koleksi `rekapanManualEntries` (read: isRekapanRole, create/delete: isAdminRole, update: false)
+- [x] `rekapanAggregation.js`: `manualEntryToReimbursementDoc`, `BBM_JENIS_OPTIONS` + 5 test baru (62 total, semua PASS)
+- [x] `RekapanUnitBisnis.jsx`: `reimbursementDocs` jadi useMemo gabungan raw+manual, tombol & modal "Tambah Rekapan Manual" (BBM toggle, Kategori creatable, Unit/Bulan/Tahun/Nominal/Keterangan Referensi wajib, list+hapus entri)
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS (108 lama + 5 baru)
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (`firestore:rules` + hosting)
+- [ ] Tes manual: buka RBS Umum/LPJ Umum, konfirmasi CSR/Utilitas/Fasilitas muncul di dropdown Jenis/Item
+- [ ] Tes manual: Admin buka Rekapan, klik "+ Tambah Rekapan", tambah 1 entri non-BBM (mis. ATK, Rp500.000, 1 Unit Bisnis, keterangan referensi), konfirmasi nominal itu LANGSUNG muncul di tabel kategori ATK untuk unit & bulan yang dipilih tanpa refresh manual
+- [ ] Tes manual: tambah 1 entri BBM manual (Jenis BBM + Plat + Liter), konfirmasi muncul di tabel "BBM -- Total Biaya" DAN "BBM -- Liter per Plat Nomor"
+- [ ] Tes manual: hapus 1 entri manual dari list di modal, konfirmasi nominalnya hilang lagi dari tabel Rekapan

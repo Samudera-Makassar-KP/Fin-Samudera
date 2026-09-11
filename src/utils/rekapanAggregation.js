@@ -5,6 +5,12 @@
 import { BBM_PRICE_PER_LITER } from '../constants/bbmPrice'
 import { canonicalizeCategoryLabel } from '../constants/rekapanCategoryGroups'
 
+// Bagian AU: daftar jenis BBM yang bisa dipilih di modal "Tambah Rekapan
+// Manual" -- sengaja pakai label LENGKAP (sudah berprefix "BBM ") dari
+// BBM_PRICE_PER_LITER, bukan didaftar ulang, supaya otomatis konsisten kalau
+// daftar itu berubah.
+export const BBM_JENIS_OPTIONS = Object.keys(BBM_PRICE_PER_LITER)
+
 export const MONTH_LABELS = [
     'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
     'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
@@ -548,6 +554,43 @@ export function listCategoryLineItems(reimbursementDocs, lpjDocs, { year, catego
     })
 
     return items.sort((a, b) => a.month - b.month)
+}
+
+// Bagian AU: ubah 1 dokumen koleksi Firestore `rekapanManualEntries` (nominal
+// tambahan di luar sistem, mis. ATK/BBM dari sumber lain yang diinput Admin
+// manual lewat modal "Tambah Rekapan" di RekapanUnitBisnis.jsx) jadi bentuk
+// dokumen `reimbursement` SINTETIS -- satu "pengajuan" dengan 1 baris item,
+// status langsung 'Disetujui' -- supaya bisa dilempar ke fungsi agregasi yang
+// SAMA PERSIS dipakai data RBS/LPJ asli (aggregateBbm/aggregateByCategory/
+// listBbmLineItems/listCategoryLineItems/listCategoryRawLabels) TANPA
+// mengubah logika di fungsi-fungsi itu sama sekali. `id` disintesis dengan
+// prefix 'manual_' supaya MUSTAHIL bentrok dengan ID dokumen reimbursement
+// asli (auto-ID Firestore, tidak pernah diawali teks itu) -- kunci sharing
+// (`buildBbmItemKey('reimbursement', doc.id, itemIndex)`) jadi otomatis unik
+// juga untuk entri manual.
+export function manualEntryToReimbursementDoc(entry) {
+    const bulan = Number(entry.bulan) || 0
+    const tahun = Number(entry.tahun) || new Date().getFullYear()
+    const tanggal = `${tahun}-${String(bulan + 1).padStart(2, '0')}-01`
+    const jenis = entry.isBbm ? (entry.jenisBbm || 'BBM Lainnya') : entry.kategori
+    const namaAdmin = entry.createdByNama ? `${entry.createdByNama} (Rekapan Manual)` : 'Rekapan Manual'
+
+    return {
+        id: `manual_${entry.id}`,
+        status: 'Disetujui',
+        isManualEntry: true,
+        user: { unit: entry.unit, nama: namaAdmin },
+        tanggalPengajuan: tanggal,
+        kategori: entry.isBbm ? 'BBM' : entry.kategori,
+        reimbursements: [{
+            jenis,
+            biaya: Number(entry.nominal) || 0,
+            plat: entry.plat || '',
+            liter: Number(entry.liter) || 0,
+            tanggal,
+            keterangan: entry.keteranganReferensi || null
+        }]
+    }
 }
 
 // Sebagian item RTG/ATK/GA-Umum/LPJ lain diisi bebas dengan kata "BBM" di

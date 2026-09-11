@@ -1,4 +1,4 @@
-import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels, listCategoryLineItems, listBbmLineItems, listAmbiguousBbmMentions } from './rekapanAggregation'
+import { normalizePlatKey, formatPlatDisplay, aggregateBbm, buildBbmItemKey, aggregateByCategory, listCategoryRawLabels, listCategoryLineItems, listBbmLineItems, listAmbiguousBbmMentions, manualEntryToReimbursementDoc } from './rekapanAggregation'
 
 const MJS = 'PT Makassar Jaya Samudera'
 const SAG = 'PT Samudera Agencies Indonesia'
@@ -730,5 +730,79 @@ describe('listAmbiguousBbmMentions (Bagian AJ)', () => {
         const docs = [makeReimbursement('doc1', MJS, 200000, 'Biaya BBM randis')]
         const result = listAmbiguousBbmMentions(docs, [], { year: 2026 })
         expect(result[0].key).toBe(buildBbmItemKey('reimbursement', 'doc1', 0))
+    })
+})
+
+describe('manualEntryToReimbursementDoc (Bagian AU)', () => {
+    test('mengubah entri non-BBM jadi dokumen reimbursement sintetis', () => {
+        const entry = {
+            id: 'abc123',
+            kategori: 'ATK',
+            unit: MJS,
+            bulan: 2,
+            tahun: 2026,
+            nominal: 500000,
+            keteranganReferensi: 'Tambahan ATK dari toko X, invoice #123',
+            createdByNama: 'Wahyu Hermawan'
+        }
+        const result = manualEntryToReimbursementDoc(entry)
+
+        expect(result.id).toBe('manual_abc123')
+        expect(result.status).toBe('Disetujui')
+        expect(result.isManualEntry).toBe(true)
+        expect(result.user.unit).toBe(MJS)
+        expect(result.tanggalPengajuan).toBe('2026-03-01')
+        expect(result.reimbursements).toHaveLength(1)
+        expect(result.reimbursements[0].jenis).toBe('ATK')
+        expect(result.reimbursements[0].biaya).toBe(500000)
+        expect(result.reimbursements[0].keterangan).toBe('Tambahan ATK dari toko X, invoice #123')
+    })
+
+    test('mengubah entri BBM jadi jenis berprefix "BBM " lengkap dengan plat & liter', () => {
+        const entry = {
+            id: 'bbm001',
+            isBbm: true,
+            jenisBbm: 'BBM Pertalite',
+            unit: SAG,
+            bulan: 0,
+            tahun: 2026,
+            nominal: 300000,
+            plat: 'DD 1234 AB',
+            liter: 30,
+            keteranganReferensi: 'BBM manual dari nota SPBU'
+        }
+        const result = manualEntryToReimbursementDoc(entry)
+
+        expect(result.reimbursements[0].jenis).toBe('BBM Pertalite')
+        expect(result.reimbursements[0].plat).toBe('DD 1234 AB')
+        expect(result.reimbursements[0].liter).toBe(30)
+        expect(result.kategori).toBe('BBM')
+    })
+
+    test('entri BBM tanpa jenisBbm fallback ke "BBM Lainnya"', () => {
+        const entry = { id: 'bbm002', isBbm: true, unit: MJS, bulan: 5, tahun: 2026, nominal: 100000 }
+        const result = manualEntryToReimbursementDoc(entry)
+        expect(result.reimbursements[0].jenis).toBe('BBM Lainnya')
+    })
+
+    test('hasil konversi terhitung otomatis di aggregateByCategory (kategori non-BBM)', () => {
+        const entry = {
+            id: 'atk001', kategori: 'ATK', unit: MJS, bulan: 4, tahun: 2026,
+            nominal: 750000, keteranganReferensi: 'Rekap manual ATK'
+        }
+        const syntheticDoc = manualEntryToReimbursementDoc(entry)
+        const result = aggregateByCategory([syntheticDoc], [], { year: 2026 })
+        expect(result.ATK[MJS][4]).toBe(750000)
+    })
+
+    test('hasil konversi terhitung otomatis di aggregateBbm (kategori BBM)', () => {
+        const entry = {
+            id: 'bbm003', isBbm: true, jenisBbm: 'BBM Solar', unit: SAG, bulan: 6, tahun: 2026,
+            nominal: 400000, plat: 'DD 5678 CD', liter: 50
+        }
+        const syntheticDoc = manualEntryToReimbursementDoc(entry)
+        const result = aggregateBbm([syntheticDoc], [], { year: 2026 })
+        expect(result.totals[SAG][6]).toBe(400000)
+        expect(result.byPlat['DD 5678 CD'].liter[6]).toBe(50)
     })
 })

@@ -474,6 +474,33 @@ service cloud.firestore {
       allow delete: if isAdminRole();
     }
 
+    // Bagian AU: entri Rekapan MANUAL -- nominal tambahan di luar sistem (mis.
+    // ATK/BBM/lainnya dari sumber lain, diinput langsung Admin/Super Admin lewat
+    // modal "Tambah Rekapan" di RekapanUnitBisnis.jsx) yang otomatis ikut
+    // terhitung di semua tabel Rekapan tanpa lewat alur pengajuan RBS/LPJ biasa
+    // -- lihat manualEntryToReimbursementDoc di src/utils/rekapanAggregation.js
+    // (diubah jadi dokumen reimbursement sintetis saat dibaca, TIDAK mengubah
+    // logika agregasi apa pun). Dokumen ID = auto-generated. Tidak ada `update`
+    // (edit) -- alurnya sengaja hapus lalu buat ulang kalau ada kesalahan input,
+    // supaya jejak `createdBy`/`createdAt` tetap akurat mewakili SIAPA & KAPAN
+    // nominal itu genuinely dimasukkan (bukan diam-diam berubah tanpa jejak).
+    match /rekapanManualEntries/{entryId} {
+      allow read: if isRekapanRole();
+      allow create: if isAdminRole()
+        && validString(request.resource.data.kategori, 100)
+        && validString(request.resource.data.unit, 150)
+        && request.resource.data.bulan is int
+        && request.resource.data.bulan >= 0 && request.resource.data.bulan <= 11
+        && request.resource.data.tahun is int
+        && request.resource.data.tahun >= 2000 && request.resource.data.tahun <= 2100
+        && request.resource.data.nominal is number && request.resource.data.nominal > 0
+        && validOptionalString(request.resource.data.plat, 20)
+        && validString(request.resource.data.keteranganReferensi, 500)
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdminRole();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

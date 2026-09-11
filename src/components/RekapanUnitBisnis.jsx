@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { collection, query, where, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore'
 import Select from 'react-select'
+import CreatableSelect from 'react-select/creatable'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import html2canvas from 'html2canvas'
@@ -13,12 +14,15 @@ import { useTheme } from '../context/ThemeContext'
 import {
     MONTH_LABELS,
     sumMonths,
+    formatRupiah,
     aggregateByCategory,
     aggregateBbm,
     listBbmLineItems,
     listCategoryLineItems,
     listCategoryRawLabels,
-    listAmbiguousBbmMentions
+    listAmbiguousBbmMentions,
+    manualEntryToReimbursementDoc,
+    BBM_JENIS_OPTIONS
 } from '../utils/rekapanAggregation'
 import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from '../constants/rekapanSharing'
 
@@ -66,6 +70,10 @@ const BBM_LITER_KEY = '__BBM_LITER__'
 const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map((y) => ({ value: y, label: String(y) }))
 
+// Bagian AU: default bulan di modal "Tambah Rekapan" -- bulan berjalan, bukan
+// selalu Januari.
+const CURRENT_MONTH_OPTION = { value: new Date().getMonth(), label: MONTH_LABELS[new Date().getMonth()] }
+
 // Filter "Bulan" (Bagian AB) -- default null = tampilkan semua 12 kolom bulan
 // seperti sebelumnya. Pilih 1 bulan tertentu untuk mempersempit SEMUA tabel
 // Rekapan (termasuk BBM) jadi cuma 1 kolom bulan itu -- dipakai bikin rekapan
@@ -97,8 +105,22 @@ const RekapanUnitBisnis = () => {
     }, [selectedMonth])
 
     const [isDataLoading, setIsDataLoading] = useState(true)
-    const [reimbursementDocs, setReimbursementDocs] = useState([])
+    const [rawReimbursementDocs, setRawReimbursementDocs] = useState([])
     const [lpjDocs, setLpjDocs] = useState([])
+
+    // Bagian AU: entri Rekapan manual (koleksi Firestore `rekapanManualEntries`,
+    // lihat modal "Tambah Rekapan"). `reimbursementDocs` yang dipakai di SELURUH
+    // sisa file ini (aggregateByCategory/aggregateBbm/listBbmLineItems/dst)
+    // sengaja jadi turunan gabungan `rawReimbursementDocs` (data Firestore asli)
+    // + entri manual yang sudah diubah jadi bentuk dokumen reimbursement
+    // sintetis (manualEntryToReimbursementDoc) -- supaya SEMUA pemakaian
+    // reimbursementDocs di bawah (banyak titik) otomatis ikut menghitung entri
+    // manual tanpa perlu diubah satu-satu.
+    const [manualEntries, setManualEntries] = useState([])
+    const reimbursementDocs = useMemo(
+        () => [...rawReimbursementDocs, ...manualEntries.map(manualEntryToReimbursementDoc)],
+        [rawReimbursementDocs, manualEntries]
+    )
 
     // Ref per tabel (keyed by title) untuk export PNG -- diisi lewat callback
     // ref di elemen wrapper masing-masing tabel di renderCategoryTable/renderBbmLiterTable.
@@ -181,18 +203,32 @@ const RekapanUnitBisnis = () => {
         setSelectedUnitOptions([])
     }, [isRoleLoaded, role, ownUnits, isAdmin])
 
+    // Bagian AU: fetch terpisah supaya bisa dipanggil ulang sendiri (setelah
+    // tambah/hapus entri manual) tanpa perlu refetch reimbursement/lpj (yang
+    // jauh lebih besar & tidak berubah).
+    const fetchManualEntries = useCallback(async () => {
+        try {
+            const snapshot = await getDocs(collection(db, 'rekapanManualEntries'))
+            setManualEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })))
+        } catch (error) {
+            console.error('Gagal mengambil data entri Rekapan manual:', error)
+        }
+    }, [])
+
     // 3. Fetch data reimbursement & lpj yang sudah Disetujui (sekali saja, filter
-    // unit/tahun dilakukan di client -- pola sama seperti ReportExport.jsx)
+    // unit/tahun dilakukan di client -- pola sama seperti ReportExport.jsx),
+    // plus entri Rekapan manual (Bagian AU).
     useEffect(() => {
         const fetchData = async () => {
             setIsDataLoading(true)
             try {
                 const [reimbursementSnap, lpjSnap] = await Promise.all([
                     getDocs(query(collection(db, 'reimbursement'), where('status', '==', 'Disetujui'))),
-                    getDocs(query(collection(db, 'lpj'), where('status', '==', 'Disetujui')))
+                    getDocs(query(collection(db, 'lpj'), where('status', '==', 'Disetujui'))),
+                    fetchManualEntries()
                 ])
 
-                setReimbursementDocs(reimbursementSnap.docs.map((d) => ({ ...d.data(), id: d.id })))
+                setRawReimbursementDocs(reimbursementSnap.docs.map((d) => ({ ...d.data(), id: d.id })))
                 setLpjDocs(lpjSnap.docs.map((d) => ({ ...d.data(), id: d.id })))
             } catch (error) {
                 console.error('Gagal mengambil data rekapan:', error)
@@ -202,7 +238,7 @@ const RekapanUnitBisnis = () => {
         }
 
         fetchData()
-    }, [])
+    }, [fetchManualEntries])
 
     // 4. Roster headcount per unit (/rekapanHeadcount) -- dasar hitung persentase
     // sharing BBM MJS (pool "All Employee"). Bisa diedit Admin/Super Admin lewat
@@ -363,6 +399,127 @@ const RekapanUnitBisnis = () => {
         } catch (error) {
             console.error('Gagal menghapus grup kategori:', error)
             toast.error('Gagal menghapus grup kategori')
+        }
+    }
+
+    // Panel "Tambah Rekapan" (Admin/Super Admin only, Bagian AU) -- input manual
+    // nominal tambahan di luar sistem (mis. ATK/BBM/lainnya dari sumber lain,
+    // tidak pernah lewat pengajuan RBS/LPJ) langsung ke 1 Unit Bisnis & 1
+    // bulan tertentu. Begitu tersimpan, otomatis ikut terhitung di SEMUA tabel
+    // Rekapan yang relevan (lihat manualEntryToReimbursementDoc & useMemo
+    // `reimbursementDocs` di atas) -- tidak ada langkah tambahan yang perlu
+    // dilakukan admin supaya nominalnya "masuk hitungan".
+    const [isAddingManualEntry, setIsAddingManualEntry] = useState(false)
+    const [manualIsBbm, setManualIsBbm] = useState(false)
+    const [manualKategori, setManualKategori] = useState('')
+    const [manualJenisBbm, setManualJenisBbm] = useState(BBM_JENIS_OPTIONS[0] || '')
+    const [manualPlat, setManualPlat] = useState('')
+    const [manualLiter, setManualLiter] = useState('')
+    const [manualUnit, setManualUnit] = useState(null)
+    const [manualBulan, setManualBulan] = useState(CURRENT_MONTH_OPTION)
+    const [manualTahun, setManualTahun] = useState(YEAR_OPTIONS[0])
+    const [manualNominal, setManualNominal] = useState('')
+    const [manualKeterangan, setManualKeterangan] = useState('')
+    const [isSavingManualEntry, setIsSavingManualEntry] = useState(false)
+
+    // Sumber pilihan Kategori (non-BBM) di modal: gabungan urutan kategori yang
+    // sudah dikenal sistem (CATEGORY_ORDER) + semua label mentah yang pernah
+    // dipakai di data asli (rawCategoryLabels, sudah difetch untuk "Kelola
+    // Kategori") -- tapi field-nya CreatableSelect, jadi admin tetap bebas
+    // ketik kategori baru sama sekali (mis. kategori yang belum pernah dipakai
+    // di form manapun).
+    const manualKategoriOptions = useMemo(() => {
+        const labels = Array.from(new Set([...CATEGORY_ORDER, ...rawCategoryLabels]))
+        return labels.map((label) => ({ value: label, label }))
+    }, [rawCategoryLabels])
+
+    const resetManualEntryForm = () => {
+        setManualIsBbm(false)
+        setManualKategori('')
+        setManualJenisBbm(BBM_JENIS_OPTIONS[0] || '')
+        setManualPlat('')
+        setManualLiter('')
+        setManualUnit(null)
+        setManualBulan(CURRENT_MONTH_OPTION)
+        setManualTahun(YEAR_OPTIONS[0])
+        setManualNominal('')
+        setManualKeterangan('')
+    }
+
+    const openAddManualEntry = () => {
+        resetManualEntryForm()
+        setIsAddingManualEntry(true)
+    }
+
+    const parseRupiahValue = (value) => Number(String(value).replace(/[^0-9]/g, '')) || 0
+
+    const saveManualEntry = async () => {
+        if (!manualUnit) {
+            toast.warning('Pilih Unit Bisnis tujuan')
+            return
+        }
+        if (!manualIsBbm && !manualKategori.trim()) {
+            toast.warning('Isi/pilih Kategori')
+            return
+        }
+        const nominal = parseRupiahValue(manualNominal)
+        if (!nominal || nominal <= 0) {
+            toast.warning('Isi Nominal yang valid')
+            return
+        }
+        if (!manualKeterangan.trim()) {
+            toast.warning('Isi Keterangan Referensi -- catat dari mana asal nominal ini')
+            return
+        }
+
+        setIsSavingManualEntry(true)
+        try {
+            const uid = localStorage.getItem('userUid')
+            let nama = 'Admin'
+            try {
+                const userSnap = await getDoc(doc(db, 'users', uid))
+                if (userSnap.exists()) nama = userSnap.data().nama || nama
+            } catch (nameError) {
+                console.error('Gagal mengambil nama admin (tetap lanjut simpan entri):', nameError)
+            }
+
+            const entry = {
+                kategori: manualIsBbm ? 'BBM' : manualKategori.trim(),
+                isBbm: manualIsBbm,
+                jenisBbm: manualIsBbm ? manualJenisBbm : null,
+                plat: manualIsBbm && manualPlat.trim() ? manualPlat.trim() : null,
+                liter: manualIsBbm && manualLiter ? Number(manualLiter) : null,
+                unit: manualUnit.value,
+                bulan: manualBulan.value,
+                tahun: manualTahun.value,
+                nominal,
+                keteranganReferensi: manualKeterangan.trim(),
+                createdBy: uid,
+                createdByNama: nama,
+                createdAt: new Date().toISOString()
+            }
+
+            const ref = doc(collection(db, 'rekapanManualEntries'))
+            await setDoc(ref, entry)
+            setManualEntries((prev) => [...prev, { id: ref.id, ...entry }])
+            toast.success('Rekapan manual berhasil ditambahkan')
+            resetManualEntryForm()
+        } catch (error) {
+            console.error('Gagal menyimpan entri Rekapan manual:', error)
+            toast.error('Gagal menyimpan entri Rekapan manual')
+        } finally {
+            setIsSavingManualEntry(false)
+        }
+    }
+
+    const deleteManualEntry = async (entryId) => {
+        try {
+            await deleteDoc(doc(db, 'rekapanManualEntries', entryId))
+            setManualEntries((prev) => prev.filter((e) => e.id !== entryId))
+            toast.success('Entri Rekapan manual dihapus')
+        } catch (error) {
+            console.error('Gagal menghapus entri Rekapan manual:', error)
+            toast.error('Gagal menghapus entri Rekapan manual')
         }
     }
 
@@ -1435,7 +1592,17 @@ const RekapanUnitBisnis = () => {
                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                 Khusus Admin/Super Admin -- tidak memengaruhi tampilan Validator.
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={openAddManualEntry}
+                                    className="text-left border-2 border-red-600 dark:border-red-500 rounded-md p-3 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                >
+                                    <p className="text-sm font-medium text-red-700 dark:text-red-400">+ Tambah Rekapan</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Input manual nominal di luar sistem (ATK/BBM/lainnya) ke Unit Bisnis & bulan tertentu.
+                                    </p>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={startEditHeadcount}
@@ -1490,6 +1657,209 @@ const RekapanUnitBisnis = () => {
                             </div>
                         </div>
                     )}
+                </>
+            )}
+
+            {isAddingManualEntry && (
+                <>
+                    <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setIsAddingManualEntry(false)} />
+                    <div className="fixed z-50 inset-0 flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+                            <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
+                                <div>
+                                    <p className="font-semibold text-gray-800 dark:text-gray-100">Tambah Rekapan Manual</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Untuk nominal yang genuinely ada tapi di luar alur pengajuan RBS/LPJ (mis. ATK/BBM
+                                        tambahan dari sumber lain) -- otomatis ikut terjumlah ke Unit Bisnis & bulan yang dipilih.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddingManualEntry(false)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-2 flex-none"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="overflow-auto p-4 space-y-4">
+                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={manualIsBbm}
+                                        onChange={(e) => setManualIsBbm(e.target.checked)}
+                                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                    />
+                                    Ini rekapan BBM (butuh Jenis BBM, opsional Plat Nomor & Liter)
+                                </label>
+
+                                {manualIsBbm ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className="sm:col-span-1">
+                                            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Jenis BBM</label>
+                                            <Select
+                                                options={BBM_JENIS_OPTIONS.map((j) => ({ value: j, label: j }))}
+                                                value={manualJenisBbm ? { value: manualJenisBbm, label: manualJenisBbm } : null}
+                                                onChange={(opt) => setManualJenisBbm(opt?.value || '')}
+                                                styles={customStyles}
+                                                isSearchable={false}
+                                                menuPortalTarget={document.body}
+                                                menuPosition="absolute"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Plat Nomor (opsional)</label>
+                                            <input
+                                                type="text"
+                                                value={manualPlat}
+                                                onChange={(e) => setManualPlat(e.target.value)}
+                                                placeholder="mis. DD 1234 AB"
+                                                className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-2 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Liter (opsional)</label>
+                                            <input
+                                                type="number"
+                                                value={manualLiter}
+                                                onChange={(e) => setManualLiter(e.target.value)}
+                                                placeholder="mis. 30"
+                                                className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-2 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Kategori</label>
+                                        <CreatableSelect
+                                            options={manualKategoriOptions}
+                                            value={manualKategori ? { value: manualKategori, label: manualKategori } : null}
+                                            onChange={(opt) => setManualKategori(opt?.value || '')}
+                                            onCreateOption={(value) => setManualKategori(value)}
+                                            placeholder="Pilih atau ketik kategori baru, mis. ATK/CSR/Utilitas"
+                                            styles={customStyles}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="sm:col-span-1">
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Unit Bisnis</label>
+                                        <Select
+                                            options={BUSINESS_UNITS}
+                                            value={manualUnit}
+                                            onChange={setManualUnit}
+                                            placeholder="Pilih Unit Bisnis"
+                                            styles={customStyles}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Bulan</label>
+                                        <Select
+                                            options={MONTH_LABELS.map((label, value) => ({ value, label }))}
+                                            value={manualBulan}
+                                            onChange={setManualBulan}
+                                            isSearchable={false}
+                                            styles={customStyles}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Tahun</label>
+                                        <Select
+                                            options={YEAR_OPTIONS}
+                                            value={manualTahun}
+                                            onChange={setManualTahun}
+                                            isSearchable={false}
+                                            styles={customStyles}
+                                            menuPortalTarget={document.body}
+                                            menuPosition="absolute"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Nominal (Rp)</label>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={manualNominal}
+                                        onChange={(e) => setManualNominal(e.target.value.replace(/[^0-9]/g, ''))}
+                                        placeholder="mis. 500000"
+                                        className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-2 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    />
+                                    {manualNominal && (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            {formatRupiah(parseRupiahValue(manualNominal))}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                        Keterangan Referensi <span className="text-red-500">*</span>
+                                    </label>
+                                    <textarea
+                                        value={manualKeterangan}
+                                        onChange={(e) => setManualKeterangan(e.target.value)}
+                                        placeholder="Catat asal nominal ini, mis. 'Tambahan ATK dari toko X, invoice #123' atau 'BBM nota manual SPBU Y tgl 5/9'"
+                                        rows={2}
+                                        className="w-full text-sm border dark:border-gray-600 rounded-md px-2 py-2 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={saveManualEntry}
+                                        disabled={isSavingManualEntry}
+                                        className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+                                    >
+                                        {isSavingManualEntry ? 'Menyimpan...' : '+ Tambah Rekapan'}
+                                    </button>
+                                </div>
+
+                                {manualEntries.length > 0 && (
+                                    <div className="border-t dark:border-gray-700 pt-3">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Entri manual yang sudah ditambahkan ({manualEntries.length})
+                                        </p>
+                                        <div className="max-h-56 overflow-y-auto space-y-2">
+                                            {manualEntries
+                                                .slice()
+                                                .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+                                                .map((entry) => (
+                                                    <div key={entry.id} className="border dark:border-gray-600 rounded-md p-2 text-xs">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div>
+                                                                <p className="font-medium text-gray-800 dark:text-gray-100">
+                                                                    {MONTH_LABELS[entry.bulan]} {entry.tahun} -- {entry.isBbm ? (entry.jenisBbm || 'BBM Lainnya') : entry.kategori} -- {formatRupiah(entry.nominal)}
+                                                                </p>
+                                                                <p className="text-gray-500 dark:text-gray-400">{entry.unit}</p>
+                                                                {entry.keteranganReferensi && (
+                                                                    <p className="text-gray-500 dark:text-gray-400 italic mt-0.5">"{entry.keteranganReferensi}"</p>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => deleteManualEntry(entry.id)}
+                                                                className="text-red-600 hover:underline flex-none"
+                                                            >
+                                                                Hapus
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </>
             )}
 
