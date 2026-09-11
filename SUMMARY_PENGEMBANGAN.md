@@ -2074,3 +2074,47 @@ Desain intinya: entri manual DIUBAH jadi bentuk dokumen `reimbursement` SINTETIS
 - [ ] Tes manual: Admin buka Rekapan, klik "+ Tambah Rekapan", tambah 1 entri non-BBM (mis. ATK, Rp500.000, 1 Unit Bisnis, keterangan referensi), konfirmasi nominal itu LANGSUNG muncul di tabel kategori ATK untuk unit & bulan yang dipilih tanpa refresh manual
 - [ ] Tes manual: tambah 1 entri BBM manual (Jenis BBM + Plat + Liter), konfirmasi muncul di tabel "BBM -- Total Biaya" DAN "BBM -- Liter per Plat Nomor"
 - [ ] Tes manual: hapus 1 entri manual dari list di modal, konfirmasi nominalnya hilang lagi dari tabel Rekapan
+
+---
+
+# BAGIAN AV — Audit Menyeluruh: Cek Bug/Error di Semua Fungsi (2026-09-11)
+
+## 58.1 Permintaan User
+
+"Mohon cek secara keseluruhan apakah sudah tidak ada bugs atau error di semua fungsi?"
+
+## 58.2 Metodologi
+
+1. Baseline: jalankan seluruh test suite frontend (113 test) & functions (23 test) + `npm run build` -- semua PASS/sukses, tidak ada error kompilasi.
+2. Audit silang SEMUA referensi koleksi Firestore di `src/` (via `collection(db, ...)`/`doc(db, ...)`) terhadap SEMUA blok `match /{collection}/{...}` di `firestore.rules` -- untuk menemukan pola bug yang sudah terbukti berulang kali muncul sepanjang sesi ini (field yang lupa disertakan di payload, salah nama koleksi, baca koleksi yang dilarang rule, dst).
+3. Investigasi lanjutan ke fungsi/alur yang polanya MIRIP dengan bug yang sudah ditemukan & diperbaiki sebelumnya di sesi ini (Bagian AO/AP -- benturan nomor dokumen BS), untuk cek apakah bug yang SAMA ada di tempat lain yang belum pernah dilaporkan user.
+4. `grep` untuk penanda pekerjaan belum selesai (`TODO`/`FIXME`/`XXX`/`HACK`) -- nihil, tidak ada.
+
+## 58.3 Temuan & Perbaikan
+
+### Bug ditemukan & DIPERBAIKI: benturan nomor dokumen di 5 form lain (sama seperti Bagian AO/AP)
+
+`generateDisplayId()` di `FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx`, `FormLpjUmum.jsx`, `FormLpjMarketing.jsx` (kode identik, cuma beda suffix counter `_RBS_BBM`/`_RBS_OPR`/`_RBS_GAU`/`_LPJ_GAU`/`_LPJ_MRO`) ternyata punya kerentanan PERSIS SAMA dengan yang sempat bikin submit BS untuk PT Samudera Agencies Indonesia gagal permanen (Bagian AO/AP): counter `businessUnitCounters/{unitCode}_XXX` bisa saja tidak sinkron dengan nomor yang sudah benar-benar terpakai di `displayIdOwners` (mis. dokumen lama dari sebelum sistem counter ini ada, ditautkan lewat `backfillDisplayIdOwners()` TANPA ikut memajukan counter yang sesuai) -- kalau itu terjadi, transaksi gagal permission-denied dengan nomor yang SAMA setiap retry (counter tidak pernah maju karena transaksinya sendiri gagal), unit itu jadi TIDAK BISA submit RBS/LPJ jenis itu SAMA SEKALI sampai diperbaiki manual. Belum pernah dilaporkan user (mungkin belum ada unit yang kena kondisi ini), tapi kerentanannya SUDAH ADA -- diperbaiki proaktif dengan pola self-healing yang sama (coba tulis, kalau ditolak karena nomor sudah dipakai, retry di luar transaksi dengan nomor berikutnya, TANPA pernah membaca `displayIdOwners`).
+
+### Ditemukan, TIDAK diubah (dead code, tidak berdampak)
+
+Koleksi `counters` dan `alerts` punya blok rule di `firestore.rules` (`match /counters/{counterId}`, `match /alerts/{alertId}`) tapi TIDAK PERNAH direferensikan di `src/` maupun `functions/index.js` sama sekali -- sisa dari fitur lama yang sudah tidak dipakai (kemungkinan `counters` adalah skema counter SEBELUM `businessUnitCounters` ada). Tidak berbahaya (rule yang tidak pernah dipanggil tidak berdampak apa pun), tidak diutak-atik supaya tidak menyentuh sesuatu yang mungkin masih dianggap perlu dipertahankan untuk alasan lain.
+
+### Ditemukan, DILAPORKAN ke user untuk keputusan (BUKAN bug baru, gap keamanan pre-existing yang sudah didokumentasikan sendiri di kode)
+
+`storage.rules` -- komentar "ROLLBACK DARURAT (2026-09-02)" mengonfirmasi bahwa validasi kepemilikan per-dokumen untuk path `Reimbursement/`, `BonSementara/`, `LPJ/`, `lampiran_lpj/` (lampiran/PDF hasil cetak) SUDAH DI-ROLLBACK ke `allow write: if signedIn()` SAJA (tanpa cek kepemilikan) karena mekanisme `firestore.get()` cross-service sebelumnya TERBUKTI TIDAK BEKERJA di produksi (memblokir SEMUA generate/cetak PDF untuk SEMUA user). Artinya saat ini **siapa pun yang sudah login bisa menimpa file lampiran/PDF milik pengajuan ORANG LAIN** di path-path itu, asal tahu/menebak path-nya (dibentuk dari `displayId`, yang formatnya bisa ditebak). Ini SUDAH terdokumentasi sendiri di komentar kode (bukan temuan baru), dengan rencana perbaikan yang sudah disketsa (upload lampiran lewat Cloud Function/Admin SDK yang validasi kepemilikan via query Firestore biasa, BUKAN cross-service) tapi BELUM diimplementasikan. Di luar scope "cek bug" murni (ini kelemahan desain yang disengaja-sementara, bukan sesuatu yang baru rusak) -- dilaporkan supaya user bisa memutuskan prioritas perbaikannya, TIDAK diimplementasikan sekarang tanpa keputusan eksplisit karena butuh Cloud Function baru + refactor alur upload di banyak form sekaligus.
+
+## 58.4 Ringkasan Hasil Audit
+
+- **113 test frontend + 23 test functions = 136 test, semua PASS.** Build produksi sukses tanpa error.
+- **Semua koleksi Firestore yang direferensikan di kode SUDAH punya rule yang sesuai** -- tidak ada lagi celah "baca/tulis koleksi yang rule-nya melarang" yang belum ketahuan.
+- **1 bug nyata ditemukan & diperbaiki proaktif** (benturan nomor dokumen di 5 form RBS/LPJ, sebelum sempat dilaporkan user).
+- **1 gap keamanan pre-existing (bukan baru) dilaporkan untuk keputusan user** -- kepemilikan lampiran/PDF di Storage.
+
+## 58.5 Task Development — Bagian AV
+
+- [x] `FormRbsBbm.jsx`/`FormRbsOperasional.jsx`/`FormRbsUmum.jsx`/`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`: `generateDisplayId()` pakai pola retry self-healing yang sama seperti FormBs.jsx (Bagian AO/AP)
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Keputusan user: apakah mau prioritaskan perbaikan kepemilikan lampiran/PDF di Storage (Cloud Function-based), atau biarkan dulu apa adanya

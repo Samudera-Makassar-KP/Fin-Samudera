@@ -438,21 +438,40 @@ const FormLpjMarketing = () => {
         const day = today.getDate().toString().padStart(2, '0')
         const counterRef = doc(db, 'businessUnitCounters', `${unitCode}_LPJ_MRO`)
 
-        return runTransaction(db, async (transaction) => {
+        // Bagian AV: sama seperti FormBs.jsx (Bagian AO/AP) -- counter TIDAK
+        // SELALU sinkron dengan nomor yang benar-benar sudah terpakai di
+        // displayIdOwners. TIDAK membaca displayIdOwners sama sekali (rule-nya
+        // melarang total get/list) -- coba tulis, kalau ditolak karena
+        // nomornya sudah dipakai, retry DI LUAR transaksi dengan offset
+        // nomor berikutnya (lihat catatan lengkap di FormRbsBbm.jsx).
+        const attemptGenerate = (offset) => runTransaction(db, async (transaction) => {
             const counterDoc = await transaction.get(counterRef)
-            const newLastNumber = (!counterDoc.exists() || counterDoc.data().lastResetYear !== year)
+            const baseNumber = (!counterDoc.exists() || counterDoc.data().lastResetYear !== year)
                 ? 1
                 : counterDoc.data().lastNumber + 1
+            const candidateNumber = baseNumber + offset
 
-            transaction.set(counterRef, { lastNumber: newLastNumber, lastResetYear: year })
+            transaction.set(counterRef, { lastNumber: candidateNumber, lastResetYear: year })
 
-            const newDisplayId = `LPJ.MRO.${unitCode}.${year.slice(-2)}${month}${day}.${newLastNumber.toString().padStart(4, '0')}`
+            const newDisplayId = `LPJ.MRO.${unitCode}.${year.slice(-2)}${month}${day}.${candidateNumber.toString().padStart(4, '0')}`
             // Dicatat di transaksi yang sama supaya storage.rules bisa memvalidasi
             // kepemilikan lampiran/PDF lewat firestore.get() cross-service (lihat 18.6)
             transaction.set(doc(db, 'displayIdOwners', newDisplayId), { uid: localStorage.getItem('userUid') })
 
             return newDisplayId
         })
+
+        const MAX_ATTEMPTS = 50
+        let lastError = null
+        for (let offset = 0; offset < MAX_ATTEMPTS; offset++) {
+            try {
+                return await attemptGenerate(offset)
+            } catch (error) {
+                if (error?.code !== 'permission-denied') throw error
+                lastError = error
+            }
+        }
+        throw lastError || new Error(`Tidak menemukan nomor dokumen yang tersedia untuk ${unitCode} setelah ${MAX_ATTEMPTS} percobaan`)
     }
 
     const handleFileUpload = async (event) => {
