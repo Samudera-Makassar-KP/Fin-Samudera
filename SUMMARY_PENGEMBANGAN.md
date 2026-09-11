@@ -2069,7 +2069,7 @@ Desain intinya: entri manual DIUBAH jadi bentuk dokumen `reimbursement` SINTETIS
 - [x] `RekapanUnitBisnis.jsx`: `reimbursementDocs` jadi useMemo gabungan raw+manual, tombol & modal "Tambah Rekapan Manual" (BBM toggle, Kategori creatable, Unit/Bulan/Tahun/Nominal/Keterangan Referensi wajib, list+hapus entri)
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS (108 lama + 5 baru)
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (`firestore:rules` + hosting)
+- [x] Deploy ke produksi (`firestore:rules` + hosting) — sukses 2026-09-11, diverifikasi teks "Tambah Rekapan Manual" & "Utilitas" ada di bundle live
 - [ ] Tes manual: buka RBS Umum/LPJ Umum, konfirmasi CSR/Utilitas/Fasilitas muncul di dropdown Jenis/Item
 - [ ] Tes manual: Admin buka Rekapan, klik "+ Tambah Rekapan", tambah 1 entri non-BBM (mis. ATK, Rp500.000, 1 Unit Bisnis, keterangan referensi), konfirmasi nominal itu LANGSUNG muncul di tabel kategori ATK untuk unit & bulan yang dipilih tanpa refresh manual
 - [ ] Tes manual: tambah 1 entri BBM manual (Jenis BBM + Plat + Liter), konfirmasi muncul di tabel "BBM -- Total Biaya" DAN "BBM -- Liter per Plat Nomor"
