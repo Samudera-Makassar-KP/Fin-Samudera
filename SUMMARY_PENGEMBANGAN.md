@@ -2189,6 +2189,6 @@ Ditambahkan `menuPortal: (base) => ({ ...base, zIndex: 9999 })` ke SEMUA 19 styl
 - [x] `menuPortal` z-index 9999 ditambahkan ke 19 file (semua style object react-select di aplikasi)
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-11, diverifikasi hash bundle live (`main.32252b09.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: modal "Tambah Rekapan Manual" -- dropdown Unit Bisnis/Bulan/Tahun/Jenis BBM tampil DI DALAM modal (bukan lagi di luar/belakang), mengetik di Kategori tidak lagi "hilang"
 - [ ] Tes manual: cek juga dropdown Select di modal lain (mis. panel admin BsCheck/ReimbursementCheck/LpjBsCheck kalau ada) untuk memastikan tidak ada regresi
