@@ -50,7 +50,9 @@ describe('getUploadablePdfFiles', () => {
 })
 
 describe('PDF_MAX_SIZE_BYTES', () => {
-    test('batas ukuran adalah 250MB', () => {
-        expect(PDF_MAX_SIZE_BYTES).toBe(250 * 1024 * 1024)
+    // Bagian AW: turun dari 250MB -- upload sekarang lewat Cloud Function
+    // (batas request ~32MB), lihat catatan di uploadPdfFile.js.
+    test('batas ukuran adalah 20MB', () => {
+        expect(PDF_MAX_SIZE_BYTES).toBe(20 * 1024 * 1024)
     })
 })

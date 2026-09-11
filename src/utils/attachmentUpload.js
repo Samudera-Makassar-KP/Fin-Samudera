@@ -1,7 +1,15 @@
 import { PDFDocument } from 'pdf-lib'
 
 export const ATTACHMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png'
-export const ATTACHMENT_MAX_SIZE_BYTES = 250 * 1024 * 1024
+// Bagian AW: turun dari 250MB -- lampiran (bisa beberapa file sekaligus)
+// digabung jadi 1 PDF lalu diupload lewat Cloud Function `uploadOwnedFile`
+// (lihat uploadPdfFile.js), yang punya batas ukuran request ~32MB (platform
+// Cloud Functions). Batas PER FILE di sini sengaja disamakan dengan batas
+// FILE GABUNGAN (PDF_MAX_SIZE_BYTES di uploadPdfFile.js) supaya gagal cepat
+// & jelas saat memilih file, bukan baru ketahuan gagal setelah semua file
+// digabung -- kalau user pilih beberapa file kecil yang totalnya masih lewat
+// batas setelah digabung, itu tetap tertangkap belakangan di uploadPdfFile().
+export const ATTACHMENT_MAX_SIZE_BYTES = 20 * 1024 * 1024
 
 const PDF_MAGIC_BYTES = '%PDF-'
 

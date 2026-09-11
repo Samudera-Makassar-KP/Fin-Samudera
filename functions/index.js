@@ -7,6 +7,7 @@ const legacyFunctions = require("firebase-functions");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore } = require("firebase-admin/firestore");
+const { getStorage } = require("firebase-admin/storage");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const vision = require("@google-cloud/vision");
@@ -925,6 +926,121 @@ exports.validatePengembalianBukti = onCall(async (request) => {
     });
 
     return { status, expectedAmount: sisaLebih };
+});
+
+// Bagian AW: upload file (lampiran RBS/LPJ, PDF resmi hasil cetak, bukti
+// pengembalian) untuk path Storage yang SEBELUMNYA divalidasi client-side
+// tanpa cek kepemilikan sama sekali (lihat "ROLLBACK DARURAT" di
+// storage.rules -- mekanisme firestore.get() cross-service dari DALAM
+// Storage Rules TERBUKTI tidak bekerja di produksi, sempat memblokir SEMUA
+// upload untuk SEMUA user). Solusinya: upload lewat Cloud Function ini
+// (Admin SDK, query Firestore BIASA -- bukan cross-service, terbukti selalu
+// bekerja) yang mengecek kepemilikan SEBELUM menulis ke Storage.
+// storage.rules sekarang `allow write: if false` untuk path-path ini --
+// SEMUA upload wajib lewat sini.
+//
+// `ownership.mode`:
+//  - 'displayIdOwners': untuk lampiran RBS/LPJ (baru diajukan ATAU sedang
+//    diedit Super Admin). Kalau /displayIdOwners/{displayId} SUDAH ada
+//    (pengajuan lama, sedang diedit), uid pemiliknya harus cocok dengan
+//    pengunggah (kecuali Super Admin). Kalau BELUM ada (pengajuan baru,
+//    belum sempat submit dokumen utamanya), diizinkan -- kepemilikan
+//    sebenarnya dikunci nanti oleh firestore.rules `canCreateWorkflow` saat
+//    dokumen bonSementara/reimbursement/lpj-nya benar-benar dibuat.
+//  - 'workflowDoc': untuk cetak ulang PDF resmi dokumen yang SUDAH ADA
+//    (Disetujui) -- kepemilikan dicek langsung ke dokumen bonSementara/
+//    reimbursement/lpj asli (pemilik ATAU validator/reviewer1/reviewer2
+//    yang tercatat di dokumen itu, sama seperti canReadWorkflow() di
+//    firestore.rules, supaya approver yang berhak lihat dokumennya juga
+//    tetap bisa cetak ulang PDF-nya).
+// Super Admin selalu diizinkan tanpa syarat tambahan, di kedua mode.
+const ALLOWED_STORAGE_PREFIXES = ["Reimbursement/", "BonSementara/", "LPJ/", "lampiran_lpj/", "lpj_pengembalian/"];
+const UPLOAD_MAX_BYTES = 20 * 1024 * 1024; // 20MB -- lihat catatan batas request Cloud Functions di uploadPdfFile.js
+
+exports.uploadOwnedFile = onCall({ memory: "512MiB", timeoutSeconds: 60 }, async (request) => {
+    if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login untuk mengunggah file.");
+    }
+
+    const storagePath = normalizeText(request.data?.storagePath, "Path penyimpanan", 500);
+    const contentType = normalizeText(request.data?.contentType, "Tipe konten", 100);
+    const fileBase64 = request.data?.fileBase64;
+    const ownership = request.data?.ownership || {};
+
+    if (!ALLOWED_STORAGE_PREFIXES.some((prefix) => storagePath.startsWith(prefix))) {
+        throw new HttpsError("invalid-argument", "Lokasi penyimpanan tidak diizinkan.");
+    }
+    // Cegah path traversal (mis. "Reimbursement/../../secret") -- storagePath
+    // dipakai langsung sebagai path objek Storage di bawah.
+    if (storagePath.includes("..") || storagePath.includes("//")) {
+        throw new HttpsError("invalid-argument", "Path penyimpanan tidak valid.");
+    }
+    if (typeof fileBase64 !== "string" || !fileBase64) {
+        throw new HttpsError("invalid-argument", "File tidak boleh kosong.");
+    }
+
+    let buffer;
+    try {
+        buffer = Buffer.from(fileBase64, "base64");
+    } catch (error) {
+        throw new HttpsError("invalid-argument", "File gagal dibaca.");
+    }
+    if (buffer.length === 0 || buffer.length > UPLOAD_MAX_BYTES) {
+        throw new HttpsError("invalid-argument", `Ukuran file maksimal ${Math.round(UPLOAD_MAX_BYTES / (1024 * 1024))}MB.`);
+    }
+
+    const uid = request.auth.uid;
+    const requesterData = await syncAuthenticatedUserProfile(request.auth);
+    const isSuperAdmin = requesterData?.role === "Super Admin";
+
+    if (!isSuperAdmin) {
+        if (ownership.mode === "displayIdOwners") {
+            const displayId = normalizeText(ownership.displayId, "displayId", 200);
+            const ownerDoc = await db.collection("displayIdOwners").doc(displayId).get();
+            if (ownerDoc.exists && ownerDoc.data()?.uid !== uid) {
+                throw new HttpsError("permission-denied", "Anda tidak berhak mengunggah file untuk dokumen ini.");
+            }
+        } else if (ownership.mode === "workflowDoc") {
+            const collectionName = ownership.collectionName;
+            if (!["bonSementara", "reimbursement", "lpj"].includes(collectionName)) {
+                throw new HttpsError("invalid-argument", "Koleksi dokumen tidak dikenali.");
+            }
+            const docId = normalizeText(ownership.docId, "ID dokumen", 200);
+            const docSnap = await db.collection(collectionName).doc(docId).get();
+            if (!docSnap.exists) {
+                throw new HttpsError("not-found", "Dokumen tidak ditemukan.");
+            }
+            const data = docSnap.data();
+            const isOwner = data.user?.uid === uid;
+            const isApprover = ["validator", "reviewer1", "reviewer2"].some((field) =>
+                Array.isArray(data.user?.[field]) && data.user[field].includes(uid)
+            );
+            if (!isOwner && !isApprover) {
+                throw new HttpsError("permission-denied", "Anda tidak berhak mengunggah file untuk dokumen ini.");
+            }
+        } else {
+            throw new HttpsError("invalid-argument", "Mode kepemilikan tidak dikenali.");
+        }
+    }
+
+    const bucket = getStorage().bucket();
+    const file = bucket.file(storagePath);
+    const downloadToken = crypto.randomUUID();
+    await file.save(buffer, {
+        resumable: false,
+        contentType,
+        metadata: {
+            metadata: { firebaseStorageDownloadTokens: downloadToken }
+        }
+    });
+
+    // Format URL identik dengan yang dikembalikan getDownloadURL() client SDK
+    // (token-based, bisa diakses tanpa header auth) supaya field lampiranUrl/
+    // pdfUrl yang disimpan ke Firestore tetap bisa dibuka seperti sebelumnya.
+    const encodedPath = encodeURIComponent(storagePath);
+    const downloadURL = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+
+    return { downloadURL };
 });
 
 // Trigger saat Reimbursement pertama kali dibuat

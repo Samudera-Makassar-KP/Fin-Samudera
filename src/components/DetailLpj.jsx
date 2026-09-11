@@ -290,7 +290,7 @@ const DetailLpj = () => {
         if (!file) return
 
         if (file.size > PENGEMBALIAN_MAX_SIZE_BYTES) {
-            toast.error(`Ukuran file ${file.name} maksimal 250MB.`)
+            toast.error(`Ukuran file ${file.name} maksimal ${Math.round(PENGEMBALIAN_MAX_SIZE_BYTES / (1024 * 1024))}MB.`)
             e.target.value = ''
             return
         }
@@ -317,8 +317,8 @@ const DetailLpj = () => {
             setLpjDetail((prev) => ({ ...prev, pengembalianStatus: status, pengembalianBuktiUrl: fileUrl }))
             setPengembalianFile(null)
         } catch (error) {
-            console.error('Gagal upload/validasi bukti pengembalian:', error)
-            toast.error('Gagal mengupload bukti pengembalian. Silakan coba lagi.')
+            console.error('Gagal upload/validasi bukti pengembalian:', error?.code, error?.message, error)
+            toast.error(error?.message || 'Gagal mengupload bukti pengembalian. Silakan coba lagi.')
         } finally {
             setIsUploadingPengembalian(false)
         }

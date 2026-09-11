@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore'
-import { db, storage } from '../firebaseConfig'
+import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import CreatableSelect from 'react-select/creatable'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -488,7 +488,7 @@ const FormLpjUmum = () => {
                 continue;
             }
             if (file.size > ATTACHMENT_MAX_SIZE_BYTES) {
-                toast.error(`Ukuran file ${file.name} maksimal 250MB.`);
+                toast.error(`Ukuran file ${file.name} maksimal ${Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB.`);
                 continue;
             }
             if (!(await isValidAttachmentFile(file))) {
@@ -513,9 +513,14 @@ const FormLpjUmum = () => {
 
         try {
             const mergedFile = await mergeAttachmentsToPdf(uploadableFiles, `Lampiran_${id}.pdf`)
-            return await uploadPdfFile(storage, `lampiran_lpj/${id}_${mergedFile.name}`, mergedFile);
+            return await uploadPdfFile(
+                functions,
+                `lampiran_lpj/${id}_${mergedFile.name}`,
+                mergedFile,
+                { mode: 'displayIdOwners', displayId: id }
+            );
         } catch (error) {
-            console.error("Gagal upload lampiran:", error);
+            console.error("Gagal upload lampiran:", error?.code, error?.message, error);
             throw error;
         }
     };
@@ -525,7 +530,7 @@ const FormLpjUmum = () => {
         if (!file) return
 
         if (file.size > PENGEMBALIAN_MAX_SIZE_BYTES) {
-            toast.error(`Ukuran file ${file.name} maksimal 250MB.`)
+            toast.error(`Ukuran file ${file.name} maksimal ${Math.round(PENGEMBALIAN_MAX_SIZE_BYTES / (1024 * 1024))}MB.`)
             e.target.value = ''
             return
         }
@@ -555,8 +560,8 @@ const FormLpjUmum = () => {
             if (tone === 'success') toast.success(label)
             else toast.warning(label)
         } catch (error) {
-            console.error('Gagal upload/validasi bukti pengembalian:', error)
-            toast.warning('Gagal mengupload bukti pengembalian. Silakan upload lagi lewat halaman Detail LPJ.')
+            console.error('Gagal upload/validasi bukti pengembalian:', error?.code, error?.message, error)
+            toast.warning(error?.message || 'Gagal mengupload bukti pengembalian. Silakan upload lagi lewat halaman Detail LPJ.')
         } finally {
             setIsUploadingPengembalian(false)
         }
@@ -836,8 +841,8 @@ const FormLpjUmum = () => {
                 navigate('/dashboard')
             }
         } catch (error) {
-            console.error('Error submitting lpj:', error)
-            toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
+            console.error('Error submitting lpj:', error?.code, error?.message, error)
+            toast.error(error?.message || 'Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
             setIsSubmitting(false)
         }
     }

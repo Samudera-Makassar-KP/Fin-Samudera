@@ -3,7 +3,7 @@ import { pdf } from '@react-pdf/renderer'
 import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer'
 import Logo from '../assets/images/logo-samudera.png'
 import { doc, getDoc } from 'firebase/firestore'
-import { db, storage } from '../firebaseConfig'
+import { db, functions } from '../firebaseConfig'
 import { toast, ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { uploadPdfFile } from './uploadPdfFile'
@@ -608,9 +608,10 @@ const generateReimbursementPDF = async (reimbursementDetail) => {
         const sanitizedKategori = reimbursementDetail.kategori.replace(/\//g, '_')
 
         const downloadURL = await uploadPdfFile(
-            storage,
+            functions,
             `Reimbursement/${sanitizedKategori}/${reimbursementDetail.displayId}/${reimbursementDetail.displayId}.pdf`,
-            pdfBlob
+            pdfBlob,
+            { mode: 'workflowDoc', collectionName: 'reimbursement', docId: reimbursementDetail.id }
         )
         return downloadURL
     } catch (error) {

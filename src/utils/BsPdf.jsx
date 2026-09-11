@@ -2,7 +2,7 @@ import React from 'react'
 import { pdf } from '@react-pdf/renderer'
 import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer'
 import { doc, getDoc } from 'firebase/firestore'
-import { db, storage } from '../firebaseConfig'
+import { db, functions } from '../firebaseConfig'
 import { toast, ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { uploadPdfFile } from './uploadPdfFile'
@@ -472,9 +472,10 @@ const generateBsPDF = async (bonSementaraDetail) => {
         const sanitizedKategori = bonSementaraDetail.bonSementara[0].kategori.replace(/\//g, '_')
 
         const downloadURL = await uploadPdfFile(
-            storage,
+            functions,
             `BonSementara/${sanitizedKategori}/${bonSementaraDetail.displayId}/${bonSementaraDetail.displayId}.pdf`,
-            pdfBlob
+            pdfBlob,
+            { mode: 'workflowDoc', collectionName: 'bonSementara', docId: bonSementaraDetail.id }
         )
         return downloadURL
     } catch (error) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore'
-import { db, storage } from '../firebaseConfig'
+import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import CreatableSelect from 'react-select/creatable'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -485,7 +485,7 @@ const FormLpjMarketing = () => {
                 continue;
             }
             if (file.size > ATTACHMENT_MAX_SIZE_BYTES) {
-                toast.error(`Ukuran file ${file.name} maksimal 250MB`);
+                toast.error(`Ukuran file ${file.name} maksimal ${Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB`);
                 continue;
             }
             if (!(await isValidAttachmentFile(file))) {
@@ -510,10 +510,15 @@ const FormLpjMarketing = () => {
 
         try {
             const mergedFile = await mergeAttachmentsToPdf(uploadableFiles, `Lampiran_${displayId}.pdf`)
-            return await uploadPdfFile(storage, `LPJ/Marketing_Operasional/${displayId}/${mergedFile.name}`, mergedFile);
+            return await uploadPdfFile(
+                functions,
+                `LPJ/Marketing_Operasional/${displayId}/${mergedFile.name}`,
+                mergedFile,
+                { mode: 'displayIdOwners', displayId }
+            );
         } catch (error) {
-            console.error('Error uploading files:', error);
-            toast.error('Gagal mengunggah lampiran');
+            console.error('Error uploading files:', error?.code, error?.message, error);
+            toast.error(error?.message || 'Gagal mengunggah lampiran');
             throw error;
         }
     }
@@ -523,7 +528,7 @@ const FormLpjMarketing = () => {
         if (!file) return
 
         if (file.size > PENGEMBALIAN_MAX_SIZE_BYTES) {
-            toast.error(`Ukuran file ${file.name} maksimal 250MB.`)
+            toast.error(`Ukuran file ${file.name} maksimal ${Math.round(PENGEMBALIAN_MAX_SIZE_BYTES / (1024 * 1024))}MB.`)
             e.target.value = ''
             return
         }
@@ -551,8 +556,8 @@ const FormLpjMarketing = () => {
             if (tone === 'success') toast.success(label)
             else toast.warning(label)
         } catch (error) {
-            console.error('Gagal upload/validasi bukti pengembalian:', error)
-            toast.warning('Gagal mengupload bukti pengembalian. Silakan upload lagi lewat halaman Detail LPJ.')
+            console.error('Gagal upload/validasi bukti pengembalian:', error?.code, error?.message, error)
+            toast.warning(error?.message || 'Gagal mengupload bukti pengembalian. Silakan upload lagi lewat halaman Detail LPJ.')
         } finally {
             setIsUploadingPengembalian(false)
         }
@@ -834,8 +839,8 @@ const FormLpjMarketing = () => {
                 navigate('/dashboard')
             }
         } catch (error) {
-            console.error('Error submitting lpj:', error)
-            toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
+            console.error('Error submitting lpj:', error?.code, error?.message, error)
+            toast.error(error?.message || 'Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
             setIsSubmitting(false)
         }
     }

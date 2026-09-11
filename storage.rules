@@ -51,42 +51,38 @@ service firebase.storage {
     // memblokir SEMUA generate/cetak PDF (Print BS/RBS/LPJ, Reminder Finance)
     // untuk SEMUA user termasuk Super Admin, langsung di-rollback ke bentuk
     // signedIn() sederhana (sama seperti sebelum Bagian K) supaya aplikasi
-    // berfungsi normal lagi. Validasi tipe/ukuran file (request.resource,
-    // TIDAK butuh cross-service) tetap dipertahankan karena itu terbukti jalan.
-    // Perlindungan ROLE (siapa Super Admin dkk) sudah diperbaiki pakai custom
-    // claims (isSuperAdminRole() di atas, lihat pemakaiannya di announcements/).
-    // Perlindungan KEPEMILIKAN per-dokumen (siapa boleh timpa lampiran/PDF
-    // path INI) untuk path di bawah (Reimbursement/BonSementara/LPJ/
-    // lampiran_lpj) MASIH belum diperbaiki -- custom claims cocok untuk role
-    // (jarang berubah, cocok ditaruh di token) tapi TIDAK cocok untuk
-    // kepemilikan per-dokumen (terlalu dinamis). Opsi yang masih perlu
-    // dikerjakan: upload lampiran lewat Cloud Function (Admin SDK) yang
-    // validasi kepemilikan via query Firestore biasa (BUKAN cross-service,
-    // terbukti selalu bekerja) sebelum menulis ke Storage -- lihat
-    // SUMMARY_PENGEMBANGAN.md Bagian S untuk detail rencana.
+    // berfungsi normal lagi.
+    //
+    // Bagian AW (2026-09-11): kepemilikan per-dokumen SEKARANG divalidasi di
+    // Cloud Function `uploadOwnedFile` (functions/index.js, Admin SDK, query
+    // Firestore BIASA -- bukan cross-service, terbukti selalu bekerja)
+    // SEBELUM menulis ke Storage. Jadi upload LANGSUNG dari client ke path
+    // di bawah ini (lewat Storage Rules) tidak lagi diizinkan sama sekali --
+    // SEMUA tulisan wajib lewat Cloud Function itu. `read` tetap terbuka
+    // untuk siapa pun yang login (tidak berubah, tidak pernah jadi masalah).
     match /Reimbursement/{allPaths=**} {
       allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+      allow write: if false;
     }
 
     match /BonSementara/{allPaths=**} {
       allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+      allow write: if false;
     }
 
     match /LPJ/{allPaths=**} {
       allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+      allow write: if false;
     }
 
     match /lampiran_lpj/{fileName} {
       allow read: if signedIn();
-      allow write: if signedIn() && validPdfUpload();
+      allow write: if false;
     }
 
     match /lpj_pengembalian/{allPaths=**} {
       allow read: if signedIn();
-      allow write: if signedIn() && validPdfOrImageUpload();
+      allow write: if false;
     }
 
     // Gambar pengumuman -- dulu dibatasi Super Admin lewat firestore.get()

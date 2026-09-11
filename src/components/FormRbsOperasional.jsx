@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { collection, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs, runTransaction } from 'firebase/firestore'
-import { db, storage } from '../firebaseConfig'
+import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import CreatableSelect from 'react-select/creatable'
 import { toast } from 'react-toastify'
@@ -452,7 +452,7 @@ const RbsOperasionalForm = () => {
         for (let file of files) {
             // Validate file size (250MB limit)
             if (file.size > ATTACHMENT_MAX_SIZE_BYTES) {
-                toast.error(`Ukuran file ${file.name} maksimal 250MB`)
+                toast.error(`Ukuran file ${file.name} maksimal ${Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB`)
                 continue
             }
             // Validate file type (PDF/JPG/PNG, dicek dari isi file bukan cuma nama/ekstensi)
@@ -477,10 +477,15 @@ const RbsOperasionalForm = () => {
 
         try {
             const mergedFile = await mergeAttachmentsToPdf(files, `Lampiran_${displayId}.pdf`)
-            return await uploadPdfFile(storage, `Reimbursement/Operasional/${displayId}/${mergedFile.name}`, mergedFile)
+            return await uploadPdfFile(
+                functions,
+                `Reimbursement/Operasional/${displayId}/${mergedFile.name}`,
+                mergedFile,
+                { mode: 'displayIdOwners', displayId }
+            )
         } catch (error) {
-            console.error('Error uploading files:', error)
-            toast.error('Gagal mengunggah lampiran')
+            console.error('Error uploading files:', error?.code, error?.message, error)
+            toast.error(error?.message || 'Gagal mengunggah lampiran')
             return null
         }
     }
@@ -729,8 +734,8 @@ const RbsOperasionalForm = () => {
             }
             
         } catch (error) {
-            console.error('Error submitting reimbursement:', error)
-            toast.error('Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
+            console.error('Error submitting reimbursement:', error?.code, error?.message, error)
+            toast.error(error?.message || 'Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
             setIsSubmitting(false)
         }
     }

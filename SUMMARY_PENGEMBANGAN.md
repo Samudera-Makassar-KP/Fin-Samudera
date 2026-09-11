@@ -2117,4 +2117,49 @@ Koleksi `counters` dan `alerts` punya blok rule di `firestore.rules` (`match /co
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-11, diverifikasi hash bundle live (`main.a6f301af.js`) cocok dengan hasil build lokal terbaru
-- [ ] Keputusan user: apakah mau prioritaskan perbaikan kepemilikan lampiran/PDF di Storage (Cloud Function-based), atau biarkan dulu apa adanya
+- [x] Keputusan user: prioritaskan sekarang, pakai pendekatan Cloud Function (batas file diperkecil, bukan Signed URL) -- lihat Bagian AW
+
+---
+
+# BAGIAN AW — Perbaikan Kepemilikan Lampiran/PDF di Storage (2026-09-11)
+
+## 59.1 Latar Belakang
+
+Bagian AV menemukan (bukan bug baru) `storage.rules` untuk path `Reimbursement/`, `BonSementara/`, `LPJ/`, `lampiran_lpj/`, `lpj_pengembalian/` cuma `allow write: if signedIn()` TANPA cek kepemilikan sama sekali -- siapa pun yang login bisa menimpa lampiran/PDF milik pengajuan orang lain kalau tahu/menebak path-nya. Ini hasil ROLLBACK DARURAT 2026-09-02 karena mekanisme `firestore.get()` cross-service dari DALAM Storage Rules terbukti tidak bekerja di produksi (memblokir SEMUA upload untuk SEMUA user).
+
+User diberi 2 opsi: (A) upload lewat Cloud Function dengan batas ukuran file diperkecil (~20MB, platform Cloud Functions), resiko produksi rendah; (B) Signed URL supaya batas ukuran tetap 250MB, tapi resiko IAM/signBlob gagal di produksi tanpa bisa diverifikasi dari sini (mirip kegagalan cross-service yang sudah pernah terjadi). **User memilih Opsi A.**
+
+## 59.2 Implementasi
+
+- **`functions/index.js`**: Cloud Function baru `uploadOwnedFile` (callable) -- terima `storagePath`, `contentType`, `fileBase64`, `ownership`. Validasi kepemilikan SEBELUM menulis ke Storage lewat query Firestore BIASA (Admin SDK, bukan cross-service):
+  - `ownership.mode: 'displayIdOwners'` (lampiran RBS/LPJ baru/diedit) -- cek `/displayIdOwners/{displayId}`, kalau sudah ada uid pemiliknya harus cocok (kecuali Super Admin); kalau belum ada (pengajuan baru), diizinkan -- kepemilikan sebenarnya dikunci nanti oleh `canCreateWorkflow` saat dokumen utamanya dibuat.
+  - `ownership.mode: 'workflowDoc'` (cetak ulang PDF resmi dokumen yang sudah Disetujui) -- cek dokumen `bonSementara`/`reimbursement`/`lpj` langsung, izinkan pemilik ATAU validator/reviewer1/reviewer2 yang tercatat (sama seperti `canReadWorkflow()` di firestore.rules) supaya approver yang berhak lihat dokumennya tetap bisa cetak ulang.
+  - Super Admin selalu diizinkan tanpa syarat tambahan, kedua mode.
+  - Batas ukuran file 20MB (`UPLOAD_MAX_BYTES`), path harus diawali salah satu prefix yang diizinkan, dicegah path traversal.
+- **`storage.rules`**: `allow write: if false` untuk SEMUA path itu -- upload langsung dari client (Storage Rules) tidak lagi diizinkan sama sekali, WAJIB lewat `uploadOwnedFile`. `read` tetap `signedIn()` (tidak berubah, tidak pernah bermasalah).
+- **`src/utils/uploadPdfFile.js`**: `uploadPdfFile()` diubah total -- bukan lagi `uploadBytes` langsung ke Storage, tapi encode file jadi base64 lalu panggil `uploadOwnedFile` lewat `httpsCallable`. Signature baru: `uploadPdfFile(functionsInstance, path, file, ownership)`. `PDF_MAX_SIZE_BYTES` turun dari 250MB ke 20MB (batas request Cloud Functions ~32MB, base64 menambah ukuran ~33%).
+- **`src/utils/pengembalianUpload.js`**: `uploadAndValidatePengembalian()` juga diubah ke `uploadOwnedFile` (mode `workflowDoc`, `collectionName:'lpj'`) sebelum memanggil `validatePengembalianBukti` seperti biasa.
+- **`src/utils/attachmentUpload.js`**: `ATTACHMENT_MAX_SIZE_BYTES` turun dari 250MB ke 20MB (disamakan dengan batas file gabungan) -- gagal cepat & jelas saat memilih file, bukan baru ketahuan setelah semua file digabung.
+- **6 form** (`FormBs.jsx` tidak perlu diubah -- tidak ada lampiran; `FormRbsBbm/Operasional/Umum.jsx`, `FormLpjUmum/Marketing.jsx`) & **3 generator PDF resmi** (`BsPdf.jsx`, `ReimbursementPdf.jsx`, `LpjPdf.jsx`): semua titik panggil `uploadPdfFile`/`uploadAndValidatePengembalian` diperbarui pakai `functions` (bukan `storage`) + `ownership` yang sesuai. Pesan error "maksimal 250MB" yang jadi basi di banyak tempat (termasuk `DetailLpj.jsx`) diperbaiki jadi dinamis dari konstanta. Semua `catch` block terkait upload diperjelas supaya pesan error SPESIFIK (mis. "Ukuran file maksimal 20MB", "Anda tidak berhak mengunggah file untuk dokumen ini") tampil ke user, bukan pesan generik.
+
+## 59.3 Catatan Risiko Deploy
+
+Perubahan ini MENGUNCI upload langsung ke Storage (`allow write: if false`) -- begitu `storage.rules` di-deploy, browser mana pun yang MASIH menjalankan bundle LAMA (sebelum Bagian AW, pakai `uploadBytes` langsung) akan GAGAL upload sampai bundle barunya termuat (hard refresh / navigasi berikutnya, sama seperti pola PWA caching yang sudah beberapa kali ditemui sesi ini). Urutan deploy: Cloud Function dulu (supaya tersedia sebelum dibutuhkan), baru `storage.rules` + `hosting` bareng.
+
+## 59.4 Task Development — Bagian AW
+
+- [x] `functions/index.js`: Cloud Function `uploadOwnedFile` (mode `displayIdOwners` & `workflowDoc`, Super Admin bypass, batas 20MB)
+- [x] `storage.rules`: `allow write: if false` untuk 5 path yang tadinya `signedIn()` saja
+- [x] `uploadPdfFile.js`: upload lewat Cloud Function, `PDF_MAX_SIZE_BYTES` 20MB
+- [x] `pengembalianUpload.js`: upload lewat Cloud Function (mode `workflowDoc`)
+- [x] `attachmentUpload.js`: `ATTACHMENT_MAX_SIZE_BYTES` 20MB
+- [x] 6 form + 3 generator PDF: semua titik panggil diperbarui (`functions` + `ownership`), pesan error "250MB" basi diperbaiki jadi dinamis, error spesifik ditampilkan ke user
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `node -c functions/index.js` -- sintaks valid; `firebase-admin/storage` dikonfirmasi resolvable
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (`functions:uploadOwnedFile` dulu, lalu `storage` + `hosting` bareng)
+- [ ] Tes manual: submit RBS/LPJ baru dengan lampiran, konfirmasi upload sukses & lampiran bisa dibuka
+- [ ] Tes manual: cetak PDF resmi BS/RBS/LPJ yang sudah Disetujui, konfirmasi tetap berhasil (baik sebagai pemilik maupun sebagai Reviewer/Validator/Admin)
+- [ ] Tes manual: upload bukti pengembalian LPJ, konfirmasi tetap tervalidasi seperti sebelumnya
+- [ ] Tes manual: coba upload file di atas 20MB, konfirmasi muncul pesan error yang jelas (bukan gagal diam-diam)
