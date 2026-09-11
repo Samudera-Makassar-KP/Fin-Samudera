@@ -2158,7 +2158,7 @@ Perubahan ini MENGUNCI upload langsung ke Storage (`allow write: if false`) -- b
 - [x] `cd functions && npx jest` -- 23 test tetap PASS
 - [x] `node -c functions/index.js` -- sintaks valid; `firebase-admin/storage` dikonfirmasi resolvable
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (`functions:uploadOwnedFile` dulu, lalu `storage` + `hosting` bareng)
+- [x] Deploy ke produksi (`functions:uploadOwnedFile` dulu, lalu `storage` + `hosting` bareng) — sukses 2026-09-11, diverifikasi teks "uploadOwnedFile" ada di bundle live (`main.e4fa6117.js`)
 - [ ] Tes manual: submit RBS/LPJ baru dengan lampiran, konfirmasi upload sukses & lampiran bisa dibuka
 - [ ] Tes manual: cetak PDF resmi BS/RBS/LPJ yang sudah Disetujui, konfirmasi tetap berhasil (baik sebagai pemilik maupun sebagai Reviewer/Validator/Admin)
 - [ ] Tes manual: upload bukti pengembalian LPJ, konfirmasi tetap tervalidasi seperti sebelumnya
