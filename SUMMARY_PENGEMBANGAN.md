@@ -2116,5 +2116,5 @@ Koleksi `counters` dan `alerts` punya blok rule di `firestore.rules` (`match /co
 - [x] `FormRbsBbm.jsx`/`FormRbsOperasional.jsx`/`FormRbsUmum.jsx`/`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`: `generateDisplayId()` pakai pola retry self-healing yang sama seperti FormBs.jsx (Bagian AO/AP)
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-11, diverifikasi hash bundle live (`main.a6f301af.js`) cocok dengan hasil build lokal terbaru
 - [ ] Keputusan user: apakah mau prioritaskan perbaikan kepemilikan lampiran/PDF di Storage (Cloud Function-based), atau biarkan dulu apa adanya
