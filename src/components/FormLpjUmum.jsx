@@ -969,6 +969,10 @@ const FormLpjUmum = () => {
         input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
         placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
         menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
+        // Bagian AX: menuPortalTarget={document.body} butuh z-index tinggi di sini
+        // juga (bukan cuma di `menu`) supaya dropdown tidak tampil tertutup/salah
+        // posisi kalau Select ini dirender di dalam modal/overlay lain.
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
         option: (base, state) => ({
             ...base,
             backgroundColor: isDark

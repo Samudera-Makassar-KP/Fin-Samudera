@@ -2163,3 +2163,32 @@ Perubahan ini MENGUNCI upload langsung ke Storage (`allow write: if false`) -- b
 - [ ] Tes manual: cetak PDF resmi BS/RBS/LPJ yang sudah Disetujui, konfirmasi tetap berhasil (baik sebagai pemilik maupun sebagai Reviewer/Validator/Admin)
 - [ ] Tes manual: upload bukti pengembalian LPJ, konfirmasi tetap tervalidasi seperti sebelumnya
 - [ ] Tes manual: coba upload file di atas 20MB, konfirmasi muncul pesan error yang jelas (bukan gagal diam-diam)
+
+---
+
+# BAGIAN AX — Dropdown Select Muncul Salah Posisi di Luar Modal (2026-09-11)
+
+## 60.1 Permintaan User
+
+Di modal "Tambah Rekapan Manual" (Bagian AU): dropdown "Unit Bisnis" muncul di LUAR & DI BELAKANG modal (bukan menyatu di dalamnya), dan mengetik di field "Kategori" (CreatableSelect) membuat teks yang diketik seperti hilang. User minta dicek juga bagian lain yang mungkin kena masalah serupa.
+
+## 60.2 Akar Masalah
+
+Semua `<Select>`/`<CreatableSelect>` di aplikasi ini pakai `menuPortalTarget={document.body}` -- ini membuat react-select merender MENU dropdown-nya lewat React Portal ke `document.body`, DI LUAR pohon DOM komponen aslinya (supaya tidak terpotong `overflow:hidden` container manapun). Portal itu dibungkus elemen wrapper terpisah (`menuPortal`) yang PUNYA STYLE SENDIRI, TERPISAH dari style `menu` biasa -- style `zIndex: 100` yang sudah ada di semua file cuma berlaku untuk `menu` (isi dropdown-nya), BUKAN untuk `menuPortal` (wrapper portalnya). Tanpa override eksplisit, `menuPortal` jatuh ke z-index default react-select yang jauh lebih rendah dari z-50 (dialog) modal "Tambah Rekapan Manual" -- makanya dropdown-nya muncul di lapisan yang salah, kelihatan "di luar" modal.
+
+Ditelusuri: pola styling ini (style object bernama `customStyles`/`selectStyles`, SELALU cuma override `menu` tanpa pernah override `menuPortal`) ternyata dipakai di **19 file** di seluruh aplikasi -- bug ini SUDAH ADA sejak lama di semua file itu, cuma baru KELIHATAN sekarang karena modal "Tambah Rekapan Manual" adalah tempat PERTAMA di aplikasi ini yang memakai `<Select>` di DALAM sebuah modal/overlay (18 file lain juga rentan kondisi yang sama kalau Select-nya suatu saat dipakai di dalam modal, walau belum tentu semuanya sudah nyata bermasalah sekarang).
+
+Field "Kategori" yang "hilang saat diketik" kemungkinan besar gejala yang SAMA -- daftar opsi/saran "Create..." dari CreatableSelect ikut ter-portal dan sama-sama salah posisi/tertutup, memberi kesan teksnya hilang padahal sebenarnya cuma dropdown sarannya yang tidak terlihat dengan benar.
+
+## 60.3 Perbaikan
+
+Ditambahkan `menuPortal: (base) => ({ ...base, zIndex: 9999 })` ke SEMUA 19 style object react-select di aplikasi (`RekapanUnitBisnis.jsx`, `FormBs.jsx`, `FormRbsBbm/Operasional/Umum.jsx`, `FormLpjUmum/Marketing.jsx`, `BsTable.jsx`, `ReimbursementTable.jsx`, `LpjBsTable.jsx`, `BsCheck.jsx`, `ReimbursementCheck.jsx`, `LpjBsCheck.jsx`, `ReportExport.jsx`, `ManageUser.jsx`, `FormEditUser.jsx`, `FormAddUser.jsx`, `GAUPieChart.jsx`, `GAUComparisonBarChart.jsx`) -- bukan cuma yang dipakai di modal "Tambah Rekapan", supaya SELURUH dropdown Select di aplikasi (termasuk yang mungkin baru akan dipakai di dalam modal lain di masa depan) konsisten selalu tampil di atas apa pun.
+
+## 60.4 Task Development — Bagian AX
+
+- [x] `menuPortal` z-index 9999 ditambahkan ke 19 file (semua style object react-select di aplikasi)
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: modal "Tambah Rekapan Manual" -- dropdown Unit Bisnis/Bulan/Tahun/Jenis BBM tampil DI DALAM modal (bukan lagi di luar/belakang), mengetik di Kategori tidak lagi "hilang"
+- [ ] Tes manual: cek juga dropdown Select di modal lain (mis. panel admin BsCheck/ReimbursementCheck/LpjBsCheck kalau ada) untuk memastikan tidak ada regresi

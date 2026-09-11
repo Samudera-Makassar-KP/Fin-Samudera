@@ -1114,6 +1114,17 @@ const RekapanUnitBisnis = () => {
         singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
         input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
         menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
+        // Bagian AX: `menuPortalTarget={document.body}` (dipakai semua <Select>/
+        // <CreatableSelect> di file ini) merender menu-nya lewat portal DI LUAR
+        // pohon DOM komponen ini -- tanpa override `menuPortal` di sini, wrapper
+        // portal itu jatuh ke z-index default react-select yang RENDAH, jadi
+        // menu-nya muncul TERTUTUP/TERPOTONG oleh elemen lain di halaman kalau
+        // Select-nya ada di dalam sesuatu yang juga punya z-index tinggi (mis.
+        // modal "Tambah Rekapan Manual", Bagian AU) -- baru ketahuan sekarang
+        // karena sebelumnya tidak ada Select di dalam modal manapun di file ini.
+        // zIndex tinggi di sini aman untuk SEMUA Select lain yang dipakai file
+        // ini juga (portal memang selalu dimaksudkan tampil di atas segalanya).
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
         option: (base, state) => ({
             ...base,
             backgroundColor: isDark

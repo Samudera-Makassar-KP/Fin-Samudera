@@ -433,6 +433,10 @@ const EditUserForm = () => {
             backgroundColor: isDark ? '#1f2937' : '#ffffff',
             zIndex: 100
         }),
+        // Bagian AX: menuPortalTarget={document.body} butuh z-index tinggi di
+        // sini juga (bukan cuma di `menu`) supaya dropdown tidak tampil
+        // tertutup/salah posisi kalau Select ini dirender di dalam modal lain.
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
         option: (base, state) => ({
             ...base,
             backgroundColor: state.isFocused

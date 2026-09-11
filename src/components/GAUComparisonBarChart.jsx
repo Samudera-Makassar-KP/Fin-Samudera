@@ -486,6 +486,10 @@ const GAUComparisonChart = ({ rawData, showLPJ = false, onClose }) => {
             zIndex: 100,
             backgroundColor: isDark ? '#1f2937' : '#ffffff'
         }),
+        // Bagian AX: menuPortalTarget={document.body} butuh z-index tinggi di
+        // sini juga (bukan cuma di `menu`) supaya dropdown tidak tampil
+        // tertutup/salah posisi kalau Select ini dirender di dalam modal lain.
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
         option: (base, state) => ({
             ...base,
             backgroundColor: isDark
