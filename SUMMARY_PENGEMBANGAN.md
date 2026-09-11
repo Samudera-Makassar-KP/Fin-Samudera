@@ -2192,3 +2192,30 @@ Ditambahkan `menuPortal: (base) => ({ ...base, zIndex: 9999 })` ke SEMUA 19 styl
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-11, diverifikasi hash bundle live (`main.32252b09.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: modal "Tambah Rekapan Manual" -- dropdown Unit Bisnis/Bulan/Tahun/Jenis BBM tampil DI DALAM modal (bukan lagi di luar/belakang), mengetik di Kategori tidak lagi "hilang"
 - [ ] Tes manual: cek juga dropdown Select di modal lain (mis. panel admin BsCheck/ReimbursementCheck/LpjBsCheck kalau ada) untuk memastikan tidak ada regresi
+
+---
+
+# BAGIAN AY — Notifikasi "Versi Baru Tersedia" & Diagnosis Print Gagal (2026-09-11)
+
+## 61.1 Latar Belakang
+
+User melaporkan "Print" Reimbursement (sudah Disetujui) gagal, dengan console menunjukkan `ReferenceError: Buffer is not defined` dan `FirebaseError: Firebase Storage: User does not have permission to access '...pdf'. (storage/unauthorized)`. Sumber error di console menunjuk `main.e8077bc8.js` -- hash bundle yang TIDAK COCOK dengan build produksi manapun dari seluruh sesi ini (build terakhir waktu itu: `main.32252b09.js`, Bagian AX).
+
+## 61.2 Diagnosis
+
+Console user JUGA menampilkan baris "Konten baru tersedia dan akan dipakai otomatis pada navigasi berikutnya" -- mengonfirmasi tab browser user sedang menjalankan bundle LAMA (dari SEBELUM Bagian AW, saat upload/print PDF masih langsung `uploadBytes()` ke Storage). `Buffer is not defined` dicek ke source code SAAT INI -- tidak ada satu pun pemakaian `Buffer` di `src/` (di luar 1 file test yang tidak pernah masuk bundle produksi) -- mengonfirmasi ini juga peninggalan kode lama, bukan bug baru. Error 403 `storage/unauthorized` justru BUKTI perbaikan Bagian AW bekerja sesuai rencana: `storage.rules` sekarang `allow write: if false` untuk path itu, jadi kode LAMA yang masih coba `uploadBytes()` langsung memang SEHARUSNYA ditolak -- masalahnya cuma tab user belum memuat kode BARU yang sudah lewat Cloud Function `uploadOwnedFile`.
+
+**Akar masalah SEBENARNYA**: `serviceWorkerRegistration.register()` dipanggil TANPA config apa pun di `index.js` sejak awal. `service-worker.js` sudah pakai `skipWaiting()`+`clientsClaim()` (SW baru langsung aktif untuk request JARINGAN berikutnya), TAPI itu tidak membuat kode JS yang SUDAH TERLANJUR jalan di memori tab ikut berubah -- dan TIDAK ADA tanda apa pun ke user kalau versi baru tersedia (cuma `console.log` yang tidak pernah dilihat pengguna biasa). User bisa terus memakai tab lama BERHARI-HARI tanpa sadar, sampai suatu deploy mengunci jalur lama (seperti Bagian AW) dan tab itu mendadak error dengan cara yang membingungkan -- ini kejadian KEDUA di sesi ini dengan pola diagnosis yang sama persis (sebelumnya Bagian AI/AL), jadi layak diperbaiki di akarnya, bukan dijelaskan berulang-ulang tiap kali terjadi.
+
+## 61.3 Perbaikan
+
+- **`src/index.js`**: `serviceWorkerRegistration.register()` sekarang diberi `onUpdate` callback -- begitu versi baru terdeteksi, muncul **toast PERSISTEN** (`autoClose: false`) "Versi baru aplikasi tersedia -- klik pesan ini untuk muat ulang." yang bisa diklik untuk `window.location.reload()`. SENGAJA TIDAK auto-reload paksa (supaya tidak mengganggu isian form yang sedang diketik user) -- tapi sekarang minimal ADA tanda visual yang terlihat, bukan cuma console.log yang tidak pernah dilihat siapa pun.
+
+## 61.4 Task Development — Bagian AY
+
+- [x] `src/index.js`: toast persisten "Versi baru tersedia" via `onUpdate` callback, klik untuk reload
+- [x] Konfirmasi `Buffer` tidak dipakai di kode produksi saat ini (cuma 1 file test, tidak masuk bundle)
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Beri tahu user: hard refresh / tutup-buka tab penuh SEKALI LAGI untuk membuang bundle lama yang menyebabkan error print ini, baru toast "Versi baru tersedia" ini sendiri akan mulai terlihat mulai dari deploy BERIKUTNYA setelah ini (sesudah tab-nya sendiri sudah di versi baru)
