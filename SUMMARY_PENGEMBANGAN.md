@@ -2246,5 +2246,5 @@ Semua 8 label diubah dari teks statis "250MB" jadi ekspresi dinamis `{Math.round
 - [x] 2 komentar basi "(250MB limit)" diperbarui
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-14, diverifikasi 0 kecocokan "Max Size: 250MB" & pola label dinamis ada di bundle live (`main.1b4e2ba1.js`)
 - [ ] Minta user: hard refresh / tutup-buka tab penuh, coba upload lampiran lagi -- kalau MASIH gagal, minta kirim console (F12 -> tab Console) supaya `error.code`/`error.message` yang sudah diperjelas Bagian AW bisa dibaca, untuk pastikan apakah ini murni soal label basi atau ada penyebab lain (mis. masalah IAM Cloud Function yang belum kelihatan dari sini)
