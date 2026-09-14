@@ -794,7 +794,7 @@ const DetailLpj = () => {
                                             >
                                                 Pilih File Bukti
                                             </label>
-                                            <span className="text-gray-500 dark:text-gray-400 text-sm">Format .pdf/.jpg/.png, Max Size: 250MB</span>
+                                            <span className="text-gray-500 dark:text-gray-400 text-sm">Format .pdf/.jpg/.png, Max Size: {Math.round(PENGEMBALIAN_MAX_SIZE_BYTES / (1024 * 1024))}MB</span>
                                         </div>
 
                                         {pengembalianFile && (

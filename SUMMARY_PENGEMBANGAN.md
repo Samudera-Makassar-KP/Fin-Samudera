@@ -2219,3 +2219,32 @@ Console user JUGA menampilkan baris "Konten baru tersedia dan akan dipakai otoma
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-11, diverifikasi hash bundle live (`main.38c930c3.js`) cocok dengan hasil build lokal terbaru
 - [ ] Beri tahu user: hard refresh / tutup-buka tab penuh SEKALI LAGI untuk membuang bundle lama yang menyebabkan error print ini, baru toast "Versi baru tersedia" ini sendiri akan mulai terlihat mulai dari deploy BERIKUTNYA setelah ini (sesudah tab-nya sendiri sudah di versi baru)
+
+---
+
+# BAGIAN AZ — Label "Max Size: 250MB" Basi, Tidak Sinkron dengan Batas 20MB Aktual (2026-09-14)
+
+## 62.1 Latar Belakang
+
+User melaporkan (lewat foto layar HRIS, form dengan item "CONTAINER"/"ORANG" -- RBS Operasional) 2 toast error saat submit: "Gagal mengunggah lampiran" dan "Terjadi kesalahan saat menyimpan data. Silakan coba lagi.", dengan teks label yang terpotong "...dan 1 file (Max Size: 2...".
+
+## 62.2 Investigasi & Akar Masalah
+
+Audit ulang seluruh kode upload (Bagian AW) untuk mencari bug nyata di `uploadOwnedFile` (Cloud Function) dan alur klien -- LOGIKA intinya benar (cek ukuran file sebelum upload, pesan error spesifik sudah ada). TAPI ditemukan: **label statis "Max Size: 250MB" di 8 tempat, 6 file, TIDAK PERNAH diperbarui** saat batas sebenarnya diturunkan ke 20MB di Bagian AW -- `FormRbsUmum.jsx`, `FormRbsOperasional.jsx`, `FormRbsBbm.jsx`, `FormLpjUmum.jsx` (2x -- lampiran & bukti pengembalian), `FormLpjMarketing.jsx` (2x), `DetailLpj.jsx`. Teks terpotong di foto user ("Max Size: 2...") cocok PERSIS dengan pola "bisa lebih dari 1 file (Max Size: 250MB/file)" di `FormRbsOperasional.jsx` -- mengonfirmasi user melihat label yang MENJANJIKAN 250MB padahal batas sungguhannya sudah 20MB, jadi kalau filenya di antara 20-250MB, gagal dengan cara yang membingungkan (label bilang boleh, ternyata ditolak).
+
+Constant `ATTACHMENT_MAX_SIZE_BYTES`/`PENGEMBALIAN_MAX_SIZE_BYTES` SUDAH dipakai dinamis di pesan error toast (diperbaiki Bagian AW), tapi label STATIS di dekat tombol upload luput tidak ikut diubah jadi dinamis waktu itu -- disisir sekarang.
+
+**Catatan**: tidak bisa dipastikan 100% ini SATU-SATUNYA penyebab tanpa akses console user (foto tidak menampilkan DevTools) -- kemungkinan lain (bundle browser user masih versi lama, pola yang sudah berulang kali terjadi sesi ini) tetap belum bisa disingkirkan sepenuhnya.
+
+## 62.3 Perbaikan
+
+Semua 8 label diubah dari teks statis "250MB" jadi ekspresi dinamis `{Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB` / `{Math.round(PENGEMBALIAN_MAX_SIZE_BYTES / (1024 * 1024))}MB` -- selalu ikut nilai constant yang sebenarnya, tidak bisa basi lagi kalau batasnya berubah lagi di masa depan. 2 komentar kode "(250MB limit)" yang juga basi ikut diperbarui.
+
+## 62.4 Task Development — Bagian AZ
+
+- [x] `FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`/`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`/`DetailLpj.jsx`: 8 label "Max Size: 250MB" jadi dinamis dari constant
+- [x] 2 komentar basi "(250MB limit)" diperbarui
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Minta user: hard refresh / tutup-buka tab penuh, coba upload lampiran lagi -- kalau MASIH gagal, minta kirim console (F12 -> tab Console) supaya `error.code`/`error.message` yang sudah diperjelas Bagian AW bisa dibaca, untuk pastikan apakah ini murni soal label basi atau ada penyebab lain (mis. masalah IAM Cloud Function yang belum kelihatan dari sini)

@@ -450,7 +450,7 @@ const RbsOperasionalForm = () => {
 
         const validFiles = []
         for (let file of files) {
-            // Validate file size (250MB limit)
+            // Validate file size (lihat ATTACHMENT_MAX_SIZE_BYTES)
             if (file.size > ATTACHMENT_MAX_SIZE_BYTES) {
                 toast.error(`Ukuran file ${file.name} maksimal ${Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB`)
                 continue
@@ -760,7 +760,7 @@ const RbsOperasionalForm = () => {
                         Upload File
                     </label>
                     <span className="ml-0 xl:ml-4 text-gray-500 dark:text-gray-400 mt-2 xl:mt-0 text-sm">
-                        Format .pdf/.jpg/.png, bisa lebih dari 1 file (Max Size: 250MB/file)
+                        Format .pdf/.jpg/.png, bisa lebih dari 1 file (Max Size: {Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB/file)
                     </span>
                 </div>
                 

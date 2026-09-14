@@ -895,7 +895,7 @@ const FormLpjMarketing = () => {
                         Upload File
                     </label>
                     <span className="ml-0 xl:ml-4 text-gray-500 dark:text-gray-400 mt-2 xl:mt-0 text-sm">
-                        Format .pdf/.jpg/.png, bisa lebih dari 1 file (Max Size: 250MB/file)
+                        Format .pdf/.jpg/.png, bisa lebih dari 1 file (Max Size: {Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB/file)
                     </span>
                 </div>
 
@@ -1547,7 +1547,7 @@ const FormLpjMarketing = () => {
                             >
                                 Upload Bukti Pengembalian
                             </label>
-                            <span className="text-gray-500 dark:text-gray-400 text-sm">Format .pdf/.jpg/.png, Max Size: 250MB</span>
+                            <span className="text-gray-500 dark:text-gray-400 text-sm">Format .pdf/.jpg/.png, Max Size: {Math.round(PENGEMBALIAN_MAX_SIZE_BYTES / (1024 * 1024))}MB</span>
                         </div>
                         {pengembalianFile && (
                             <div className="flex justify-between items-center bg-white dark:bg-gray-700 px-3 py-2 rounded mt-3 border border-gray-200 dark:border-gray-600">
