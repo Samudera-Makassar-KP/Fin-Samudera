@@ -2350,6 +2350,6 @@ Ditemukan pola SAMA (pencocokan `nomorBS`/`displayId` tanpa normalisasi) direpli
 - [x] `CI=true npx eslint` untuk 2 file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.d0a94fff.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka Dashboard, konfirmasi angka "Sudah LPJ" di ringkasan sudah benar
 - [ ] Tes manual: kalau ada BS "Disetujui" yang sudah lewat 3 hari belum di-LPJ, konfirmasi banner merah peringatan sekarang MUNCUL (sebelumnya kemungkinan besar tidak pernah muncul sama sekali)
