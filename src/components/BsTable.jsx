@@ -174,16 +174,28 @@ const BsTable = () => {
             const lpjSnapshot = await getDocs(
                 query(collection(db, 'lpj'), where('user.uid', '==', uid))
             )
+            // Bagian BB: field "Nomor Bon Sementara" di form LPJ (FormLpjUmum.jsx/
+            // FormLpjMarketing.jsx) adalah INPUT TEKS BEBAS -- BUKAN dipilih dari
+            // daftar BS yang benar-benar ada -- jadi rawan beda spasi/kapitalisasi
+            // dari `nomorBS`/`displayId` BS aslinya walau terlihat identik di layar
+            // (mis. "BS2609SMDR0000503 " dengan spasi nyangkut di akhir, atau salah
+            // ketik huruf besar/kecil). Normalisasi (trim + uppercase) SEBELUM
+            // dicocokkan supaya kasus-kasus seperti itu tetap ketemu, bukan
+            // dianggap "Belum LPJ" selamanya padahal LPJ-nya sudah ada & sedang
+            // diproses.
+            const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase()
+
             const lpjByNomorBS = {}
             lpjSnapshot.docs.forEach((docSnap) => {
                 const d = docSnap.data()
-                if (d.nomorBS) lpjByNomorBS[d.nomorBS] = d
+                const key = normalizeNomorBS(d.nomorBS)
+                if (key) lpjByNomorBS[key] = d
             })
 
             const newLpjStatus = {};
 
             for (const bs of bonSementaraList) {
-                const lpjData = lpjByNomorBS[bs.displayId]
+                const lpjData = lpjByNomorBS[normalizeNomorBS(bs.displayId)]
 
                 if (!lpjData) {
                     // No LPJ found

@@ -2285,3 +2285,40 @@ Ditelusuri alur `uploadOwnedFile` (Bagian AW) & `validatePengembalianBukti`/`ext
 - [x] Deploy ke produksi (`functions:uploadOwnedFile,validatePengembalianBukti` + hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.2a7668a2.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka tab "Bon Sementara Diajukan", pindah ke tab lain >1 menit lalu balik, konfirmasi Status LPJ ikut update tanpa reload manual
 - [ ] Tes manual: user coba lagi upload bukti pengembalian JPG/PNG yang GAGAL sebelumnya -- kalau MASIH gagal, `pengembalianValidationNote` di data LPJ sekarang berisi alasan spesifik (bisa dilihat admin) untuk diagnosis lanjutan tanpa perlu tebak-tebakan lagi
+
+---
+
+# BAGIAN BB — Akar Masalah Sebenarnya: Status LPJ Beku Meski Tab Baru Dibuka (2026-09-16)
+
+## 64.1 Latar Belakang
+
+User konfirmasi perbaikan Bagian BA TIDAK menyelesaikan masalah -- kirim tangkapan layar BARU yang masih menunjukkan mismatch identik: baris BS "BS2609SMDR0000503" tetap "Belum LPJ" padahal LPJ "LPJ.GAU.SMDR.260916.0003" yang mereferensikan `nomorBS: "BS2609SMDR0000503"` sudah berstatus "Divalidasi". Ini membuktikan teori "fetch beku di tab lama" (Bagian BA) BUKAN akar masalah tunggal -- gejalanya persis sama walau screenshot baru, jadi kemungkinan besar tab-nya sudah di-refresh dan datanya memang baru, tapi TETAP tidak cocok.
+
+## 64.2 Investigasi & Akar Masalah Sebenarnya
+
+Ditelusuri ulang dari sisi PEMBUATAN data, bukan sisi PEMBACAAN (`fetchLpjStatus`). Ditemukan: field "Nomor Bon Sementara" di `FormLpjUmum.jsx` dan `FormLpjMarketing.jsx` adalah **kolom teks bebas (`<input type="text">`)** -- BUKAN dipilih dari daftar BS yang benar-benar ada. Field ini di-*pre-fill* lewat `location.state?.nomorBS` kalau user masuk dari tombol "Buat Laporan" di `LpjBsTable.jsx`, tapi setelah itu tetap 100% bisa diketik ulang bebas oleh user, dan kalau user membuka form LPJ langsung (bukan lewat tombol itu), field-nya kosong dan HARUS diketik manual dari awal.
+
+`BsTable.jsx`nya sendiri mencocokkan `bs.displayId` dengan `lpjData.nomorBS` pakai **exact string match** (`lpjByNomorBS[bs.displayId]`, sebelum perbaikan Bagian BB defensif di bawah). Kalau nilai `nomorBS` yang tersimpan di dokumen LPJ berbeda SEDIKIT SAJA dari `displayId` BS aslinya -- spasi nyangkut di ujung, huruf besar/kecil tertukar, atau salah ketik 1 karakter -- string-nya akan TERLIHAT IDENTIK di layar (terutama untuk mata manusia yang membaca font monospace/sans biasa) tapi GAGAL cocok di kode. Akibatnya: LPJ tsb selamanya "tidak terlihat" oleh kolom Status LPJ di BS aslinya, walau LPJ itu sendiri berjalan normal (bisa divalidasi, disetujui, dst) di tabelnya sendiri -- TIDAK ADA error atau peringatan apa pun ke user, baik saat LPJ dibuat maupun saat dilihat, karena tidak ada validasi apa pun terhadap field ini.
+
+Ini menjelaskan kenapa perbaikan Bagian BA (refresh visibilitychange) tidak berpengaruh -- datanya SUDAH benar sejak awal fetch, cuma memang tidak pernah bisa cocok karena nilai `nomorBS` yang tersimpan di Firestore sendiri sudah salah/berbeda dari `displayId` BS-nya.
+
+## 64.3 Perbaikan
+
+Dua lapis perbaikan -- satu defensif (menyembuhkan kasus yang SUDAH terlanjur salah ketik di data lama), satu akar masalah (mencegah kasus baru ke depannya):
+
+1. **`src/components/BsTable.jsx`** (`fetchLpjStatus`, defensif): kunci pencocokan `lpjByNomorBS` dan `bs.displayId` di-normalisasi (`trim()` + `toUpperCase()`) SEBELUM dibandingkan -- jadi perbedaan spasi di ujung atau huruf besar/kecil tidak lagi menggagalkan pencocokan. Ini bisa langsung "menyembuhkan" tampilan Status LPJ untuk LPJ yang sudah terlanjur tersimpan dengan `nomorBS` yang beda kapitalisasi/spasi dari `displayId` aslinya, TANPA perlu migrasi data manual.
+2. **`src/components/FormLpjUmum.jsx` & `FormLpjMarketing.jsx`** (akar masalah): field "Nomor Bon Sementara" diganti dari `<input type="text">` bebas jadi `CreatableSelect` (react-select) -- opsinya diisi dari daftar BS MILIK USER SENDIRI yang berstatus "Disetujui" (query `bonSementara` filter `user.uid` + `status == 'Disetujui'`, sama dengan syarat BS "layak di-LPJ-kan" yang sudah dipakai `BsTable.jsx`/`shouldShowTimer`). User sekarang MEMILIH nomor BS dari dropdown (tidak mungkin typo), tapi tetap bisa mengetik manual (mode "Creatable") untuk kasus BS yang karena alasan tertentu tidak muncul di daftar -- supaya tidak ada alur yang jadi buntu.
+
+**Catatan**: perbaikan #1 (normalisasi) hanya menutupi typo BERUPA spasi/kapitalisasi -- kalau `nomorBS` yang tersimpan salah ketik ANGKA/HURUF (mis. "0503" jadi "0503 " sudah tertutup, tapi "0503" jadi "0053" TIDAK), kasus itu tetap harus diperbaiki manual di Firestore (edit dokumen LPJ tsb, ganti `nomorBS` supaya persis sama dengan `displayId` BS-nya) -- saya tidak mengubah data user secara langsung tanpa izin eksplisit. Kalau BS "BS2609SMDR0000503" di laporan user masih belum cocok setelah deploy ini, kemungkinan besar ini kasusnya, dan saya perlu izin untuk mengecek/memperbaiki dokumen LPJ spesifik itu di Firestore.
+
+## 64.4 Task Development — Bagian BB
+
+- [x] `BsTable.jsx`: normalisasi (`trim` + `toUpperCase`) pencocokan `nomorBS` <-> `displayId` di `fetchLpjStatus`
+- [x] `FormLpjUmum.jsx`: field Nomor Bon Sementara jadi `CreatableSelect` berisi BS "Disetujui" milik user sendiri
+- [x] `FormLpjMarketing.jsx`: field Nomor Bon Sementara jadi `CreatableSelect` berisi BS "Disetujui" milik user sendiri
+- [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: buka Dashboard, konfirmasi BS "BS2609SMDR0000503" akhirnya menampilkan status LPJ yang benar (bukan lagi "Belum LPJ") -- kalau MASIH belum cocok, kemungkinan `nomorBS` yang tersimpan di LPJ tsb salah ketik ANGKA/HURUF (bukan cuma spasi/kapitalisasi) dan perlu diperbaiki manual di data, minta izin user dulu sebelum saya sentuh
+- [ ] Tes manual: buat LPJ baru, konfirmasi dropdown Nomor Bon Sementara menampilkan daftar BS "Disetujui" milik user sendiri dan bisa dipilih (bukan diketik manual)

@@ -65,6 +65,9 @@ const FormLpjMarketing = () => {
     const editData = location.state?.editData || null
     const [lpj, setLpj] = useState([initialLpjState])
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
+    // Bagian BB: lihat catatan sama di FormLpjUmum.jsx -- dropdown BS asli
+    // milik user, bukan kolom teks bebas yang rawan typo.
+    const [bsOptions, setBsOptions] = useState([])
     const [jumlahBS, setJumlahBS] = useState(location.state?.jumlahBS || '')
     const [project, setProject] = useState(location.state?.project || '')
     const [nomorJO, setNomorJO] = useState(location.state?.nomorJO || '')
@@ -220,6 +223,34 @@ const FormLpjMarketing = () => {
             }
         }
     }, [userData, validatorOptions, reviewerOptions]);
+
+    // Bagian BB: ambil daftar Nomor BS milik user sendiri yang sudah
+    // "Disetujui" untuk dropdown Nomor Bon Sementara -- lihat catatan sama
+    // di FormLpjUmum.jsx.
+    useEffect(() => {
+        const uid = localStorage.getItem('userUid')
+        if (!uid) return
+
+        const fetchBsOptions = async () => {
+            try {
+                const q = query(
+                    collection(db, 'bonSementara'),
+                    where('user.uid', '==', uid),
+                    where('status', '==', 'Disetujui')
+                )
+                const snapshot = await getDocs(q)
+                const options = snapshot.docs
+                    .map((docSnap) => docSnap.data().displayId)
+                    .filter(Boolean)
+                    .map((displayId) => ({ value: displayId, label: displayId }))
+                setBsOptions(options)
+            } catch (error) {
+                console.error('Error fetching daftar Nomor BS:', error)
+            }
+        }
+
+        fetchBsOptions()
+    }, [])
 
     const isSingleUnit = !isSuperAdmin && userUnitOptions.length === 1;
 
@@ -1220,12 +1251,20 @@ const FormLpjMarketing = () => {
                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Nomor Bon Sementara <span className="text-red-500">*</span>
                         </label>
-                        <input
-                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                            type="text"
-                            value={nomorBS}
-                            onChange={(e) => setNomorBS(e.target.value)}
-                            placeholder="Masukkan nomor bon sementara"
+                        <CreatableSelect
+                            options={bsOptions}
+                            value={nomorBS ? { value: nomorBS, label: nomorBS } : null}
+                            onChange={(selected) => setNomorBS(selected ? selected.value : '')}
+                            placeholder="Pilih atau ketik nomor bon sementara"
+                            className="basic-single"
+                            classNamePrefix="select"
+                            styles={customStyles}
+                            isSearchable={true}
+                            isClearable={true}
+                            menuPortalTarget={document.body}
+                            menuPosition="absolute"
+                            formatCreateLabel={(inputValue) => `Gunakan "${inputValue}"`}
+                            noOptionsMessage={() => 'Tidak ada BS "Disetujui" milik Anda -- Anda tetap bisa mengetik manual'}
                         />
                     </div>
                     <div>

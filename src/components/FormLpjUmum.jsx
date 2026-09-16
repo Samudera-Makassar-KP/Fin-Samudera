@@ -61,6 +61,12 @@ const FormLpjUmum = () => {
     const editData = location.state?.editData || null
     const [lpj, setLpj] = useState([initialLpjState])
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
+    // Bagian BB: dulu "Nomor Bon Sementara" adalah kolom teks bebas -- rawan
+    // typo/spasi nyangkut yang membuat status LPJ di BsTable.jsx gagal
+    // cocok walau terlihat identik di layar. bsOptions diisi dari BS milik
+    // user sendiri yang sudah "Disetujui" supaya bisa dipilih dari daftar,
+    // bukan diketik manual.
+    const [bsOptions, setBsOptions] = useState([])
     const [jumlahBS, setJumlahBS] = useState(location.state?.jumlahBS || '')
     const [aktivitas] = useState(location.state?.aktivitas || '')
 
@@ -217,6 +223,35 @@ const FormLpjUmum = () => {
             }
         }
     }, [userData, validatorOptions, reviewerOptions]); // Pastikan dependency-nya diperbarui
+
+    // Bagian BB: ambil daftar Nomor BS milik user sendiri yang sudah
+    // "Disetujui" (status BS, bukan status LPJ) supaya dropdown Nomor Bon
+    // Sementara berisi pilihan asli -- bukan tebakan/ketikan manual yang
+    // rawan typo.
+    useEffect(() => {
+        const uid = localStorage.getItem('userUid')
+        if (!uid) return
+
+        const fetchBsOptions = async () => {
+            try {
+                const q = query(
+                    collection(db, 'bonSementara'),
+                    where('user.uid', '==', uid),
+                    where('status', '==', 'Disetujui')
+                )
+                const snapshot = await getDocs(q)
+                const options = snapshot.docs
+                    .map((docSnap) => docSnap.data().displayId)
+                    .filter(Boolean)
+                    .map((displayId) => ({ value: displayId, label: displayId }))
+                setBsOptions(options)
+            } catch (error) {
+                console.error('Error fetching daftar Nomor BS:', error)
+            }
+        }
+
+        fetchBsOptions()
+    }, [])
 
     const isSingleUnit = !isSuperAdmin && userUnitOptions.length === 1;;
     
@@ -1197,12 +1232,20 @@ const FormLpjUmum = () => {
                         <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
                             Nomor Bon Sementara <span className="text-red-500">*</span>
                         </label>
-                        <input
-                            className="w-full h-10 px-4 py-2 border dark:border-gray-600 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 rounded-md hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                            type="text"
-                            value={nomorBS}
-                            onChange={(e) => setNomorBS(e.target.value)}
-                            placeholder="Masukkan nomor bon sementara"
+                        <CreatableSelect
+                            options={bsOptions}
+                            value={nomorBS ? { value: nomorBS, label: nomorBS } : null}
+                            onChange={(selected) => setNomorBS(selected ? selected.value : '')}
+                            placeholder="Pilih atau ketik nomor bon sementara"
+                            className="basic-single"
+                            classNamePrefix="select"
+                            styles={customStyles}
+                            isSearchable={true}
+                            isClearable={true}
+                            menuPortalTarget={document.body}
+                            menuPosition="absolute"
+                            formatCreateLabel={(inputValue) => `Gunakan "${inputValue}"`}
+                            noOptionsMessage={() => 'Tidak ada BS "Disetujui" milik Anda -- Anda tetap bisa mengetik manual'}
                         />
                     </div>
                     <div>
