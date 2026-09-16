@@ -2424,5 +2424,6 @@ Kalau ada 2 dokumen dengan prioritas SAMA (mis. 2 LPJ yang sama-sama masih "Dipr
 - [x] `CI=true npx eslint` untuk 4 file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + functions, untuk menghapus `debugFindLpjMismatch` dari produksi)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.a608310b.js`) cocok dengan hasil build lokal terbaru
+- [x] `firebase functions:delete debugFindLpjMismatch` — sukses 2026-09-16, fungsi diagnostik sementara sudah tidak ada di produksi
 - [ ] Tes manual: buka Dashboard, konfirmasi BS "BS2609SMDR0000503" akhirnya menampilkan "Sedang LPJ" (bukan lagi "Belum LPJ") sesuai LPJ "Divalidasi" yang aktif
