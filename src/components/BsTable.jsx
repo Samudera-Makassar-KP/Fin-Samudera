@@ -175,21 +175,50 @@ const BsTable = () => {
                 query(collection(db, 'lpj'), where('user.uid', '==', uid))
             )
             // Bagian BB: field "Nomor Bon Sementara" di form LPJ (FormLpjUmum.jsx/
-            // FormLpjMarketing.jsx) adalah INPUT TEKS BEBAS -- BUKAN dipilih dari
-            // daftar BS yang benar-benar ada -- jadi rawan beda spasi/kapitalisasi
-            // dari `nomorBS`/`displayId` BS aslinya walau terlihat identik di layar
-            // (mis. "BS2609SMDR0000503 " dengan spasi nyangkut di akhir, atau salah
-            // ketik huruf besar/kecil). Normalisasi (trim + uppercase) SEBELUM
-            // dicocokkan supaya kasus-kasus seperti itu tetap ketemu, bukan
-            // dianggap "Belum LPJ" selamanya padahal LPJ-nya sudah ada & sedang
-            // diproses.
+            // FormLpjMarketing.jsx) dulu input teks bebas -- rawan beda spasi/
+            // kapitalisasi dari `nomorBS`/`displayId` BS aslinya walau terlihat
+            // identik di layar. Normalisasi (trim + uppercase) SEBELUM
+            // dicocokkan supaya kasus seperti itu tetap ketemu.
             const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase()
+
+            // Bagian BE: SATU BS bisa punya LEBIH DARI SATU dokumen LPJ dengan
+            // nomorBS yang PERSIS SAMA -- kasus nyata: LPJ pertama dibatalkan
+            // (Dibatalkan), lalu user mengajukan LPJ BARU untuk BS yang sama.
+            // Dictionary lama meng-overwrite entry tanpa peduli urutan/prioritas,
+            // jadi kalau dokumen "Dibatalkan" kebetulan diproses BELAKANGAN oleh
+            // Firestore (urutan query tidak dijamin), entry LPJ yang AKTIF
+            // (mis. "Divalidasi") malah tertimpa jadi terlihat "tidak ada LPJ"
+            // -- BS tampil "Belum LPJ" selamanya walau LPJ aktifnya sudah jalan.
+            // Prioritaskan status LPJ paling relevan: Disetujui > status aktif
+            // lainnya (Diajukan/Diproses/Divalidasi/dst) > Dibatalkan/Ditolak.
+            const lpjStatusPriority = (status) => {
+                if (status === 'Disetujui') return 3
+                if (status === 'Dibatalkan' || status === 'Ditolak') return 1
+                return 2
+            }
+            const lpjTimestamp = (d) => {
+                const value = d.tanggalPengajuan || d.createdAt
+                const parsed = value ? new Date(value).getTime() : NaN
+                return isNaN(parsed) ? 0 : parsed
+            }
 
             const lpjByNomorBS = {}
             lpjSnapshot.docs.forEach((docSnap) => {
                 const d = docSnap.data()
                 const key = normalizeNomorBS(d.nomorBS)
-                if (key) lpjByNomorBS[key] = d
+                if (!key) return
+                const existing = lpjByNomorBS[key]
+                if (!existing) {
+                    lpjByNomorBS[key] = d
+                    return
+                }
+                const newPriority = lpjStatusPriority(d.status)
+                const existingPriority = lpjStatusPriority(existing.status)
+                if (newPriority > existingPriority) {
+                    lpjByNomorBS[key] = d
+                } else if (newPriority === existingPriority && lpjTimestamp(d) > lpjTimestamp(existing)) {
+                    lpjByNomorBS[key] = d
+                }
             })
 
             const newLpjStatus = {};

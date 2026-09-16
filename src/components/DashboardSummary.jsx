@@ -86,11 +86,37 @@ const DashboardSummary = ({ uid, role }) => {
                 // -- normalisasi supaya konsisten dengan BsTable.jsx.
                 const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase()
 
+                // Bagian BE: SATU BS bisa punya LEBIH DARI SATU dokumen LPJ dengan
+                // nomorBS yang sama (mis. LPJ pertama Dibatalkan, lalu diajukan
+                // ulang) -- prioritaskan status paling relevan, bukan overwrite
+                // berdasarkan urutan Firestore yang tidak dijamin. Lihat catatan
+                // sama di BsTable.jsx (Bagian BE).
+                const lpjStatusPriority = (status) => {
+                    if (status === 'Disetujui') return 3
+                    if (status === 'Dibatalkan' || status === 'Ditolak') return 1
+                    return 2
+                }
+                const lpjTimestamp = (d) => {
+                    const value = d.tanggalPengajuan || d.createdAt
+                    const parsed = value ? new Date(value).getTime() : NaN
+                    return isNaN(parsed) ? 0 : parsed
+                }
+
                 const lpjByNomorBS = {}
                 lpjSnapshot.docs.forEach((docSnap) => {
                     const lpjData = docSnap.data()
                     const key = normalizeNomorBS(lpjData.nomorBS)
-                    if (key) {
+                    if (!key) return
+                    const existing = lpjByNomorBS[key]
+                    if (!existing) {
+                        lpjByNomorBS[key] = lpjData
+                        return
+                    }
+                    const newPriority = lpjStatusPriority(lpjData.status)
+                    const existingPriority = lpjStatusPriority(existing.status)
+                    if (newPriority > existingPriority) {
+                        lpjByNomorBS[key] = lpjData
+                    } else if (newPriority === existingPriority && lpjTimestamp(lpjData) > lpjTimestamp(existing)) {
                         lpjByNomorBS[key] = lpjData
                     }
                 })

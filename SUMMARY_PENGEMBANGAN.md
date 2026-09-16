@@ -2381,5 +2381,48 @@ Tidak bisa dipastikan nilai persis yang tersimpan tanpa akses langsung ke data -
 - [x] `CI=true npm run build` sukses
 - [x] Deploy `functions:debugFindLpjMismatch` — sukses 2026-09-16
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.5bacc1b0.js`) cocok dengan hasil build lokal terbaru
-- [ ] Minta user: buka "Manage Users", masukkan "BS2609SMDR0000503" di panel kuning, klik "Cek", kirim hasil JSON-nya
-- [ ] Setelah data mentah didapat: perbaiki akar masalah kasus ini (edit manual `nomorBS` LPJ jika memang typo, dengan izin eksplisit user) DAN hapus `debugFindLpjMismatch` + panel diagnostik ini
+- [x] Minta user: buka "Manage Users", masukkan "BS2609SMDR0000503" di panel kuning, klik "Cek", kirim hasil JSON-nya
+- [x] Data mentah didapat 2026-09-16 -- lihat Bagian BE untuk akar masalah SEBENARNYA (BUKAN typo) dan perbaikan permanennya
+
+---
+
+# BAGIAN BE — Akar Masalah Final: Dua Dokumen LPJ dengan nomorBS SAMA PERSIS, Bukan Typo (2026-09-16)
+
+## 67.1 Temuan dari Data Diagnostik
+
+Hasil panel diagnostik Bagian BD untuk "BS2609SMDR0000503" membongkar akar masalah SEBENARNYA -- BUKAN typo/spasi/kapitalisasi seperti dugaan Bagian BB/BC. Ditemukan **DUA dokumen LPJ dengan `nomorBS` PERSIS SAMA, karakter demi karakter**, keduanya milik BS yang sama:
+
+| id LPJ | nomorBS | status |
+|---|---|---|
+| `cTYJfNhjnFn1ELGvYewn` | `"BS2609SMDR0000503"` | **Divalidasi** (aktif, sedang diproses) |
+| `rBvpURWSr5iCvjQ8J6jR` | `"BS2609SMDR0000503"` | **Dibatalkan** |
+
+Kronologinya masuk akal: user pertama kali mengajukan LPJ untuk BS ini, LPJ itu DIBATALKAN, lalu user mengajukan LPJ BARU untuk BS yang sama (normal & sah -- BS "Disetujui" yang LPJ-nya dibatalkan memang harus di-LPJ ulang). Tapi kode `fetchLpjStatus` (`BsTable.jsx`) dan yang serupa di `DashboardSummary.jsx`/`BSAlerts.jsx` membangun dictionary `{ [nomorBS]: dataLpj }` dengan **overwrite polos** -- `lpjByNomorBS[key] = d` tanpa peduli isi entry sebelumnya. Karena Firestore TIDAK menjamin urutan dokumen dalam hasil query tanpa `orderBy` eksplisit, dokumen "Dibatalkan" kadang diproses BELAKANGAN dan menimpa entry "Divalidasi" yang aktif -- BS jadi tampil "Belum LPJ" selamanya walau LPJ aktifnya sudah berjalan sampai "Divalidasi".
+
+Ini menjelaskan kenapa normalisasi Bagian BB/BC TIDAK berpengaruh sama sekali pada kasus ini: string-nya memang SUDAH identik dari awal, jadi trim/uppercase tidak mengubah apa pun -- masalahnya di collision KUNCI dictionary, bukan di isi stringnya.
+
+## 67.2 Perbaikan
+
+**`BsTable.jsx`, `DashboardSummary.jsx`, `BSAlerts.jsx`** (`fetchLpjStatus`/sejenisnya): dictionary `lpjByNomorBS` sekarang dibangun dengan **prioritas status**, bukan overwrite polos -- kalau ada lebih dari 1 dokumen LPJ dengan `nomorBS` yang sama, yang "menang" adalah:
+1. `Disetujui` (prioritas tertinggi -- status akhir/final)
+2. Status aktif lainnya (`Diajukan`/`Diproses`/`Divalidasi`/dst -- "sedang berjalan")
+3. `Dibatalkan`/`Ditolak` (prioritas terendah -- dianggap "tidak ada LPJ aktif")
+
+Kalau ada 2 dokumen dengan prioritas SAMA (mis. 2 LPJ yang sama-sama masih "Diproses" -- seharusnya tidak terjadi kalau alur normal, tapi dijaga untuk kasus tak terduga), yang dipilih adalah yang `tanggalPengajuan`/`createdAt`-nya PALING BARU.
+
+**Dibersihkan**: alat diagnostik sementara Bagian BD (`debugFindLpjMismatch` di `functions/index.js`, panel kuning di `ManageUser.jsx`) sudah tidak diperlukan lagi setelah akar masalah ditemukan -- dihapus.
+
+## 67.3 Task Development — Bagian BE
+
+- [x] `BsTable.jsx`: `lpjByNomorBS` dibangun dengan prioritas status (Disetujui > aktif lainnya > Dibatalkan/Ditolak), tie-break by tanggal terbaru
+- [x] `DashboardSummary.jsx`: perbaikan sama
+- [x] `BSAlerts.jsx`: perbaikan sama
+- [x] `functions/index.js`: hapus `debugFindLpjMismatch` (diagnostik Bagian BD, sudah tidak perlu)
+- [x] `src/components/ManageUser.jsx`: hapus panel diagnostik sementara Bagian BD
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `CI=true npx eslint` untuk 4 file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + functions, untuk menghapus `debugFindLpjMismatch` dari produksi)
+- [ ] Tes manual: buka Dashboard, konfirmasi BS "BS2609SMDR0000503" akhirnya menampilkan "Sedang LPJ" (bukan lagi "Belum LPJ") sesuai LPJ "Divalidasi" yang aktif

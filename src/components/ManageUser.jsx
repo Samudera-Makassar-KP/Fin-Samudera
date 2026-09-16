@@ -138,30 +138,6 @@ const ManageUser = () => {
         setDeleteModal({ isOpen: false, user: null })
     }
 
-    // Bagian BD: panel diagnostik SEMENTARA (read-only, khusus Super Admin di
-    // server) untuk menelusuri kasus nomorBS/displayId yang masih tidak cocok
-    // walau normalisasi (Bagian BB/BC) sudah diterapkan -- lihat
-    // debugFindLpjMismatch di functions/index.js. Dihapus lagi setelah kasus
-    // ini selesai didiagnosis.
-    const [debugDisplayId, setDebugDisplayId] = useState('')
-    const [debugResult, setDebugResult] = useState(null)
-    const [isDebugging, setIsDebugging] = useState(false)
-    const handleDebugLpjMismatch = async () => {
-        if (!debugDisplayId.trim()) return
-        setIsDebugging(true)
-        setDebugResult(null)
-        try {
-            const debugFindLpjMismatch = httpsCallable(functions, 'debugFindLpjMismatch')
-            const result = await debugFindLpjMismatch({ displayId: debugDisplayId.trim() })
-            setDebugResult(result.data)
-        } catch (error) {
-            console.error('Error debugging LPJ mismatch:', error)
-            setDebugResult({ error: error?.message || String(error) })
-        } finally {
-            setIsDebugging(false)
-        }
-    }
-
     // Migrasi satu-kali (aman diklik berkali-kali) untuk mengisi /userDirectory
     // dari user LAMA yang sudah ada sebelum trigger syncUserDirectoryOnWrite live
     // -- trigger itu sendiri hanya jalan untuk write BARU ke /users, bukan
@@ -395,32 +371,6 @@ const ManageUser = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <div className="mb-4 p-4 border border-yellow-500 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
-                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
-                    Diagnostik sementara: cek kecocokan Nomor BS vs LPJ
-                </p>
-                <div className="flex flex-wrap gap-2 items-center">
-                    <input
-                        type="text"
-                        value={debugDisplayId}
-                        onChange={(e) => setDebugDisplayId(e.target.value)}
-                        placeholder="Nomor BS, contoh: BS2609SMDR0000503"
-                        className="h-9 px-3 border dark:border-gray-600 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 rounded-md"
-                    />
-                    <button
-                        onClick={handleDebugLpjMismatch}
-                        disabled={isDebugging}
-                        className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
-                    >
-                        {isDebugging ? 'Mencari...' : 'Cek'}
-                    </button>
-                </div>
-                {debugResult && (
-                    <pre className="mt-2 p-2 text-xs overflow-auto bg-white dark:bg-gray-800 dark:text-gray-100 border dark:border-gray-600 rounded max-h-96">
-                        {JSON.stringify(debugResult, null, 2)}
-                    </pre>
-                )}
-            </div>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <h2 className="text-xl font-bold dark:text-gray-100">Manage Users</h2>
                 <div className="flex flex-wrap gap-2">

@@ -38,6 +38,23 @@ const BsAlerts = ({ scrollToTable }) => {
         // (dinormalisasi trim+uppercase supaya konsisten juga dengan data lama
         // yang nomorBS-nya beda spasi/kapitalisasi dari displayId BS aslinya).
         const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase();
+
+        // Bagian BE: SATU BS bisa punya LEBIH DARI SATU dokumen LPJ dengan
+        // nomorBS yang sama (mis. LPJ pertama Dibatalkan, lalu diajukan ulang)
+        // -- prioritaskan status paling relevan, bukan overwrite berdasarkan
+        // urutan Firestore yang tidak dijamin. Lihat catatan sama di
+        // BsTable.jsx (Bagian BE).
+        const lpjStatusPriority = (status) => {
+          if (status === 'Disetujui') return 3;
+          if (status === 'Dibatalkan' || status === 'Ditolak') return 1;
+          return 2;
+        };
+        const lpjTimestamp = (d) => {
+          const value = d.tanggalPengajuan || d.createdAt;
+          const parsed = value ? new Date(value).getTime() : NaN;
+          return isNaN(parsed) ? 0 : parsed;
+        };
+
         const lpjSnapshotAll = await getDocs(
           query(collection(db, 'lpj'), where('user.uid', '==', uid))
         );
@@ -45,7 +62,19 @@ const BsAlerts = ({ scrollToTable }) => {
         lpjSnapshotAll.docs.forEach((docSnap) => {
           const lpjData = docSnap.data();
           const key = normalizeNomorBS(lpjData.nomorBS);
-          if (key) lpjByNomorBS[key] = lpjData;
+          if (!key) return;
+          const existing = lpjByNomorBS[key];
+          if (!existing) {
+            lpjByNomorBS[key] = lpjData;
+            return;
+          }
+          const newPriority = lpjStatusPriority(lpjData.status);
+          const existingPriority = lpjStatusPriority(existing.status);
+          if (newPriority > existingPriority) {
+            lpjByNomorBS[key] = lpjData;
+          } else if (newPriority === existingPriority && lpjTimestamp(lpjData) > lpjTimestamp(existing)) {
+            lpjByNomorBS[key] = lpjData;
+          }
         });
 
         // Process each BS document
