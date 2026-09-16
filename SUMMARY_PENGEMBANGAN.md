@@ -2282,6 +2282,6 @@ Ditelusuri alur `uploadOwnedFile` (Bagian AW) & `validatePengembalianBukti`/`ext
 - [x] `cd functions && npx jest` -- 23 test tetap PASS
 - [x] `node -c functions/index.js` -- sintaks valid
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (`functions:uploadOwnedFile,validatePengembalianBukti` + hosting)
+- [x] Deploy ke produksi (`functions:uploadOwnedFile,validatePengembalianBukti` + hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.2a7668a2.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka tab "Bon Sementara Diajukan", pindah ke tab lain >1 menit lalu balik, konfirmasi Status LPJ ikut update tanpa reload manual
 - [ ] Tes manual: user coba lagi upload bukti pengembalian JPG/PNG yang GAGAL sebelumnya -- kalau MASIH gagal, `pengembalianValidationNote` di data LPJ sekarang berisi alasan spesifik (bisa dilihat admin) untuk diagnosis lanjutan tanpa perlu tebak-tebakan lagi
