@@ -2427,3 +2427,9 @@ Kalau ada 2 dokumen dengan prioritas SAMA (mis. 2 LPJ yang sama-sama masih "Dipr
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.a608310b.js`) cocok dengan hasil build lokal terbaru
 - [x] `firebase functions:delete debugFindLpjMismatch` — sukses 2026-09-16, fungsi diagnostik sementara sudah tidak ada di produksi
 - [x] Tes manual: buka Dashboard, konfirmasi BS "BS2609SMDR0000503" akhirnya menampilkan "Sedang LPJ" (bukan lagi "Belum LPJ") sesuai LPJ "Divalidasi" yang aktif — **dikonfirmasi user 2026-09-16, sudah benar**
+
+## 67.4 Status Penutup Sesi (2026-09-16)
+
+User tidak punya laporan bug baru saat ini -- untuk sementara SEMUA perbaikan Bagian AV-BE dianggap selesai/beres. Satu catatan yang masih terbuka untuk sesi berikutnya (BELUM ada konfirmasi ulang dari user, jangan dianggap selesai kalau belum ada laporan retest):
+
+- **Verifikasi OCR bukti pengembalian untuk file JPG/PNG** (laporan awal di Bagian BA, poin 2) -- hanya diberi perbaikan DEFENSIF (redundansi `contentType` saat `file.save()`, pesan error lebih jelas di `pengembalianValidationNote`), akar masalah pastinya TIDAK pernah dikonfirmasi. Kalau user melapor masalah upload bukti pengembalian gambar lagi, cek dulu `pengembalianValidationNote` di dokumen LPJ terkait (sekarang berisi alasan asli dari Vision API, bukan lagi pesan generik) sebelum menebak ulang dari nol.
