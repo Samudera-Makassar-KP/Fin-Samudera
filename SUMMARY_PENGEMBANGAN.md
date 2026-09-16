@@ -2353,3 +2353,33 @@ Ditemukan pola SAMA (pencocokan `nomorBS`/`displayId` tanpa normalisasi) direpli
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.d0a94fff.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka Dashboard, konfirmasi angka "Sudah LPJ" di ringkasan sudah benar
 - [ ] Tes manual: kalau ada BS "Disetujui" yang sudah lewat 3 hari belum di-LPJ, konfirmasi banner merah peringatan sekarang MUNCUL (sebelumnya kemungkinan besar tidak pernah muncul sama sekali)
+
+---
+
+# BAGIAN BD — Diagnostik Sementara: Kasus BS2609SMDR0000503 Masih Tidak Cocok (2026-09-16)
+
+## 66.1 Latar Belakang
+
+User konfirmasi setelah Bagian BB/BC deploy: "masih belum ada perubahan" -- BS "BS2609SMDR0000503" TETAP menampilkan "Belum LPJ". Karena normalisasi (trim+uppercase) di Bagian BB sudah diterapkan dan TIDAK menyembuhkan kasus ini, kemungkinan besar `nomorBS` yang tersimpan di dokumen LPJ berbeda dari `displayId` BS aslinya bukan cuma soal spasi/kapitalisasi, melainkan salah ketik ANGKA/HURUF -- sesuai peringatan yang sudah ditulis di Bagian BB.
+
+## 66.2 Perbaikan (diagnostik, BUKAN untuk permanen)
+
+Tidak bisa dipastikan nilai persis yang tersimpan tanpa akses langsung ke data -- tidak ada akses Firestore Console/CLI query langsung dari sesi ini. Percobaan pertama (HTTP endpoint dengan token rahasia di-hardcode di source) DIBLOKIR classifier keamanan otomatis Claude Code karena berisiko kebocoran kredensial -- benar, dan tidak dilanjutkan. Sebagai gantinya, dibuat:
+
+- **`functions/index.js`**: `debugFindLpjMismatch` -- Cloud Function `onCall` (bukan HTTP publik), memakai pola otentikasi & otorisasi yang SAMA dengan fungsi lain di file ini (wajib login + role Super Admin, dicek server-side), read-only, mengembalikan nilai mentah `nomorBS`/`displayId` (di-escape `JSON.stringify` supaya spasi/karakter tersembunyi kelihatan) untuk 1 nomor BS yang diminta, plus semua LPJ milik pemilik BS tsb untuk perbandingan.
+- **`src/components/ManageUser.jsx`**: panel kuning sementara di atas halaman "Manage Users" (khusus bisa dipakai user dengan role Super Admin, sesuai penegakan di server) -- input Nomor BS + tombol "Cek" yang memanggil `debugFindLpjMismatch` dan menampilkan hasil JSON mentah di layar.
+
+**Ini SEMENTARA** -- setelah kasus ini terdiagnosis (dan kalau perlu, `nomorBS` LPJ yang salah diperbaiki manual dengan izin user), baik function maupun panel ini akan DIHAPUS lagi, bukan fitur permanen.
+
+## 66.3 Task Development — Bagian BD
+
+- [x] `functions/index.js`: `debugFindLpjMismatch` (onCall, Super Admin only, read-only)
+- [x] `src/components/ManageUser.jsx`: panel diagnostik sementara
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `CI=true npx eslint src/components/ManageUser.jsx` -- bersih
+- [x] `CI=true npm run build` sukses
+- [x] Deploy `functions:debugFindLpjMismatch` — sukses 2026-09-16
+- [ ] Deploy ke produksi (hosting)
+- [ ] Minta user: buka "Manage Users", masukkan "BS2609SMDR0000503" di panel kuning, klik "Cek", kirim hasil JSON-nya
+- [ ] Setelah data mentah didapat: perbaiki akar masalah kasus ini (edit manual `nomorBS` LPJ jika memang typo, dengan izin eksplisit user) DAN hapus `debugFindLpjMismatch` + panel diagnostik ini
