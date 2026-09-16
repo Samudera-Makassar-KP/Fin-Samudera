@@ -80,11 +80,18 @@ const DashboardSummary = ({ uid, role }) => {
                 const lpjSnapshot = await getDocs(
                     query(collection(db, 'lpj'), where('user.uid', '==', uid))
                 )
+                // Bagian BB: nomorBS di LPJ dulu kolom teks bebas (sudah diganti
+                // dropdown, lihat FormLpjUmum.jsx/FormLpjMarketing.jsx), tapi data
+                // lama tetap bisa beda spasi/kapitalisasi dari displayId BS aslinya
+                // -- normalisasi supaya konsisten dengan BsTable.jsx.
+                const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase()
+
                 const lpjByNomorBS = {}
                 lpjSnapshot.docs.forEach((docSnap) => {
                     const lpjData = docSnap.data()
-                    if (lpjData.nomorBS) {
-                        lpjByNomorBS[lpjData.nomorBS] = lpjData
+                    const key = normalizeNomorBS(lpjData.nomorBS)
+                    if (key) {
+                        lpjByNomorBS[key] = lpjData
                     }
                 })
 
@@ -92,7 +99,7 @@ const DashboardSummary = ({ uid, role }) => {
                 let jumlahBsSudahLpj = 0
                 for (const bs of bsDisetujui) {
                     if (!bs.displayId) continue
-                    const lpjData = lpjByNomorBS[bs.displayId]
+                    const lpjData = lpjByNomorBS[normalizeNomorBS(bs.displayId)]
                     if (lpjData && lpjData.status === 'Disetujui') {
                         totalSudahLpj += bs.bonSementara?.[0]?.jumlahBS || 0
                         jumlahBsSudahLpj += 1

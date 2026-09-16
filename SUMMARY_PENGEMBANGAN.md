@@ -2322,3 +2322,34 @@ Dua lapis perbaikan -- satu defensif (menyembuhkan kasus yang SUDAH terlanjur sa
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.501fc175.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka Dashboard, konfirmasi BS "BS2609SMDR0000503" akhirnya menampilkan status LPJ yang benar (bukan lagi "Belum LPJ") -- kalau MASIH belum cocok, kemungkinan `nomorBS` yang tersimpan di LPJ tsb salah ketik ANGKA/HURUF (bukan cuma spasi/kapitalisasi) dan perlu diperbaiki manual di data, minta izin user dulu sebelum saya sentuh
 - [ ] Tes manual: buat LPJ baru, konfirmasi dropdown Nomor Bon Sementara menampilkan daftar BS "Disetujui" milik user sendiri dan bisa dipilih (bukan diketik manual)
+
+---
+
+# BAGIAN BC — Pola Bug Sama Ditemukan di 2 Tempat Lain: DashboardSummary & Banner Alert LPJ (2026-09-16)
+
+## 65.1 Latar Belakang
+
+Menindaklanjuti instruksi user sebelumnya ("cek bagian lainnya juga") setelah Bagian BB menemukan akar masalah pencocokan `nomorBS` <-> `displayId`, disisir seluruh pemakaian `nomorBS` di codebase untuk memastikan tidak ada tempat lain yang mengulang pola bug yang sama.
+
+## 65.2 Investigasi & Temuan
+
+Ditemukan pola SAMA (pencocokan `nomorBS`/`displayId` tanpa normalisasi) direplikasi di 2 tempat lain, satu di antaranya adalah bug BARU yang lebih parah:
+
+1. **`DashboardSummary.jsx`** (ringkasan angka di Dashboard, "Sudah LPJ"/nominal): pola identik dengan `BsTable.jsx` sebelum Bagian BB -- exact-match tanpa normalisasi, kena masalah yang sama persis (typo spasi/kapitalisasi bikin BS dihitung "Belum LPJ" padahal LPJ-nya sudah "Disetujui").
+2. **`BSAlerts.jsx`** (banner merah peringatan "Bon Sementara belum dipertanggungjawabkan" di Dashboard) -- **bug LEBIH PARAH, bukan cuma typo**: query LPJ di sini (`where('nomorBS', '==', bsData.displayId)`, TANPA filter `user.uid`) pasti ditolak `firestore.rules` (`allow list` collection `lpj` mensyaratkan query bisa dibuktikan lewat `where('user.uid', '==', request.auth.uid)`). Karena error ini ditangkap `catch` generik yang cuma `console.error`, banner ini **KEMUNGKINAN BESAR TIDAK PERNAH MUNCUL SAMA SEKALI** untuk siapa pun sejak aturan Firestore itu diberlakukan -- bukan soal typo, tapi query yang selalu gagal diam-diam.
+
+## 65.3 Perbaikan
+
+- **`DashboardSummary.jsx`**: pola pencocokan `lpjByNomorBS` dinormalisasi (trim+uppercase), identik dengan perbaikan `BsTable.jsx` di Bagian BB.
+- **`BSAlerts.jsx`**: query LPJ diganti dari "query per-BS filter nomorBS saja" (selalu ditolak) menjadi pola yang sama dengan `BsTable.jsx`/`DashboardSummary.jsx` -- ambil SEMUA LPJ milik user sekali saja (query provable, difilter `user.uid`), cocokkan `nomorBS` di JS dengan normalisasi. Sekalian diselaraskan penanganan status `Dibatalkan`/`Ditolak` (dianggap "tidak ada LPJ aktif", BS tetap harus di-LPJ ulang) supaya konsisten dengan logika `BsTable.jsx` -- sebelumnya LPJ yang dibatalkan/ditolak salah dianggap "Sedang LPJ" sehingga alert tidak muncul padahal seharusnya muncul.
+
+## 65.4 Task Development — Bagian BC
+
+- [x] `DashboardSummary.jsx`: normalisasi pencocokan `nomorBS` (trim+uppercase)
+- [x] `BSAlerts.jsx`: ganti query LPJ yang selalu ditolak Firestore jadi fetch-semua-lalu-cocokkan-di-JS + normalisasi + penyelarasan status Dibatalkan/Ditolak
+- [x] `CI=true npx eslint` untuk 2 file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: buka Dashboard, konfirmasi angka "Sudah LPJ" di ringkasan sudah benar
+- [ ] Tes manual: kalau ada BS "Disetujui" yang sudah lewat 3 hari belum di-LPJ, konfirmasi banner merah peringatan sekarang MUNCUL (sebelumnya kemungkinan besar tidak pernah muncul sama sekali)

@@ -28,30 +28,47 @@ const BsAlerts = ({ scrollToTable }) => {
         const pendingBS = [];
         const overdueBS = [];
 
+        // Bagian BB: query lpj lama di sini filter HANYA by nomorBS (tanpa
+        // user.uid) -- firestore.rules mensyaratkan query "list" collection
+        // lpj provable lewat where('user.uid', '==', request.auth.uid), jadi
+        // query lama itu SELALU ditolak permission-denied (ditangkap diam-diam
+        // oleh catch di bawah), membuat banner alert ini efektif tidak pernah
+        // muncul. Diganti pola yang sama dengan BsTable.jsx/DashboardSummary.jsx:
+        // ambil SEMUA lpj milik user sekali saja, cocokkan nomorBS di JS
+        // (dinormalisasi trim+uppercase supaya konsisten juga dengan data lama
+        // yang nomorBS-nya beda spasi/kapitalisasi dari displayId BS aslinya).
+        const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase();
+        const lpjSnapshotAll = await getDocs(
+          query(collection(db, 'lpj'), where('user.uid', '==', uid))
+        );
+        const lpjByNomorBS = {};
+        lpjSnapshotAll.docs.forEach((docSnap) => {
+          const lpjData = docSnap.data();
+          const key = normalizeNomorBS(lpjData.nomorBS);
+          if (key) lpjByNomorBS[key] = lpjData;
+        });
+
         // Process each BS document
         for (const bsDoc of bsSnapshot.docs) {
           const bsData = bsDoc.data();
-          
+
           // Find approval timestamp
           const approvalEntry = bsData.statusHistory?.find(
-            entry => entry.status === 'Disetujui oleh Reviewer 2' || 
+            entry => entry.status === 'Disetujui oleh Reviewer 2' ||
                      entry.status === 'Disetujui oleh Super Admin (Pengganti Reviewer 2)'
           );
 
           if (!approvalEntry) continue;
 
           // Check LPJ status
-          const lpjQuery = query(
-            collection(db, 'lpj'),
-            where('nomorBS', '==', bsData.displayId)
-          );
-          const lpjSnapshot = await getDocs(lpjQuery);
-          
+          const lpjData = lpjByNomorBS[normalizeNomorBS(bsData.displayId)];
+
           // Initialize LPJ status as 'Belum LPJ'
           let lpjStatus = 'Belum LPJ';
-          
-          if (!lpjSnapshot.empty) {
-            const lpjData = lpjSnapshot.docs[0].data();
+
+          // LPJ yang Dibatalkan/Ditolak dianggap tidak ada (sama seperti
+          // BsTable.jsx) -- BS tsb tetap harus di-LPJ-kan ulang.
+          if (lpjData && lpjData.status !== 'Dibatalkan' && lpjData.status !== 'Ditolak') {
             // Only change status to 'Sedang LPJ' if LPJ exists but not approved
             if (lpjData.status === 'Disetujui') {
               continue; // Skip if LPJ is already approved
