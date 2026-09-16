@@ -913,9 +913,18 @@ exports.validatePengembalianBukti = onCall(async (request) => {
         status = isValid ? "valid" : "tidak_sesuai";
         note = extractedText.slice(0, 1000);
     } catch (error) {
-        console.error("Gagal membaca/validasi bukti pengembalian:", error);
+        // Bagian BA: sertakan pesan error ASLI (mis. dari Cloud Vision atau
+        // fetch) ke `note` -- sebelumnya cuma pesan generik yang sama untuk
+        // SEMUA jenis kegagalan (file gagal di-fetch, Vision API menolak
+        // ukuran/format file, dst), jadi kalau gagal lagi di masa depan tidak
+        // ada cara mendiagnosis dari UI/data tanpa buka Cloud Functions log
+        // (yang tidak semua orang punya akses). Detail error tetap TIDAK
+        // dianggap "sensitif" -- ini cuma info teknis soal proses baca file,
+        // bukan data pribadi user lain.
+        const reason = error?.message || String(error) || "error tidak diketahui"
+        console.error("Gagal membaca/validasi bukti pengembalian:", reason, error);
         status = "gagal_baca";
-        note = "Sistem tidak bisa membaca isi file. Silakan cek manual atau upload ulang dengan foto/scan yang lebih jelas.";
+        note = `Sistem tidak bisa membaca isi file (${reason}). Silakan cek manual atau upload ulang dengan foto/scan yang lebih jelas.`;
     }
 
     await lpjDoc.ref.update({
@@ -1026,10 +1035,17 @@ exports.uploadOwnedFile = onCall({ memory: "512MiB", timeoutSeconds: 60 }, async
     const bucket = getStorage().bucket();
     const file = bucket.file(storagePath);
     const downloadToken = crypto.randomUUID();
+    // contentType disertakan DUA kali dengan sengaja (shorthand top-level DAN
+    // nested di dalam `metadata`) -- beberapa versi @google-cloud/storage cuma
+    // menghormati salah satu bentuk tergantung apakah `metadata` juga
+    // disertakan di request yang sama. Redundan tapi aman, menghilangkan
+    // ambiguitas supaya contentType (dipakai validatePengembalianBukti buat
+    // menentukan PDF vs gambar) selalu tersimpan benar di objek Storage-nya.
     await file.save(buffer, {
         resumable: false,
         contentType,
         metadata: {
+            contentType,
             metadata: { firebaseStorageDownloadTokens: downloadToken }
         }
     });

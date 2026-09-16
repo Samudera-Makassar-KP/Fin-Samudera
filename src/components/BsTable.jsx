@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import ReactDOM from 'react-dom'
 import { Link } from 'react-router-dom'
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore'
@@ -90,49 +90,77 @@ const BsTable = () => {
         ]
     }
 
-    useEffect(() => {
-        const fetchUserAndBonSementara = async () => {
-            setLoading(true) // Set loading to true before fetching data
-            try {
-                const uid = localStorage.getItem('userUid')
-                if (!uid) {
-                    console.error('UID tidak ditemukan di localStorage')
-                    setLoading(false)
-                    return
-                }
-
-                // Query bon sementara berdasarkan UID user
-                const q = query(
-                    collection(db, 'bonSementara'),
-                    where('user.uid', '==', uid) // Filter data bon sementara berdasarkan UID user
-                )
-
-                const querySnapshot = await getDocs(q)
-                const bonSementara = querySnapshot.docs
-                    .map((doc) => ({
-                        id: doc.id,
-                        displayId: doc.data().displayId,
-                        ...doc.data()
-                    }))
-                    .filter((item) => !HIDDEN_STATUSES.includes(item.status))
-
-                const existingYears = new Set(bonSementara.map((item) => new Date(item.tanggalPengajuan).getFullYear()))
-
-                const updatedYearOptions = Array.from(existingYears)
-                    .map((year) => ({ value: year, label: `${year}` }))
-                    .sort((a, b) => b.value - a.value) // Urutkan tahun dari yang terbaru
-
-                setYearOptions(updatedYearOptions)
-                setData({ bonSementara })
-            } catch (error) {
-                console.error('Error fetching user or bon sementara data:', error)
-            } finally {
+    // Bagian BA: dipisah ke useCallback (bukan cuma fungsi lokal di dalam
+    // useEffect) supaya bisa dipanggil ulang dari effect visibilitychange di
+    // bawah -- sebelumnya cuma fetch SEKALI saat mount, jadi kolom "Status
+    // LPJ" bisa BEKU/basi kalau tab ini dibiarkan terbuka lama (mis. LPJ-nya
+    // baru saja divalidasi validator di sesi lain, tapi tab ini tidak pernah
+    // tahu sampai di-reload manual) -- persis pola yang bikin bingung "saya
+    // sedang LPJ-kan tapi statusnya masih Belum LPJ".
+    const fetchUserAndBonSementara = useCallback(async ({ silent = false } = {}) => {
+        if (!silent) setLoading(true)
+        try {
+            const uid = localStorage.getItem('userUid')
+            if (!uid) {
+                console.error('UID tidak ditemukan di localStorage')
                 setLoading(false)
+                return
             }
+
+            // Query bon sementara berdasarkan UID user
+            const q = query(
+                collection(db, 'bonSementara'),
+                where('user.uid', '==', uid) // Filter data bon sementara berdasarkan UID user
+            )
+
+            const querySnapshot = await getDocs(q)
+            const bonSementara = querySnapshot.docs
+                .map((doc) => ({
+                    id: doc.id,
+                    displayId: doc.data().displayId,
+                    ...doc.data()
+                }))
+                .filter((item) => !HIDDEN_STATUSES.includes(item.status))
+
+            const existingYears = new Set(bonSementara.map((item) => new Date(item.tanggalPengajuan).getFullYear()))
+
+            const updatedYearOptions = Array.from(existingYears)
+                .map((year) => ({ value: year, label: `${year}` }))
+                .sort((a, b) => b.value - a.value) // Urutkan tahun dari yang terbaru
+
+            setYearOptions(updatedYearOptions)
+            setData({ bonSementara })
+        } catch (error) {
+            console.error('Error fetching user or bon sementara data:', error)
+        } finally {
+            setLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        fetchUserAndBonSementara()
+    }, [fetchUserAndBonSementara])
+
+    // Bagian BA: begitu tab ini dibuka lagi setelah sempat di-background
+    // (pindah tab lain / minimize / pindah aplikasi lalu balik) -- refresh
+    // diam-diam (tanpa skeleton loading, `silent: true`) supaya kolom "Status
+    // LPJ" & data lain ikut update kalau ada perubahan dari sesi lain
+    // (validator approve, LPJ baru disubmit, dst) selama tab ini idle.
+    // Throttle minimal 60 detik antar refresh supaya tidak query berulang
+    // kalau user gonta-ganti tab dengan cepat.
+    useEffect(() => {
+        let lastFetchAt = Date.now()
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== 'visible') return
+            if (Date.now() - lastFetchAt < 60000) return
+            lastFetchAt = Date.now()
+            fetchUserAndBonSementara({ silent: true })
         }
 
-        fetchUserAndBonSementara()
-    }, [])
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }, [fetchUserAndBonSementara])
 
     const fetchLpjStatus = async (bonSementaraList) => {
         try {

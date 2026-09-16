@@ -2248,3 +2248,40 @@ Semua 8 label diubah dari teks statis "250MB" jadi ekspresi dinamis `{Math.round
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-14, diverifikasi 0 kecocokan "Max Size: 250MB" & pola label dinamis ada di bundle live (`main.1b4e2ba1.js`)
 - [ ] Minta user: hard refresh / tutup-buka tab penuh, coba upload lampiran lagi -- kalau MASIH gagal, minta kirim console (F12 -> tab Console) supaya `error.code`/`error.message` yang sudah diperjelas Bagian AW bisa dibaca, untuk pastikan apakah ini murni soal label basi atau ada penyebab lain (mis. masalah IAM Cloud Function yang belum kelihatan dari sini)
+
+---
+
+# BAGIAN BA — Status LPJ Beku di Tab Lama & Diagnostik Bukti Pengembalian Gambar (2026-09-16)
+
+## 63.1 Permintaan User
+
+1. Tabel "Bon Sementara Diajukan" menampilkan "Belum LPJ" untuk 1 BS yang user klaim sedang/sudah di-LPJ-kan -- ditandai lewat tangkapan layar 2 tabel (Bon Sementara & LPJ Bon Sementara) sekaligus.
+2. Verifikasi OCR bukti pengembalian dana LPJ tidak berhasil membaca foto/JPG/PNG, padahal file PDF langsung berhasil.
+
+## 63.2 Investigasi
+
+### Status LPJ "Belum LPJ" padahal LPJ sudah ada
+
+Ditelusuri `fetchLpjStatus`/`fetchUserAndBonSementara` di `BsTable.jsx` -- logika pencocokan `bs.displayId` <-> `lpjData.nomorBS` SECARA STRUKTUR sudah benar (field yang sama dipakai konsisten untuk render maupun pencocokan). **Akar masalah**: `fetchUserAndBonSementara` (termasuk `fetchLpjStatus` yang di-trigger dari situ) cuma jalan SEKALI saat halaman pertama dimuat (`useEffect` dependency `[]`, plain `getDocs`, BUKAN listener realtime `onSnapshot`) -- kalau tab ini dibiarkan terbuka lama (jam/hari) sementara status LPJ berubah di SESI LAIN (mis. validator approve dari device lain), kolom "Status LPJ" di tab yang sudah lama terbuka itu TIDAK PERNAH ikut update sampai di-reload manual. Angka "Terlewat: Xh Yj Zm" yang terus berjalan (dihitung client-side dari `Date.now()`) memberi kesan halaman "hidup", padahal data intinya beku sejak fetch pertama -- pola stale-state yang mirip (tapi BEDA akar) dari masalah bundle PWA basi yang sudah beberapa kali ditemui sesi ini.
+
+### Bukti pengembalian gambar tidak terbaca, PDF berhasil
+
+Ditelusuri alur `uploadOwnedFile` (Bagian AW) & `validatePengembalianBukti`/`extractTextFromBuktiFile` (OCR Cloud Vision) -- SECARA LOGIKA, penentuan jalur PDF (`batchAnnotateFiles`) vs gambar (`textDetection`) berdasarkan `contentType` sudah benar. **TIDAK bisa dipastikan 100% akar masalahnya dari sini** (tidak ada akses ke Cloud Functions log atau file yang gagal) -- 2 kemungkinan yang teridentifikasi: (a) `contentType` yang tersimpan di object Storage kurang pasti terbawa benar lewat `file.save()` (ambiguitas shorthand top-level vs nested), (b) Cloud Vision `textDetection` (inline `content`, dipakai gambar) punya batas ukuran payload yang MUNGKIN lebih ketat dari `batchAnnotateFiles` (dipakai PDF) -- foto kamera ponsel modern gampang mendekati batas 20MB yang sudah ditetapkan Bagian AW.
+
+## 63.3 Perbaikan
+
+- **`BsTable.jsx`**: `fetchUserAndBonSementara` dipisah jadi `useCallback` + effect baru `visibilitychange` -- begitu tab ini dibuka lagi setelah sempat di-background (ganti tab/minimize lalu balik), data (termasuk "Status LPJ") di-refresh DIAM-DIAM (`silent: true`, tanpa skeleton loading mengganggu), throttle minimal 60 detik antar refresh.
+- **`functions/index.js`**: `uploadOwnedFile` sekarang menulis `contentType` DUA KALI (shorthand top-level DAN nested di `metadata.contentType`) -- menghilangkan ambiguitas soal versi `@google-cloud/storage` mana yang dipakai, defensif & aman walau bukan pasti akar masalah. `validatePengembalianBukti`: pesan error di `pengembalianValidationNote` sekarang menyertakan ALASAN ASLI kegagalan (pesan error dari Vision API/fetch), bukan lagi teks generik yang sama untuk semua jenis kegagalan -- kalau terjadi lagi, admin bisa lihat alasan spesifiknya langsung dari data LPJ tanpa perlu akses Cloud Functions log.
+
+## 63.4 Task Development — Bagian BA
+
+- [x] `BsTable.jsx`: `fetchUserAndBonSementara` jadi `useCallback`, refresh diam-diam saat tab kembali visible (throttle 60 detik)
+- [x] `functions/index.js`: `uploadOwnedFile` set `contentType` redundan (top-level + nested)
+- [x] `functions/index.js`: `validatePengembalianBukti` sertakan alasan error asli di `pengembalianValidationNote`
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `node -c functions/index.js` -- sintaks valid
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (`functions:uploadOwnedFile,validatePengembalianBukti` + hosting)
+- [ ] Tes manual: buka tab "Bon Sementara Diajukan", pindah ke tab lain >1 menit lalu balik, konfirmasi Status LPJ ikut update tanpa reload manual
+- [ ] Tes manual: user coba lagi upload bukti pengembalian JPG/PNG yang GAGAL sebelumnya -- kalau MASIH gagal, `pengembalianValidationNote` di data LPJ sekarang berisi alasan spesifik (bisa dilihat admin) untuk diagnosis lanjutan tanpa perlu tebak-tebakan lagi
