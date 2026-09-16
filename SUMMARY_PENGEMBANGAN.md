@@ -2319,6 +2319,6 @@ Dua lapis perbaikan -- satu defensif (menyembuhkan kasus yang SUDAH terlanjur sa
 - [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.501fc175.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: buka Dashboard, konfirmasi BS "BS2609SMDR0000503" akhirnya menampilkan status LPJ yang benar (bukan lagi "Belum LPJ") -- kalau MASIH belum cocok, kemungkinan `nomorBS` yang tersimpan di LPJ tsb salah ketik ANGKA/HURUF (bukan cuma spasi/kapitalisasi) dan perlu diperbaiki manual di data, minta izin user dulu sebelum saya sentuh
 - [ ] Tes manual: buat LPJ baru, konfirmasi dropdown Nomor Bon Sementara menampilkan daftar BS "Disetujui" milik user sendiri dan bisa dipilih (bukan diketik manual)
