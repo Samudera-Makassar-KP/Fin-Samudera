@@ -2380,6 +2380,6 @@ Tidak bisa dipastikan nilai persis yang tersimpan tanpa akses langsung ke data -
 - [x] `CI=true npx eslint src/components/ManageUser.jsx` -- bersih
 - [x] `CI=true npm run build` sukses
 - [x] Deploy `functions:debugFindLpjMismatch` — sukses 2026-09-16
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-16, diverifikasi hash bundle live (`main.5bacc1b0.js`) cocok dengan hasil build lokal terbaru
 - [ ] Minta user: buka "Manage Users", masukkan "BS2609SMDR0000503" di panel kuning, klik "Cek", kirim hasil JSON-nya
 - [ ] Setelah data mentah didapat: perbaiki akar masalah kasus ini (edit manual `nomorBS` LPJ jika memang typo, dengan izin eksplisit user) DAN hapus `debugFindLpjMismatch` + panel diagnostik ini
