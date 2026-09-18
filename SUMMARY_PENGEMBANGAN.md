@@ -2463,5 +2463,5 @@ Ini kombinasi CSS/Flexbox yang ambigu: `height: '100%'` pada elemen flex child S
 - [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-18, diverifikasi hash bundle live (`main.968aa2d6.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: cetak ulang PDF Reimbursement RBS.GAU.KEJS.260916.0010 (atau RBS/BS/LPJ lain dengan detail item 2 baris), konfirmasi garis tabel sekarang menyambung penuh, tidak lagi "putus" -- kalau MASIH terlihat putus, kirim screenshot baru supaya bisa ditelusuri dari sudut lain (kemungkinan bukan alignItems, tapi sumber lain seperti page-break atau rounding lebar kolom)
