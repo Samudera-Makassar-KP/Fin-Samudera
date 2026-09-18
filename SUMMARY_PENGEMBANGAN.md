@@ -2498,5 +2498,5 @@ Perbaikan Bagian BF (`alignItems: 'stretch'`) TETAP dipertahankan (tidak salah, 
 - [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-09-18, diverifikasi hash bundle live (`main.d4573da9.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: cetak ulang PDF BS/RBS/LPJ, konfirmasi kotak tabel sekarang punya garis lengkap di keempat sisi (atas, kiri, kanan, bawah) -- termasuk BS2609SMDR0000504, RBS.GAU.KEJS.260916.0010, dan LPJ yang dilaporkan
