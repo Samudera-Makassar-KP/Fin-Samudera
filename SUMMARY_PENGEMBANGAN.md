@@ -2433,3 +2433,35 @@ Kalau ada 2 dokumen dengan prioritas SAMA (mis. 2 LPJ yang sama-sama masih "Dipr
 User tidak punya laporan bug baru saat ini -- untuk sementara SEMUA perbaikan Bagian AV-BE dianggap selesai/beres. Satu catatan yang masih terbuka untuk sesi berikutnya (BELUM ada konfirmasi ulang dari user, jangan dianggap selesai kalau belum ada laporan retest):
 
 - **Verifikasi OCR bukti pengembalian untuk file JPG/PNG** (laporan awal di Bagian BA, poin 2) -- hanya diberi perbaikan DEFENSIF (redundansi `contentType` saat `file.save()`, pesan error lebih jelas di `pengembalianValidationNote`), akar masalah pastinya TIDAK pernah dikonfirmasi. Kalau user melapor masalah upload bukti pengembalian gambar lagi, cek dulu `pengembalianValidationNote` di dokumen LPJ terkait (sekarang berisi alasan asli dari Vision API, bukan lagi pesan generik) sebelum menebak ulang dari nol.
+
+---
+
+# BAGIAN BF — Garis Tabel PDF Cetak (BS/RBS/LPJ) Terlihat Putus/Terputus (2026-09-18)
+
+## 68.1 Latar Belakang
+
+User melaporkan (lewat screenshot hasil cetak PDF Reimbursement RBS.GAU.KEJS.260916.0010) garis tabel pada PDF cetak BS/RBS/LPJ terlihat "putus" -- tidak menyambung rapi, khususnya di baris item yang punya teks 2 baris (mis. kolom ACTIVITIES NAME yang menampilkan tanggal+jenis di baris pertama, lalu detail item di baris kedua di bawahnya).
+
+## 68.2 Investigasi & Akar Masalah
+
+Ditelusuri styling tabel di ketiga file generator PDF (`BsPdf.jsx`, `LpjPdf.jsx`, `ReimbursementPdf.jsx`, dipakai `@react-pdf/renderer`) -- ketiganya punya pola IDENTIK: style `tableRow` (`flexDirection: 'row'`) diset `alignItems: 'center'`, sementara tiap `tableCell`/`tableHeaderCell` di dalamnya diberi `height: '100%'` untuk membuatnya setinggi baris.
+
+Ini kombinasi CSS/Flexbox yang ambigu: `height: '100%'` pada elemen flex child SECARA SPESIFIKASI hanya pasti bekerja kalau parent-nya punya tinggi definitif -- yang normalnya disediakan otomatis oleh `alignItems: 'stretch'` (default flexbox). Begitu `alignItems` di-override jadi `'center'`, tinggi baris jadi tidak lagi "definitif" dengan cara yang sama, dan `height: '100%'` pada child bisa dihitung tidak konsisten tergantung versi/engine Yoga (layout engine react-pdf) yang dipakai -- BISA berbeda antara build Node dan build browser (PDF di aplikasi ini di-generate di BROWSER lewat `pdf(...).toBlob()`, bukan Node). Efeknya: pada baris dengan sel yang tingginya berbeda-beda (mis. sel ACTIVITIES NAME 2 baris vs sel KETERANGAN/JUMLAH 1 baris), garis pembatas kolom (`borderRight`) sel yang lebih pendek bisa berhenti di tengah, tidak menyambung sampai ke atas/bawah baris -- persis "putus" seperti yang dilaporkan.
+
+**Catatan kejujuran**: saya coba reproduksi bug ini dengan me-render ulang tabel yang sama lewat `@react-pdf/renderer` versi Node secara lokal (pakai data dari screenshot user) untuk verifikasi visual -- versi Node yang terpasang TIDAK menunjukkan bug ini secara kentara (kemungkinan karena resolusi `height: '100%'` yang berbeda dari build browser yang sebenarnya dipakai user). Jadi saya tidak bisa mengonfirmasi 100% lewat reproduksi lokal, TAPI perbaikan yang diterapkan (`alignItems: 'stretch'`) adalah cara yang BENAR secara CSS/Flexbox untuk masalah kelas ini -- menghilangkan ambiguitas sepenuhnya, membuat semua sel di baris yang sama otomatis setinggi sel tertinggi, TANPA downside visual (tiap sel sudah punya `justifyContent: 'center'` sendiri untuk tetap menengahkan isinya secara vertikal).
+
+## 68.3 Perbaikan
+
+**`BsPdf.jsx`, `LpjPdf.jsx`, `ReimbursementPdf.jsx`**: `tableRow.alignItems` diubah dari `'center'` ke `'stretch'` -- satu baris kode per file, konsisten di ketiganya. Ini membuat semua sel di 1 baris (termasuk kolom KETERANGAN/JUMLAH yang cuma 1 baris teks) otomatis meregang mengikuti tinggi sel tertinggi di baris yang sama (mis. ACTIVITIES NAME yang 2 baris), sehingga garis pembatas antar kolom selalu menyambung penuh dari atas sampai bawah baris.
+
+## 68.4 Task Development — Bagian BF
+
+- [x] `BsPdf.jsx`: `tableRow.alignItems` -> `'stretch'`
+- [x] `LpjPdf.jsx`: `tableRow.alignItems` -> `'stretch'`
+- [x] `ReimbursementPdf.jsx`: `tableRow.alignItems` -> `'stretch'`
+- [x] Reproduksi lokal dengan `@react-pdf/renderer` (data dari screenshot user) -- tidak berhasil mereproduksi bug secara visual di versi Node (kemungkinan beda dari build browser), tapi perbaikan tetap benar secara prinsip CSS/Flexbox
+- [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: cetak ulang PDF Reimbursement RBS.GAU.KEJS.260916.0010 (atau RBS/BS/LPJ lain dengan detail item 2 baris), konfirmasi garis tabel sekarang menyambung penuh, tidak lagi "putus" -- kalau MASIH terlihat putus, kirim screenshot baru supaya bisa ditelusuri dari sudut lain (kemungkinan bukan alignItems, tapi sumber lain seperti page-break atau rounding lebar kolom)

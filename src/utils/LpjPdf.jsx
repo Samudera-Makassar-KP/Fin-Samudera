@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         borderBottomColor: '#000',
         borderBottomWidth: 1,
-        alignItems: 'center'
+        alignItems: 'stretch'
     },
     tableHeader: {
         backgroundColor: '#ED1C24',

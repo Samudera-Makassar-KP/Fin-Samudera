@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         borderBottomColor: '#000',
         borderBottomWidth: 1,
-        alignItems: 'center'
+        alignItems: 'stretch'
     },
     tableHeader: {
         textAlign: 'center'
