@@ -47,8 +47,16 @@ const styles = StyleSheet.create({
         fontFamily: 'Optima',
         alignItems: 'flex-end'
     },
+    // Bagian BG: `border: 1` (shorthand) terbukti TIDAK konsisten me-render
+    // sisi atas & kiri saat container ini membungkus baris-baris flex yang
+    // masing-masing juga punya border sendiri (borderBottomWidth di tableRow) --
+    // direproduksi & dikonfirmasi lewat render lokal. Sisi eksplisit per-arah
+    // (borderTopWidth/dst) TIDAK kena bug yang sama.
     tableContainer: {
-        border: 1,
+        borderTopWidth: 1,
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
         borderColor: '#000'
     },
     tableRow: {

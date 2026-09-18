@@ -2465,3 +2465,38 @@ Ini kombinasi CSS/Flexbox yang ambigu: `height: '100%'` pada elemen flex child S
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-18, diverifikasi hash bundle live (`main.968aa2d6.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: cetak ulang PDF Reimbursement RBS.GAU.KEJS.260916.0010 (atau RBS/BS/LPJ lain dengan detail item 2 baris), konfirmasi garis tabel sekarang menyambung penuh, tidak lagi "putus" -- kalau MASIH terlihat putus, kirim screenshot baru supaya bisa ditelusuri dari sudut lain (kemungkinan bukan alignItems, tapi sumber lain seperti page-break atau rounding lebar kolom)
+
+---
+
+# BAGIAN BG — Akar Masalah Sebenarnya: Garis Atas & Kiri Tabel PDF Hilang (2026-09-18)
+
+## 69.1 Latar Belakang
+
+User konfirmasi setelah Bagian BF deploy, kirim 3 screenshot baru: garis atas & kiri tabel LPJ hilang, tabel BS "rusak total" (sebelumnya tidak seperti ini), dan garis atas & kiri tabel RBS "masih sama tidak muncul" (menyiratkan ini SUDAH ada sebelum Bagian BF, bukan regresi baru). Ini membuktikan diagnosis Bagian BF (`alignItems: 'center'` vs `'stretch'`) BUKAN akar masalah sebenarnya untuk laporan awal -- masalah aslinya adalah garis TEPI LUAR tabel (`tableContainer`) yang hilang di sisi atas & kiri, bukan garis pembatas antar-kolom di tengah tabel.
+
+## 69.2 Investigasi & Akar Masalah (kali ini berhasil direproduksi & dikonfirmasi visual)
+
+Belajar dari Bagian BF (reproduksi Node sempat tidak berhasil menunjukkan bug), kali ini reproduksi dilakukan lebih presisi: replika PERSIS struktur `BsPdf.jsx` (termasuk 2 baris info "Tanggal Pembayaran.../Diselesaikan..." SEBELUM baris header tabel) di-render lokal -- **berhasil direproduksi 100%**, PDF hasil render menunjukkan tabel tanpa garis atas & kiri, PERSIS seperti laporan user.
+
+**Akar masalah**: `tableContainer` di ketiga file (`BsPdf.jsx`, `LpjPdf.jsx`, `ReimbursementPdf.jsx`) memakai properti shorthand `border: 1` (gabungan width+style+color sekaligus) untuk kotak luar tabel. Properti shorthand ini TERBUKTI tidak konsisten merender semua 4 sisi ketika container-nya membungkus baris-baris flex yang masing-masing PUNYA border sendiri (`borderBottomWidth` di `tableRow`) -- sisi atas & kiri kotak luar hilang, sisi bawah & kanan tetap muncul (kebetulan "ketiban" garis dari elemen anak-anaknya). Dikonfirmasi lewat pembanding: `borderWidth: 2` (properti TERPISAH, bukan gabungan `border`) di style `bankInfo` (kotak info bank di footer Reimbursement) TIDAK kena bug ini -- merender sempurna 4 sisi -- membuktikan biang keladinya SPESIFIK properti gabungan `border`, bukan konsep border pada umumnya.
+
+Ini juga menjelaskan kenapa tabel BS terlihat "rusak total" dibanding LPJ/RBS: dengan cuma 1 baris item, kotak tabel BS jadi sangat pendek, jadi hilangnya garis atas+kiri jauh lebih mencolok (isinya seperti "mengambang" tanpa bingkai) dibanding tabel LPJ/RBS yang lebih panjang dan punya lebih banyak garis internal yang menutupi kesan "rusak".
+
+## 69.3 Perbaikan
+
+**`BsPdf.jsx`, `LpjPdf.jsx`, `ReimbursementPdf.jsx`**: `tableContainer.border: 1` diganti jadi 4 properti eksplisit per sisi (`borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1`) -- terbukti lewat reproduksi lokal TIDAK kena bug yang sama, merender kotak penuh 4 sisi dengan benar.
+
+Perbaikan Bagian BF (`alignItems: 'stretch'`) TETAP dipertahankan (tidak salah, cuma bukan akar masalah utama untuk laporan ini) -- masih perbaikan yang sah secara CSS/Flexbox untuk kasus sel dengan tinggi konten berbeda.
+
+## 69.4 Task Development — Bagian BG
+
+- [x] `BsPdf.jsx`: `tableContainer` -> border eksplisit 4 sisi (bukan shorthand)
+- [x] `LpjPdf.jsx`: `tableContainer` -> border eksplisit 4 sisi (bukan shorthand)
+- [x] `ReimbursementPdf.jsx`: `tableContainer` -> border eksplisit 4 sisi (bukan shorthand)
+- [x] Reproduksi lokal replika PERSIS struktur BsPdf.jsx -- BERHASIL mereproduksi bug (garis atas & kiri hilang) dengan `border` shorthand, dan BERHASIL memverifikasi perbaikan (border eksplisit 4 sisi merender sempurna)
+- [x] Cek properti `borderWidth` lain (mis. `bankInfo` di ReimbursementPdf.jsx) -- TIDAK kena bug yang sama, tidak perlu diubah
+- [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: cetak ulang PDF BS/RBS/LPJ, konfirmasi kotak tabel sekarang punya garis lengkap di keempat sisi (atas, kiri, kanan, bawah) -- termasuk BS2609SMDR0000504, RBS.GAU.KEJS.260916.0010, dan LPJ yang dilaporkan
