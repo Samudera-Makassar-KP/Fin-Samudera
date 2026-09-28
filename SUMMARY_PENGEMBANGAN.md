@@ -2500,3 +2500,31 @@ Perbaikan Bagian BF (`alignItems: 'stretch'`) TETAP dipertahankan (tidak salah, 
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-18, diverifikasi hash bundle live (`main.d4573da9.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: cetak ulang PDF BS/RBS/LPJ, konfirmasi kotak tabel sekarang punya garis lengkap di keempat sisi (atas, kiri, kanan, bawah) -- termasuk BS2609SMDR0000504, RBS.GAU.KEJS.260916.0010, dan LPJ yang dilaporkan
+
+---
+
+# BAGIAN BH — Verifikasi Branch `dev`/`main` & Status Produksi (2026-09-28)
+
+## 70.1 Latar Belakang
+
+User minta cek apakah branch `dev` dan `main` sudah aktif (buat kalau belum), dengan penegasan ulang alur kerja: semua perubahan WAJIB lewat `dev` dulu, baru di-merge ke `main`, lalu langsung deploy setelah semuanya sesuai.
+
+## 70.2 Hasil Pengecekan
+
+Kedua branch sudah ada di remote (`origin/dev` & `origin/main`), jadi tidak ada branch yang perlu dibuat. Setelah `git fetch`, keduanya berada di commit yang sama persis (`5b249ed`, selisih 0 commit ke dua arah) dan working tree bersih. Commit kode terakhir adalah perbaikan tabel PDF Bagian BG (`6e6bafe`); commit sesudahnya hanya update dokumen ini, tidak memengaruhi hosting.
+
+Bundle live di `https://samudera-web-cbf2f.web.app` dicek langsung: `main.d4573da9.js` -- cocok dengan catatan deploy Bagian BG. Artinya produksi sudah di versi terbaru, jadi **tidak dilakukan deploy ulang** (hasilnya akan identik).
+
+Branch lokal `dev` belum ada sebelumnya (hanya `main`), sekarang dibuat dari `origin/dev` dengan tracking ke remote, dan sesi kerja dipindah ke `dev` -- sesuai alur yang disepakati di bagian 16 (kerja lanjutan tidak dilakukan langsung di `main`).
+
+## 70.3 Alur Kerja (ditegaskan ulang)
+
+Commit & push ke `dev` → `npm test` + `npm run build` lokal lulus (CI GitHub Actions juga jalan di kedua branch) → merge fast-forward ke `main` & push → deploy ke produksi → verifikasi hash bundle live cocok dengan build lokal → update dokumen ini → checkout kembali ke `dev`.
+
+## 70.4 Task Development — Bagian BH
+
+- [x] Cek keberadaan branch `dev` & `main` di remote -- keduanya sudah ada
+- [x] Cek sinkronisasi `dev` vs `main` -- identik (`5b249ed`)
+- [x] Cek bundle live produksi -- `main.d4573da9.js`, sudah versi terbaru
+- [x] Buat branch lokal `dev` (tracking `origin/dev`) & pindah kerja ke `dev`
+- [ ] Item terbuka dari Bagian BG masih berlaku: tes manual cetak ulang PDF BS/RBS/LPJ untuk konfirmasi garis tabel lengkap 4 sisi
