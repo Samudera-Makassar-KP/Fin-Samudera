@@ -12,12 +12,12 @@ import EmptyState from '../assets/images/EmptyState.png'
 import { useTheme } from '../context/ThemeContext'
 import { getStatusBadgeClass } from '../utils/statusBadge'
 
-// Bagian BH: menu "Maker" -- khusus role Validator (Admin/Super Admin ikut
+// Bagian BI: menu "Maker" -- khusus role Validator (Admin/Super Admin ikut
 // bisa melihat untuk keperluan pengawasan, mengikuti pola akses "Rekapan").
 // Menampilkan BS & Reimbursement yang sudah berstatus "Disetujui" dan
 // menunggu diproses pencairannya ("di-maker"), sesuai unit bisnis yang
 // ditugaskan ke Validator yang login. LPJ sengaja TIDAK disertakan (lihat
-// keputusan Bagian BH: cakupan Maker hanya BS & RBS).
+// keputusan Bagian BI: cakupan Maker hanya BS & RBS).
 const BUSINESS_UNITS = [
     { value: 'PT Makassar Jaya Samudera', label: 'PT Makassar Jaya Samudera' },
     { value: 'PT Samudera Makassar Logistik', label: 'PT Samudera Makassar Logistik' },

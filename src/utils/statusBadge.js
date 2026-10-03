@@ -16,7 +16,7 @@ export const getStatusBadgeClass = (status) => {
             return 'bg-green-200 text-green-800 border-[1px] border-green-600'
         case 'Ditolak':
             return 'bg-red-200 text-red-800 border-[1px] border-red-600'
-        // Bagian BH: status makerStatus (menu Maker, src/components/Maker.jsx)
+        // Bagian BI: status makerStatus (menu Maker, src/components/Maker.jsx)
         // -- field terpisah dari `status` approval utama, tapi dipakai di badge
         // yang sama supaya tampilannya konsisten dengan status lain.
         case 'Menunggu Maker':

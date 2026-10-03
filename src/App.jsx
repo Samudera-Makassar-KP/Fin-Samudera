@@ -162,7 +162,7 @@ const AppContent = () => {
                         </ProtectedRoute>
                     } />
 
-                    {/* Bagian BH: menu Maker -- khusus Validator (Admin/Super Admin ikut
+                    {/* Bagian BI: menu Maker -- khusus Validator (Admin/Super Admin ikut
                         bisa akses untuk pengawasan, sama seperti pola /rekapan). */}
                     <Route path="/maker" element={
                         <ProtectedRoute allowedRoles={['Validator', 'Admin', 'Super Admin']}>

@@ -2503,13 +2503,41 @@ Perbaikan Bagian BF (`alignItems: 'stretch'`) TETAP dipertahankan (tidak salah, 
 
 ---
 
-# BAGIAN BH — Fitur Baru: Menu "Maker" untuk Validator + Notifikasi Email Pencairan (2026-10-03)
+# BAGIAN BH — Verifikasi Branch `dev`/`main` & Status Produksi (2026-09-28)
 
-## 70.1 Permintaan User
+## 70.1 Latar Belakang
+
+User minta cek apakah branch `dev` dan `main` sudah aktif (buat kalau belum), dengan penegasan ulang alur kerja: semua perubahan WAJIB lewat `dev` dulu, baru di-merge ke `main`, lalu langsung deploy setelah semuanya sesuai.
+
+## 70.2 Hasil Pengecekan
+
+Kedua branch sudah ada di remote (`origin/dev` & `origin/main`), jadi tidak ada branch yang perlu dibuat. Setelah `git fetch`, keduanya berada di commit yang sama persis (`5b249ed`, selisih 0 commit ke dua arah) dan working tree bersih. Commit kode terakhir adalah perbaikan tabel PDF Bagian BG (`6e6bafe`); commit sesudahnya hanya update dokumen ini, tidak memengaruhi hosting.
+
+Bundle live di `https://samudera-web-cbf2f.web.app` dicek langsung: `main.d4573da9.js` -- cocok dengan catatan deploy Bagian BG. Artinya produksi sudah di versi terbaru, jadi **tidak dilakukan deploy ulang** (hasilnya akan identik).
+
+Branch lokal `dev` belum ada sebelumnya (hanya `main`), sekarang dibuat dari `origin/dev` dengan tracking ke remote, dan sesi kerja dipindah ke `dev` -- sesuai alur yang disepakati di bagian 16 (kerja lanjutan tidak dilakukan langsung di `main`).
+
+## 70.3 Alur Kerja (ditegaskan ulang)
+
+Commit & push ke `dev` → `npm test` + `npm run build` lokal lulus (CI GitHub Actions juga jalan di kedua branch) → merge fast-forward ke `main` & push → deploy ke produksi → verifikasi hash bundle live cocok dengan build lokal → update dokumen ini → checkout kembali ke `dev`.
+
+## 70.4 Task Development — Bagian BH
+
+- [x] Cek keberadaan branch `dev` & `main` di remote -- keduanya sudah ada
+- [x] Cek sinkronisasi `dev` vs `main` -- identik (`5b249ed`)
+- [x] Cek bundle live produksi -- `main.d4573da9.js`, sudah versi terbaru
+- [x] Buat branch lokal `dev` (tracking `origin/dev`) & pindah kerja ke `dev`
+- [ ] Item terbuka dari Bagian BG masih berlaku: tes manual cetak ulang PDF BS/RBS/LPJ untuk konfirmasi garis tabel lengkap 4 sisi
+
+---
+
+# BAGIAN BI — Fitur Baru: Menu "Maker" untuk Validator + Notifikasi Email Pencairan (2026-10-03)
+
+## 71.1 Permintaan User
 
 User meminta 1 menu baru bernama "Maker", khusus untuk role Validator, beserta notifikasi email ke semua user Validator sesuai Unit Bisnis yang ditetapkan ke mereka -- begitu ada pengajuan (misalnya RBS) yang siap diproses, email berbunyi "1 permintaan RBS dengan nomor xxx menunggu untuk di-maker" dan mereka bisa melihatnya juga di menu Maker.
 
-## 70.2 Klarifikasi (lewat AskUserQuestion, sebelum implementasi)
+## 71.2 Klarifikasi (lewat AskUserQuestion, sebelum implementasi)
 
 "Maker" BELUM PERNAH ada di sistem ini dalam bentuk apa pun (dicek: bukan role/status/menu yang sudah ada) -- satu-satunya petunjuk adalah istilah "mohon dibantu maker" di email reminder finance yang sudah ada (`sendBsFinanceReminder`). Dikonfirmasi ke user:
 1. **Arti "Maker"**: proses pencairan dana SETELAH dokumen Disetujui penuh (BUKAN tahap sebelum validasi).
@@ -2517,7 +2545,7 @@ User meminta 1 menu baru bernama "Maker", khusus untuk role Validator, beserta n
 3. **Pelacakan status**: dicatat formal sebagai field/status baru (`makerStatus`) + jejak siapa & kapan -- bukan cuma daftar/pengingat tanpa status.
 4. **Penerima email**: SEMUA user ber-role Validator yang field `unit`-nya cocok dengan unit bisnis dokumen (bukan cuma Validator yang sudah ditetapkan di dokumen itu) -- logika pencarian BARU, beda dari pola existing (`user.validator` per-dokumen).
 
-## 70.3 Desain & Implementasi
+## 71.3 Desain & Implementasi
 
 **Prinsip utama**: `makerStatus` adalah field TERPISAH dari `status` approval utama -- sengaja TIDAK mengubah/menimpa `status` (tetap "Disetujui" selamanya) supaya seluruh logika lain yang sudah menggantungkan diri pada `status === 'Disetujui'` (cetak PDF BS/RBS, Rekapan, dst) sama sekali tidak terganggu.
 
@@ -2535,7 +2563,7 @@ User meminta 1 menu baru bernama "Maker", khusus untuk role Validator, beserta n
 
 **Catatan risiko belum terverifikasi**: query gabungan `where('role','==','Validator').where('unit','array-contains', unit)` di Cloud Function SEHARUSNYA tidak butuh composite index (kombinasi 1 equality + 1 array-contains didukung index otomatis Firestore), tapi belum bisa dipastikan 100% tanpa data produksi nyata -- kalau Cloud Functions log menunjukkan error `FAILED_PRECONDITION` soal index saat pertama kali 1 BS/RBS mencapai "Disetujui" setelah deploy ini, perlu dibuatkan composite index manual lewat link yang disediakan error tsb.
 
-## 70.4 Task Development — Bagian BH
+## 71.4 Task Development — Bagian BI
 
 - [x] `functions/index.js`: `createEmailTemplate` case `'maker'`
 - [x] `functions/index.js`: `notifyValidatorsForMaker` helper, dipanggil dari `notifyReviewersAndUserCreateBS` (BS) & `notifyReviewersAndUserRBS` (RBS) di titik transisi ke "Disetujui"

@@ -633,7 +633,7 @@ exports.notifyReviewer1OnCreateBS = onDocumentCreated("bonSementara/{docId}", as
     );
 });
 
-// Bagian BH: begitu BS/RBS mencapai status akhir "Disetujui", beri tahu SEMUA
+// Bagian BI: begitu BS/RBS mencapai status akhir "Disetujui", beri tahu SEMUA
 // user ber-role Validator yang unit bisnisnya cocok dengan unit pengaju
 // dokumen ini -- supaya proses pencairan ("maker") bisa langsung ditindak-
 // lanjuti, bukan menunggu reminder manual ke SATU validator pilihan seperti
@@ -893,7 +893,7 @@ exports.sendBsFinanceReminder = onCall(async (request) => {
     return { sent: true, to: validatorData.email };
 });
 
-// Bagian BH: dipanggil dari menu "Maker" (src/components/Maker.jsx) saat
+// Bagian BI: dipanggil dari menu "Maker" (src/components/Maker.jsx) saat
 // Validator menandai 1 BS/RBS sudah selesai diproses pencairannya. Menyimpan
 // `makerStatus`/`makerBy`/`makerByName`/`makerAt` + jejak di `statusHistory`
 // -- TIDAK mengubah `status` approval utama sama sekali (tetap "Disetujui"),
