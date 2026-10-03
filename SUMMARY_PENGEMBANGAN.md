@@ -2614,6 +2614,6 @@ Saat investigasi `ReimbursementTable.jsx`, ditemukan mekanisme `transferred` yan
 - [x] `CI=true npx eslint` untuk semua file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + functions: `markAsMaker`)
+- [x] Deploy ke produksi (hosting + functions: `markAsMaker`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.f69ddd5f.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: sebagai pengaju, buka tabel BS/RBS & halaman detail untuk 1 dokumen Disetujui, konfirmasi badge "Status Pencairan" muncul dan sinkron dengan menu Maker
 - [ ] Tes manual: sebagai Validator, tandai 1 dokumen "Sudah Dimaker", konfirmasi pengaju menerima email "Dana Sudah Dicairkan"
