@@ -2733,3 +2733,30 @@ Ditelusuri `textContainsAmount` di `functions/lib/pengembalianMatcher.js` -- fun
 - [x] Deploy ke produksi (hosting + functions: hapus `debugPengembalianGagalBaca`, tambah `backfillPengembalianValidation`, update `validatePengembalianBukti`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.f4501a38.js`) cocok dengan hasil build lokal terbaru
 - [ ] Minta user (Super Admin): klik tombol "Validasi Ulang Bukti Pengembalian" di "Manage Users", konfirmasi 5 LPJ yang dilaporkan sebelumnya berubah jadi "valid"
 - [ ] Tes manual: upload bukti pengembalian JPG/PNG BARU dengan format serupa (nominal berakhir tanpa separator sen di hasil OCR), konfirmasi langsung "valid" tanpa perlu backfill lagi
+
+---
+
+# BAGIAN BN — Field Liter BBM Tidak Bisa Diketik Pakai Koma (2026-10-03)
+
+## 76.1 Latar Belakang
+
+User melaporkan tidak bisa menginput Liter BBM dalam format berkoma (mis. "10,5") di form RBS BBM/Operasional/Umum.
+
+## 76.2 Akar Masalah
+
+Field Liter pakai `<input type="number">` -- elemen HTML native ini SECARA BAWAAN BROWSER hanya menerima TITIK sebagai pemisah desimal, tidak peduli locale halaman. Konvensi Indonesia pakai KOMA untuk desimal ("10,5"), jadi user yang mengetik koma di field ini mendapati karakternya ditolak/diabaikan begitu saja oleh browser -- bukan bug logika JavaScript, tapi keterbatasan bawaan tipe input HTML itu sendiri.
+
+## 76.3 Perbaikan
+
+Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasional.jsx`, `FormRbsUmum.jsx` -- BBM bisa muncul sebagai kategori sendiri ATAU sebagai item berprefix "BBM " di dalam Operasional/GA-Umum) diganti dari `type="number"` jadi `type="text"` + `inputMode="decimal"` (tetap memunculkan keyboard angka di HP). Fungsi baru `normalizeDecimalInput()` (identik di ketiga file, mengikuti pola `calculateLiter` yang juga sudah terduplikasi di ketiganya) menormalisasi input: koma diubah jadi titik, karakter selain digit & SATU titik dibuang -- nilai yang tersimpan selalu format titik, jadi `Number(item.liter)` saat submit tetap bekerja tanpa perlu diubah. LPJ Umum/Marketing TIDAK kena (tidak punya field Liter terpisah -- dihitung langsung dari biaya, lihat komentar di kode).
+
+## 76.4 Task Development — Bagian BN
+
+- [x] `FormRbsBbm.jsx`: field Liter -> `type="text"` + `normalizeDecimalInput`
+- [x] `FormRbsOperasional.jsx`: field Liter -> `type="text"` + `normalizeDecimalInput`
+- [x] `FormRbsUmum.jsx`: field Liter -> `type="text"` + `normalizeDecimalInput`
+- [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting)
+- [ ] Tes manual: ketik "10,5" di field Liter (RBS BBM/Operasional/Umum), konfirmasi diterima & tersimpan benar sebagai 10.5

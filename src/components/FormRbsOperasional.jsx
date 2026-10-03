@@ -217,6 +217,19 @@ const RbsOperasionalForm = () => {
         return Number(String(value).replace(/[^0-9,]/g, '').replace(',', '.')) || 0
     }
 
+    // Bagian BN: dipakai field Liter (input teks, bukan type="number" lagi)
+    // supaya koma ("10,5") ikut diterima sebagai pemisah desimal -- lihat
+    // handleInputChange. Cuma izinkan digit & SATU titik; titik kedua dst
+    // dan karakter lain dibuang.
+    const normalizeDecimalInput = (value) => {
+        const withDot = value.replace(',', '.')
+        const firstDotIndex = withDot.indexOf('.')
+        if (firstDotIndex === -1) return withDot.replace(/[^\d]/g, '')
+        const intPart = withDot.slice(0, firstDotIndex).replace(/[^\d]/g, '')
+        const decPart = withDot.slice(firstDotIndex + 1).replace(/[^\d]/g, '')
+        return `${intPart}.${decPart}`
+    }
+
     // Liter dihitung otomatis dari biaya yang diinput dibagi harga/liter jenis BBM terpilih.
     // Tetap bisa diedit manual (mis. kalau harga di struk beda dari patokan).
     const calculateLiter = (biayaValue, jenisValue) => {
@@ -344,6 +357,12 @@ const RbsOperasionalForm = () => {
 
         if (field === 'biaya') {
             formattedValue = formatRupiah(value)
+        }
+
+        // Bagian BN: lihat catatan di normalizeDecimalInput -- field Liter
+        // sekarang input teks, koma dinormalisasi jadi titik di sini.
+        if (field === 'liter') {
+            formattedValue = normalizeDecimalInput(value)
         }
 
         const updatedReimbursements = reimbursements.map((item, i) => {
@@ -1066,9 +1085,9 @@ const RbsOperasionalForm = () => {
                                         )}
                                         <input
                                             className="w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
+                                            type="text"
+                                            inputMode="decimal"
+                                            placeholder="mis. 10,5"
                                             value={reimbursement.liter}
                                             onChange={(e) => handleInputChange(index, 'liter', e.target.value)}
                                         />
