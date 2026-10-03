@@ -138,6 +138,28 @@ const ManageUser = () => {
         setDeleteModal({ isOpen: false, user: null })
     }
 
+    // Bagian BL: panel diagnostik SEMENTARA (read-only, khusus Super Admin di
+    // server) untuk melihat alasan ASLI kegagalan OCR bukti pengembalian LPJ
+    // (field pengembalianValidationNote, sudah ditangkap sejak Bagian BA tapi
+    // tidak pernah ditampilkan di UI mana pun). Dihapus lagi setelah kasus
+    // ini selesai didiagnosis.
+    const [pengembalianDebugResult, setPengembalianDebugResult] = useState(null)
+    const [isDebuggingPengembalian, setIsDebuggingPengembalian] = useState(false)
+    const handleDebugPengembalian = async () => {
+        setIsDebuggingPengembalian(true)
+        setPengembalianDebugResult(null)
+        try {
+            const debugPengembalianGagalBaca = httpsCallable(functions, 'debugPengembalianGagalBaca')
+            const result = await debugPengembalianGagalBaca()
+            setPengembalianDebugResult(result.data)
+        } catch (error) {
+            console.error('Error debugging pengembalian:', error)
+            setPengembalianDebugResult({ error: error?.message || String(error) })
+        } finally {
+            setIsDebuggingPengembalian(false)
+        }
+    }
+
     // Migrasi satu-kali (aman diklik berkali-kali) untuk mengisi /userDirectory
     // dari user LAMA yang sudah ada sebelum trigger syncUserDirectoryOnWrite live
     // -- trigger itu sendiri hanya jalan untuk write BARU ke /users, bukan
@@ -371,6 +393,23 @@ const ManageUser = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
+            <div className="mb-4 p-4 border border-yellow-500 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
+                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                    Diagnostik sementara: alasan asli kegagalan baca bukti pengembalian LPJ
+                </p>
+                <button
+                    onClick={handleDebugPengembalian}
+                    disabled={isDebuggingPengembalian}
+                    className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+                >
+                    {isDebuggingPengembalian ? 'Mencari...' : 'Cek'}
+                </button>
+                {pengembalianDebugResult && (
+                    <pre className="mt-2 p-2 text-xs overflow-auto bg-white dark:bg-gray-800 dark:text-gray-100 border dark:border-gray-600 rounded max-h-96">
+                        {JSON.stringify(pengembalianDebugResult, null, 2)}
+                    </pre>
+                )}
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <h2 className="text-xl font-bold dark:text-gray-100">Manage Users</h2>
                 <div className="flex flex-wrap gap-2">

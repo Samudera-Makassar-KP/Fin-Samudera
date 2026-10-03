@@ -2662,3 +2662,40 @@ Meniru PERSIS pola `sendBsFinanceReminder`/`handleSendFinanceReminder` di `BsTab
 - [x] Deploy ke produksi (hosting + functions: hapus `markAsMaker`, update `notifyReviewersAndUserCreateBS`/`notifyReviewersAndUserRBS`, tambah `sendRbsFinanceReminder`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.f15a9477.js`) cocok dengan hasil build lokal terbaru, dan dikonfirmasi langsung string "sendRbsFinanceReminder" ada sementara "Menunggu Maker"/"Sudah Dimaker"/"markAsMaker" sudah tidak ada lagi di bundle live
 - [ ] Tes manual: menu Maker & route `/maker` sudah tidak ada/404 untuk semua role
 - [ ] Tes manual: sebagai pengaju RBS, buka Reimbursement berstatus Disetujui, klik ikon amplop "Send Reminder to Finance", konfirmasi email terkirim ke Finance (Validator) dengan lampiran PDF
+
+---
+
+# BAGIAN BL — Tambah "IT M&R" di GA/Umum + Diagnostik Bukti Pengembalian Gagal Baca (2026-10-03)
+
+## 74.1 Permintaan User
+
+1. Tambahkan item "IT M&R" di kategori GA/Umum, baik RBS maupun BS.
+2. Perbaiki verifikasi bukti pengembalian JPG/PNG yang masih gagal (laporan awal di Bagian BA, 2026-09-16, belum pernah dikonfirmasi beres).
+
+## 74.2 "IT M&R" -- Ditambahkan di RBS & LPJ Umum, TIDAK ADA di BS
+
+Dicek struktur masing-masing form:
+- **RBS Umum** (`FormRbsUmum.jsx`) & **LPJ Umum** (`FormLpjUmum.jsx`) sama-sama punya daftar `jenisOptions` identik (item per baris: ATK/RTG/RTK/.../Fasilitas/Lainnya) -- "IT M&R" ditambahkan di KEDUANYA (disisipkan sebelum "Lainnya", yang harus tetap di posisi terakhir karena memicu mode teks bebas).
+- **BS (Bon Sementara)** (`FormBs.jsx`) TERNYATA tidak punya daftar jenis/item per baris sama sekali -- cuma field teks bebas "Aktivitas" per baris, plus 1 dropdown Kategori di level dokumen (cuma 2 pilihan: "GA/Umum" vs "Marketing/Operasional", sudah mencakup pembedaan GA/Umum tanpa perlu sub-kategori). Jadi tidak ada tempat yang relevan untuk menambahkan "IT M&R" di BS -- kemungkinan besar user bermaksud LPJ (yang memang mencerminkan RBS persis), BUKAN BS secara harfiah, mengingat BS memang didesain sebagai permintaan dana di muka (belum perlu rincian item) sementara rinciannya baru muncul nanti di LPJ.
+
+## 74.3 Diagnostik Bukti Pengembalian Gagal Baca
+
+Investigasi ulang `extractTextFromBuktiFile`/`validatePengembalianBukti` di `functions/index.js` -- TIDAK ditemukan bug kode baru lewat analisis statis (pemisahan PDF/gambar, pembacaan `contentType`, batas ukuran semuanya terlihat benar secara struktur, sama seperti kesimpulan Bagian BA). **Temuan penting**: alasan ASLI kegagalan (`pengembalianValidationNote`, sudah ditangkap sejak Bagian BA) **TIDAK PERNAH ditampilkan di UI mana pun** -- `describePengembalianStatus()` cuma menunjukkan pesan generik "Bukti tidak dapat dibaca sistem..." ke user, jadi walau user coba upload ulang, mereka (dan saya) tetap tidak akan tahu alasan spesifiknya tanpa akses langsung ke data Firestore.
+
+Dibuat diagnostik sementara (pola sama dengan Bagian BD, sudah terbukti aman & efektif sebelumnya): `debugPengembalianGagalBaca` (onCall, khusus Super Admin, read-only) -- membaca semua dokumen `lpj` dengan `pengembalianStatus` "gagal_baca"/"tidak_sesuai", mengembalikan `pengembalianValidationNote` mentahnya. Panel sementara ditambahkan di halaman "Manage Users".
+
+## 74.4 Task Development — Bagian BL
+
+- [x] `FormRbsUmum.jsx`: tambah "IT M&R" di `jenisOptions`
+- [x] `FormLpjUmum.jsx`: tambah "IT M&R" di `jenisOptions` (disamakan dengan RBS Umum)
+- [x] `functions/index.js`: `debugPengembalianGagalBaca` (onCall, Super Admin only, read-only)
+- [x] `src/components/ManageUser.jsx`: panel diagnostik sementara
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `CI=true npx eslint` untuk semua file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + functions: `debugPengembalianGagalBaca`)
+- [ ] Tes manual: form RBS Umum & LPJ Umum, konfirmasi "IT M&R" muncul di dropdown Jenis
+- [ ] Minta user (Super Admin): buka "Manage Users", klik "Cek" di panel kuning bukti pengembalian, kirim hasil JSON-nya -- kalau ada hasil, itu alasan ASLI kegagalan untuk diagnosis lanjutan; kalau kosong, berarti belum ada percobaan baru sejak Bagian BA (2026-09-16) yang gagal, perlu diminta upload ulang dulu
+- [ ] Setelah data didapat: perbaiki akar masalah berdasarkan alasan spesifik yang ditemukan, DAN hapus `debugPengembalianGagalBaca` + panel diagnostik ini (sementara, bukan fitur permanen)

@@ -1028,6 +1028,41 @@ exports.validatePengembalianBukti = onCall(async (request) => {
     return { status, expectedAmount: sisaLebih };
 });
 
+// Bagian BL: diagnostik SEMENTARA, khusus Super Admin -- `pengembalianValidationNote`
+// (alasan ASLI kegagalan baca bukti pengembalian, lihat Bagian BA) sudah
+// ditangkap sejak 2026-09-16, TAPI tidak pernah ditampilkan di UI mana pun --
+// bahkan user yang gagal upload cuma lihat pesan generik (describePengembalianStatus).
+// Fungsi ini membaca langsung dari Firestore supaya bisa didiagnosis tanpa
+// perlu user retest (yang toh tidak akan melihat alasan aslinya). Read-only,
+// TIDAK mengubah data apa pun -- dihapus lagi setelah kasus ini terdiagnosis.
+exports.debugPengembalianGagalBaca = onCall(async (request) => {
+    if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login.");
+    }
+    const requesterData = await syncAuthenticatedUserProfile(request.auth);
+    if (requesterData?.role !== "Super Admin") {
+        throw new HttpsError("permission-denied", "Khusus Super Admin.");
+    }
+
+    const snapshot = await db.collection("lpj")
+        .where("pengembalianStatus", "in", ["gagal_baca", "tidak_sesuai"])
+        .get();
+
+    return {
+        results: snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                displayId: data.displayId,
+                pengembalianStatus: data.pengembalianStatus,
+                pengembalianValidationNote: data.pengembalianValidationNote,
+                pengembalianBuktiUrl: data.pengembalianBuktiUrl,
+                pengembalianUploadedAt: data.pengembalianUploadedAt
+            };
+        })
+    };
+});
+
 // Bagian AW: upload file (lampiran RBS/LPJ, PDF resmi hasil cetak, bukti
 // pengembalian) untuk path Storage yang SEBELUMNYA divalidasi client-side
 // tanpa cek kepemilikan sama sekali (lihat "ROLLBACK DARURAT" di
