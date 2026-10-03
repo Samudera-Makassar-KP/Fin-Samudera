@@ -2578,7 +2578,7 @@ User meminta 1 menu baru bernama "Maker", khusus untuk role Validator, beserta n
 - [x] `CI=true npx eslint` untuk semua file baru/diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + functions: `notifyReviewersAndUserCreateBS`, `notifyReviewersAndUserRBS`, `markAsMaker`)
+- [x] Deploy ke produksi (hosting + functions: `notifyReviewersAndUserCreateBS`, `notifyReviewersAndUserRBS`, `markAsMaker`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.bd2f8e73.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: ajukan & setujui penuh 1 BS/RBS test (sampai status "Disetujui"), konfirmasi (a) semua Validator dengan unit yang cocok menerima email "menunggu di-maker", (b) dokumen itu muncul di menu Maker dengan status "Menunggu Maker"
 - [ ] Tes manual: sebagai Validator, klik "Tandai Sudah Dimaker" pada 1 dokumen, konfirmasi status berubah jadi "Sudah Dimaker" + muncul nama & waktu pemroses, dan dokumen TIDAK bisa ditandai dua kali
 - [ ] Tes manual: cetak PDF BS/RBS yang sudah di-maker, konfirmasi PDF tetap berhasil seperti biasa (makerStatus tidak mengganggu `status` approval)
