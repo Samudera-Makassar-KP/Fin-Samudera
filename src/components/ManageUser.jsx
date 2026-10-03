@@ -138,25 +138,24 @@ const ManageUser = () => {
         setDeleteModal({ isOpen: false, user: null })
     }
 
-    // Bagian BL: panel diagnostik SEMENTARA (read-only, khusus Super Admin di
-    // server) untuk melihat alasan ASLI kegagalan OCR bukti pengembalian LPJ
-    // (field pengembalianValidationNote, sudah ditangkap sejak Bagian BA tapi
-    // tidak pernah ditampilkan di UI mana pun). Dihapus lagi setelah kasus
-    // ini selesai didiagnosis.
-    const [pengembalianDebugResult, setPengembalianDebugResult] = useState(null)
-    const [isDebuggingPengembalian, setIsDebuggingPengembalian] = useState(false)
-    const handleDebugPengembalian = async () => {
-        setIsDebuggingPengembalian(true)
-        setPengembalianDebugResult(null)
+    // Bagian BM: migrasi satu-kali (aman diklik berkali-kali) untuk menyembuhkan
+    // LPJ yang salah ditandai "tidak_sesuai" oleh bug lama textContainsAmount
+    // (Vision OCR kehilangan separator sen di beberapa bukti transfer bank,
+    // sudah diperbaiki -- lihat functions/lib/pengembalianMatcher.js). Teks
+    // OCR yang sudah tersimpan dicocokkan ULANG pakai logika baru, TANPA perlu
+    // user upload ulang. Lihat backfillPengembalianValidation di functions/index.js.
+    const [isBackfillingPengembalian, setIsBackfillingPengembalian] = useState(false)
+    const handleBackfillPengembalian = async () => {
+        setIsBackfillingPengembalian(true)
         try {
-            const debugPengembalianGagalBaca = httpsCallable(functions, 'debugPengembalianGagalBaca')
-            const result = await debugPengembalianGagalBaca()
-            setPengembalianDebugResult(result.data)
+            const backfillPengembalianValidation = httpsCallable(functions, 'backfillPengembalianValidation')
+            const result = await backfillPengembalianValidation()
+            toast.success(`${result.data?.fixed ?? 0} dari ${result.data?.checked ?? 0} LPJ "tidak_sesuai" diperbaiki jadi "valid"`)
         } catch (error) {
-            console.error('Error debugging pengembalian:', error)
-            setPengembalianDebugResult({ error: error?.message || String(error) })
+            console.error('Error backfilling pengembalian validation:', error)
+            toast.error('Gagal menjalankan ulang validasi bukti pengembalian')
         } finally {
-            setIsDebuggingPengembalian(false)
+            setIsBackfillingPengembalian(false)
         }
     }
 
@@ -393,26 +392,17 @@ const ManageUser = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <div className="mb-4 p-4 border border-yellow-500 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
-                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
-                    Diagnostik sementara: alasan asli kegagalan baca bukti pengembalian LPJ
-                </p>
-                <button
-                    onClick={handleDebugPengembalian}
-                    disabled={isDebuggingPengembalian}
-                    className="px-4 py-2 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
-                >
-                    {isDebuggingPengembalian ? 'Mencari...' : 'Cek'}
-                </button>
-                {pengembalianDebugResult && (
-                    <pre className="mt-2 p-2 text-xs overflow-auto bg-white dark:bg-gray-800 dark:text-gray-100 border dark:border-gray-600 rounded max-h-96">
-                        {JSON.stringify(pengembalianDebugResult, null, 2)}
-                    </pre>
-                )}
-            </div>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                 <h2 className="text-xl font-bold dark:text-gray-100">Manage Users</h2>
                 <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={handleBackfillPengembalian}
+                        disabled={isBackfillingPengembalian}
+                        title="Cocokkan ulang bukti pengembalian LPJ berstatus 'tidak_sesuai' pakai logika OCR terbaru -- aman diklik berkali-kali"
+                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 flex-none"
+                    >
+                        {isBackfillingPengembalian ? 'Memvalidasi ulang...' : 'Validasi Ulang Bukti Pengembalian'}
+                    </button>
                     <button
                         onClick={handleSyncDirectory}
                         disabled={isSyncingDirectory}

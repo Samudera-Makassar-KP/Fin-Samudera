@@ -1028,39 +1028,43 @@ exports.validatePengembalianBukti = onCall(async (request) => {
     return { status, expectedAmount: sisaLebih };
 });
 
-// Bagian BL: diagnostik SEMENTARA, khusus Super Admin -- `pengembalianValidationNote`
-// (alasan ASLI kegagalan baca bukti pengembalian, lihat Bagian BA) sudah
-// ditangkap sejak 2026-09-16, TAPI tidak pernah ditampilkan di UI mana pun --
-// bahkan user yang gagal upload cuma lihat pesan generik (describePengembalianStatus).
-// Fungsi ini membaca langsung dari Firestore supaya bisa didiagnosis tanpa
-// perlu user retest (yang toh tidak akan melihat alasan aslinya). Read-only,
-// TIDAK mengubah data apa pun -- dihapus lagi setelah kasus ini terdiagnosis.
-exports.debugPengembalianGagalBaca = onCall(async (request) => {
-    if (!request.auth?.uid) {
-        throw new HttpsError("unauthenticated", "Anda harus login.");
-    }
-    const requesterData = await syncAuthenticatedUserProfile(request.auth);
-    if (requesterData?.role !== "Super Admin") {
-        throw new HttpsError("permission-denied", "Khusus Super Admin.");
-    }
+// Bagian BM: migrasi satu-kali (aman dijalankan ulang kapan pun) untuk
+// menyembuhkan LPJ yang SALAH ditandai "tidak_sesuai" oleh bug `textContainsAmount`
+// yang baru diperbaiki (lihat catatan panjang di functions/lib/pengembalianMatcher.js
+// -- Vision OCR kadang kehilangan separator desimal/sen PERSIS sebelum "00"
+// terakhir di screenshot bukti transfer bank, bikin nominal terbaca 100x lebih
+// besar & tidak pernah cocok walau foto buktinya sudah benar). Teks hasil OCR
+// SUDAH tersimpan di `pengembalianValidationNote` sejak awal (Bagian BA) --
+// jadi TIDAK PERLU fetch ulang file/panggil Vision API lagi, cukup cocokkan
+// ulang teks yang sudah ada pakai logika BARU. Hanya menyentuh status
+// "tidak_sesuai" (BUKAN "gagal_baca", yang teksnya mungkin kosong/tidak
+// representatif -- tetap butuh upload ulang beneran).
+exports.backfillPengembalianValidation = onCall(async (request) => {
+    await requireSuperAdmin(request.auth);
 
     const snapshot = await db.collection("lpj")
-        .where("pengembalianStatus", "in", ["gagal_baca", "tidak_sesuai"])
+        .where("pengembalianStatus", "==", "tidak_sesuai")
         .get();
 
-    return {
-        results: snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                displayId: data.displayId,
-                pengembalianStatus: data.pengembalianStatus,
-                pengembalianValidationNote: data.pengembalianValidationNote,
-                pengembalianBuktiUrl: data.pengembalianBuktiUrl,
-                pengembalianUploadedAt: data.pengembalianUploadedAt
-            };
-        })
-    };
+    let fixed = 0;
+    const fixedDisplayIds = [];
+    for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const sisaLebih = Number(data.sisaLebih) || 0;
+        if (sisaLebih <= 0 || !data.pengembalianValidationNote) continue;
+
+        const nowValid = textContainsAmount(data.pengembalianValidationNote, sisaLebih);
+        if (!nowValid) continue;
+
+        await docSnap.ref.update({
+            pengembalianStatus: "valid",
+            pengembalianRevalidatedAt: new Date().toISOString()
+        });
+        fixed += 1;
+        fixedDisplayIds.push(data.displayId);
+    }
+
+    return { checked: snapshot.size, fixed, fixedDisplayIds };
 });
 
 // Bagian AW: upload file (lampiran RBS/LPJ, PDF resmi hasil cetak, bukti

@@ -2697,5 +2697,39 @@ Dibuat diagnostik sementara (pola sama dengan Bagian BD, sudah terbukti aman & e
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting + functions: `debugPengembalianGagalBaca`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.9bd624ab.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: form RBS Umum & LPJ Umum, konfirmasi "IT M&R" muncul di dropdown Jenis
-- [ ] Minta user (Super Admin): buka "Manage Users", klik "Cek" di panel kuning bukti pengembalian, kirim hasil JSON-nya -- kalau ada hasil, itu alasan ASLI kegagalan untuk diagnosis lanjutan; kalau kosong, berarti belum ada percobaan baru sejak Bagian BA (2026-09-16) yang gagal, perlu diminta upload ulang dulu
-- [ ] Setelah data didapat: perbaiki akar masalah berdasarkan alasan spesifik yang ditemukan, DAN hapus `debugPengembalianGagalBaca` + panel diagnostik ini (sementara, bukan fitur permanen)
+- [x] Minta user (Super Admin): buka "Manage Users", klik "Cek" di panel kuning bukti pengembalian, kirim hasil JSON-nya -- **dikirim user 2026-10-03, 5 LPJ dengan status "tidak_sesuai" + teks OCR lengkap, lihat Bagian BM untuk analisis & perbaikannya**
+- [x] Setelah data didapat: perbaiki akar masalah berdasarkan alasan spesifik yang ditemukan, DAN hapus `debugPengembalianGagalBaca` + panel diagnostik ini -- **selesai di Bagian BM**
+
+---
+
+# BAGIAN BM — Akar Masalah Ditemukan: OCR Kehilangan Separator Sen di Bukti Transfer (2026-10-03)
+
+## 75.1 Data dari Diagnostik Bagian BL
+
+User jalankan panel diagnostik, kirim hasil: **5 LPJ, SEMUA berstatus `"tidak_sesuai"`** (BUKAN `"gagal_baca"`) -- artinya OCR BERHASIL membaca teks bukti transfer dengan jelas (teksnya lengkap & terbaca sempurna di `pengembalianValidationNote`), tapi logika PENCOCOKAN NOMINAL-lah yang gagal. Contoh nyata: teks OCR "NOMINAL IDR 274,69200" untuk LPJ.MRO.KEJS.260917.0006.
+
+## 75.2 Akar Masalah
+
+Ditelusuri `textContainsAmount` di `functions/lib/pengembalianMatcher.js` -- fungsi ini (Bagian AR) SUDAH menangani kasus "sen format Inggris/Indonesia dengan separator eksplisit sebelum 2 digit terakhir" (mis. "190,200.00" atau "190.200,00"). TAPI pola yang terjadi di 5 kasus nyata ini BERBEDA: Cloud Vision OCR kehilangan PERSIS karakter separator yang ada tepat sebelum "00" sen terakhir di screenshot bukti transfer bank (karakternya kecil/tipis, gampang tidak terbaca), menghasilkan "274,69200" (bukan "274,692.00") -- pemisah ribuan SEBELUMNYA tetap terbaca normal, cuma pemisah PALING AKHIR yang hilang total (bukan cuma beda simbol). Pola regex Bagian AR mensyaratkan ADA separator sebelum 2 digit terakhir -- kalau tidak ada sama sekali, "00" ikut dianggap bagian pemisah ribuan tambahan, nominal terbaca 100x lebih besar, SELALU gagal cocok walau fotonya benar.
+
+## 75.3 Perbaikan
+
+- **`functions/lib/pengembalianMatcher.js`**: `textContainsAmount` ditambah tafsiran KEDUA (sebagai tambahan, bukan pengganti, tafsiran Bagian AR) -- kalau angka hasil OCR berakhir "00" TANPA separator di depannya, dan cukup panjang (>=5 digit setelah pemisah dilucuti, supaya tidak salah menafsir angka pendek), coba juga lucuti "00" terakhir itu sebagai sen yang separatornya hilang.
+- **`functions/test/pengembalianMatcher.test.js`**: 5 test baru pakai TEKS ASLI dari 4 LPJ produksi (data nyata dari diagnostik Bagian BL) + 1 test negatif (nomor rekening panjang tidak ikut kecocok-kocokkan).
+- **`functions/index.js`**: diagnostik sementara `debugPengembalianGagalBaca` (Bagian BL) DIHAPUS, diganti `backfillPengembalianValidation` (migrasi permanen, aman diklik berkali-kali) -- mencocokkan ULANG teks OCR yang SUDAH TERSIMPAN (`pengembalianValidationNote`) pakai logika baru, TANPA perlu fetch ulang file atau panggil Vision API lagi, untuk menyembuhkan LPJ yang SUDAH TERLANJUR salah ditandai "tidak_sesuai". Cuma menyentuh status "tidak_sesuai" (bukan "gagal_baca", yang teksnya mungkin memang tidak representatif).
+- **`src/components/ManageUser.jsx`**: panel kuning diagnostik sementara dihapus, diganti tombol permanen "Validasi Ulang Bukti Pengembalian" di deretan tombol maintenance yang sudah ada (gaya sama dengan "Sinkronkan Direktori Pengguna" dkk).
+
+## 75.4 Task Development — Bagian BM
+
+- [x] `functions/lib/pengembalianMatcher.js`: tafsiran tambahan untuk sen tanpa separator
+- [x] `functions/test/pengembalianMatcher.test.js`: 5 test baru dengan data produksi asli -- 28 test functions total tetap PASS
+- [x] `functions/index.js`: hapus `debugPengembalianGagalBaca`, tambah `backfillPengembalianValidation`
+- [x] `src/components/ManageUser.jsx`: ganti panel diagnostik jadi tombol permanen
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 28 test PASS (17 pengembalianMatcher + 11 lainnya)
+- [x] `CI=true npx eslint` untuk file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + functions: hapus `debugPengembalianGagalBaca`, tambah `backfillPengembalianValidation`)
+- [ ] Minta user (Super Admin): klik tombol "Validasi Ulang Bukti Pengembalian" di "Manage Users", konfirmasi 5 LPJ yang dilaporkan sebelumnya berubah jadi "valid"
+- [ ] Tes manual: upload bukti pengembalian JPG/PNG BARU dengan format serupa (nominal berakhir tanpa separator sen di hasil OCR), konfirmasi langsung "valid" tanpa perlu backfill lagi
