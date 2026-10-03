@@ -2659,6 +2659,6 @@ Meniru PERSIS pola `sendBsFinanceReminder`/`handleSendFinanceReminder` di `BsTab
 - [x] `CI=true npx eslint` untuk semua file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + functions: hapus `markAsMaker`, update `notifyReviewersAndUserCreateBS`/`notifyReviewersAndUserRBS`, tambah `sendRbsFinanceReminder`)
+- [x] Deploy ke produksi (hosting + functions: hapus `markAsMaker`, update `notifyReviewersAndUserCreateBS`/`notifyReviewersAndUserRBS`, tambah `sendRbsFinanceReminder`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.f15a9477.js`) cocok dengan hasil build lokal terbaru, dan dikonfirmasi langsung string "sendRbsFinanceReminder" ada sementara "Menunggu Maker"/"Sudah Dimaker"/"markAsMaker" sudah tidak ada lagi di bundle live
 - [ ] Tes manual: menu Maker & route `/maker` sudah tidak ada/404 untuk semua role
 - [ ] Tes manual: sebagai pengaju RBS, buka Reimbursement berstatus Disetujui, klik ikon amplop "Send Reminder to Finance", konfirmasi email terkirim ke Finance (Validator) dengan lampiran PDF
