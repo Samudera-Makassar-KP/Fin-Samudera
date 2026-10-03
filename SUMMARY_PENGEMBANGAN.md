@@ -2758,5 +2758,5 @@ Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasiona
 - [x] `CI=true npx eslint` untuk 3 file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting)
+- [x] Deploy ke produksi (hosting) — sukses 2026-10-03, diverifikasi hash bundle live (`main.84c80ac9.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: ketik "10,5" di field Liter (RBS BBM/Operasional/Umum), konfirmasi diterima & tersimpan benar sebagai 10.5
