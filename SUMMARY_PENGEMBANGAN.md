@@ -2695,7 +2695,7 @@ Dibuat diagnostik sementara (pola sama dengan Bagian BD, sudah terbukti aman & e
 - [x] `CI=true npx eslint` untuk semua file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + functions: `debugPengembalianGagalBaca`)
+- [x] Deploy ke produksi (hosting + functions: `debugPengembalianGagalBaca`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.9bd624ab.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: form RBS Umum & LPJ Umum, konfirmasi "IT M&R" muncul di dropdown Jenis
 - [ ] Minta user (Super Admin): buka "Manage Users", klik "Cek" di panel kuning bukti pengembalian, kirim hasil JSON-nya -- kalau ada hasil, itu alasan ASLI kegagalan untuk diagnosis lanjutan; kalau kosong, berarti belum ada percobaan baru sejak Bagian BA (2026-09-16) yang gagal, perlu diminta upload ulang dulu
 - [ ] Setelah data didapat: perbaiki akar masalah berdasarkan alasan spesifik yang ditemukan, DAN hapus `debugPengembalianGagalBaca` + panel diagnostik ini (sementara, bukan fitur permanen)
