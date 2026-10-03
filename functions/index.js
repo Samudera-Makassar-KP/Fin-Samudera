@@ -209,6 +209,9 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
         case 'maker':
             headerText = 'Menunggu Diproses (Maker)';
             break;
+        case 'makerCompleted':
+            headerText = 'Dana Sudah Dicairkan';
+            break;
         case 'pengembalianReminder':
             headerText = 'Reminder Bukti Pengembalian BS';
             break;
@@ -963,6 +966,24 @@ exports.markAsMaker = onCall(async (request) => {
         makerAt: now,
         statusHistory: updatedHistory
     });
+
+    // Beri tahu pengaju bahwa dananya sudah dicairkan -- sebelumnya tidak ada
+    // penanda apa pun buat pengaju soal status pencairan (cuma kelihatan di
+    // menu Maker milik Validator).
+    const submitterData = await getUserData(data.user?.uid);
+    if (submitterData?.email) {
+        const jenisLabel = docType === "bonSementara" ? "BS" : "Reimbursement";
+        const subject = `Dana ${jenisLabel} Sudah Dicairkan - ${data.displayId}`;
+        const emailContent = `
+            Dear <strong>${submitterData.nama}</strong>,
+            <br><br>Dana untuk pengajuan ${jenisLabel} anda dengan nomor <strong>${data.displayId}</strong> telah selesai diproses dan dicairkan oleh ${requesterData?.nama || "Validator"}.
+        `;
+        await sendEmail(
+            submitterData.email,
+            subject,
+            createEmailTemplate(emailContent, submitterData, data, false, 'makerCompleted')
+        );
+    }
 
     return { success: true };
 });

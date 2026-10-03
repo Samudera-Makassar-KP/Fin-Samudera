@@ -11,6 +11,7 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faMoneyBillWave, faCheckCircle } from '@fortawesome/free-solid-svg-icons'
+import { getStatusBadgeClass } from '../utils/statusBadge'
 
 // Bagian AQ: status yang disembunyikan dari list milik user sendiri (lihat
 // catatan di filterOptions.status di bawah).
@@ -372,6 +373,7 @@ const ReimbursementTable = () => {
                                             <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
                                             <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
                                             <th className="py-2 border dark:border-gray-600 text-center">Status</th>
+                                            <th className="py-2 border dark:border-gray-600 text-center">Status Pencairan</th>
                                             <th className="py-2 border dark:border-gray-600 text-center">Aksi</th>
                                         </tr>
                                     </thead>
@@ -422,6 +424,19 @@ const ReimbursementTable = () => {
                                                     >
                                                         {item.status || 'Tidak Diketahui'}
                                                     </span>
+                                                </td>
+                                                <td className="px-2 py-2 border text-center">
+                                                    {/* Bagian BJ: penanda ke pengaju apakah dana Reimbursement yang
+                                                        sudah Disetujui ini sudah dicairkan (di-maker) oleh Validator
+                                                        -- beda dari checklist "Transferred" di kolom Aksi (itu
+                                                        konfirmasi SENDIRI oleh pengaju bahwa dana sudah diterima). */}
+                                                    {item.status === 'Disetujui' ? (
+                                                        <span className={`px-4 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(item.makerStatus || 'Menunggu Maker')}`}>
+                                                            {item.makerStatus || 'Menunggu Maker'}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">-</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
                                                     {item.status === 'Disetujui' ? (

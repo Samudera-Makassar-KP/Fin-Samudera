@@ -2583,3 +2583,37 @@ User meminta 1 menu baru bernama "Maker", khusus untuk role Validator, beserta n
 - [ ] Tes manual: sebagai Validator, klik "Tandai Sudah Dimaker" pada 1 dokumen, konfirmasi status berubah jadi "Sudah Dimaker" + muncul nama & waktu pemroses, dan dokumen TIDAK bisa ditandai dua kali
 - [ ] Tes manual: cetak PDF BS/RBS yang sudah di-maker, konfirmasi PDF tetap berhasil seperti biasa (makerStatus tidak mengganggu `status` approval)
 - [ ] Pantau Cloud Functions log setelah deploy untuk BS/RBS PERTAMA yang mencapai "Disetujui" -- pastikan query `users` (role+unit) tidak melempar error index
+
+---
+
+# BAGIAN BJ — Penanda Status Pencairan untuk Pengaju + Email Konfirmasi (2026-10-03)
+
+## 72.1 Latar Belakang
+
+Menindaklanjuti Bagian BI (menu Maker): user bertanya apa penanda bagi PENGAJU (bukan Validator) bahwa permintaan mereka sudah di-maker. Dicek: TIDAK ADA -- `makerStatus` hanya terlihat di menu Maker (sisi Validator), sama sekali tidak tampil di tabel/detail milik pengaju sendiri (`BsTable.jsx`, `ReimbursementTable.jsx`, `DetailBs.jsx`, `DetailRbs.jsx`). User minta ditambahkan: badge di ke-4 tempat tsb, PLUS email ke pengaju begitu Validator menandai selesai.
+
+## 72.2 Temuan Tambahan
+
+Saat investigasi `ReimbursementTable.jsx`, ditemukan mekanisme `transferred` yang SUDAH ADA SEBELUMNYA -- checklist yang bisa diklik LANGSUNG oleh pengaju sendiri di kolom Aksi untuk konfirmasi dana sudah diterima (`handleMarkTransferred`, `updateDoc({ transferred: true, transferredAt })`). Ini KONSEP BERBEDA dari `makerStatus` (konfirmasi dari sisi Validator bahwa pencairan sudah DIPROSES), bukan duplikat -- keduanya saling melengkapi (Validator memproses -> pengaju mengonfirmasi terima). BS tidak punya mekanisme `transferred` sama sekali. Badge baru diberi label jelas "Status Pencairan" dan ditaruh terpisah dari checklist "Transferred" yang sudah ada supaya tidak membingungkan.
+
+## 72.3 Perbaikan
+
+- **`functions/index.js`**: `createEmailTemplate` tambah `case 'makerCompleted'` ("Dana Sudah Dicairkan"). `markAsMaker` sekarang juga mengirim email ke pengaju (`data.user.uid`) begitu `makerStatus` diset "Sudah Dimaker" -- isi: dana untuk [BS/RBS] nomor X telah dicairkan oleh [nama Validator].
+- **`src/components/BsTable.jsx`** & **`src/components/ReimbursementTable.jsx`**: kolom baru "Status Pencairan" -- badge (pakai `getStatusBadgeClass` dari `statusBadge.js`, Bagian BI) menampilkan `item.makerStatus` ("Menunggu Maker"/"Sudah Dimaker") untuk baris berstatus "Disetujui"; baris lain tampil "-".
+- **`src/components/DetailBs.jsx`** & **`src/components/DetailRbs.jsx`**: baris baru "Status Pencairan" (badge sama) di layout desktop & mobile/xl, muncul HANYA kalau dokumen sudah "Disetujui" (field `makerStatus` memang cuma ada di titik itu).
+
+## 72.4 Task Development — Bagian BJ
+
+- [x] `functions/index.js`: `createEmailTemplate` case `'makerCompleted'`, `markAsMaker` kirim email ke pengaju
+- [x] `src/components/BsTable.jsx`: kolom "Status Pencairan"
+- [x] `src/components/ReimbursementTable.jsx`: kolom "Status Pencairan" (dibedakan jelas dari checklist "Transferred" yang sudah ada)
+- [x] `src/components/DetailBs.jsx`: baris "Status Pencairan" (desktop & mobile/xl)
+- [x] `src/components/DetailRbs.jsx`: baris "Status Pencairan" (desktop & mobile/xl)
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `CI=true npx eslint` untuk semua file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + functions: `markAsMaker`)
+- [ ] Tes manual: sebagai pengaju, buka tabel BS/RBS & halaman detail untuk 1 dokumen Disetujui, konfirmasi badge "Status Pencairan" muncul dan sinkron dengan menu Maker
+- [ ] Tes manual: sebagai Validator, tandai 1 dokumen "Sudah Dimaker", konfirmasi pengaju menerima email "Dana Sudah Dicairkan"
