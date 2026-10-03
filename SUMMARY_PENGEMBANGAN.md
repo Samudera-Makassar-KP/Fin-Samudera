@@ -2617,3 +2617,48 @@ Saat investigasi `ReimbursementTable.jsx`, ditemukan mekanisme `transferred` yan
 - [x] Deploy ke produksi (hosting + functions: `markAsMaker`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.f69ddd5f.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: sebagai pengaju, buka tabel BS/RBS & halaman detail untuk 1 dokumen Disetujui, konfirmasi badge "Status Pencairan" muncul dan sinkron dengan menu Maker
 - [ ] Tes manual: sebagai Validator, tandai 1 dokumen "Sudah Dimaker", konfirmasi pengaju menerima email "Dana Sudah Dicairkan"
+
+---
+
+# BAGIAN BK — Fitur Maker Dibatalkan, Diganti Reminder Finance untuk RBS (2026-10-03)
+
+## 73.1 Latar Belakang
+
+User menilai fitur menu "Maker" (Bagian BI/BJ) tidak akan berguna, minta dihapus total. Sebagai gantinya, user minta fitur "Kirim Reminder ke Finance" yang SUDAH ADA untuk BS (tombol amplop di `BsTable.jsx`, Cloud Function `sendBsFinanceReminder`) dibuatkan versi yang sama persis untuk RBS -- tombol ini HANYA aktif saat status "Disetujui", dan saat diklik mengirim email "mohon dibantu maker" + lampiran PDF ke Finance (Validator) pilihan. Dengan ini, "Maker" kembali jadi istilah di dalam teks reminder (bukan status/menu formal) -- dan fiturnya murni jadi pengingat manual (dipakai kalau Finance lambat memproses), bukan tahap approval baru yang dilacak sistem.
+
+## 73.2 Penghapusan Fitur Maker (Bagian BI/BJ)
+
+Dihapus total, termasuk:
+- `src/components/Maker.jsx`, `src/pages/MakerPage.jsx` (dihapus/delete file)
+- Route `/maker` di `src/App.jsx`
+- Link navigasi "Maker" di `src/components/Sidebar.jsx` (2 tempat)
+- `functions/index.js`: helper `notifyValidatorsForMaker` + 2 titik panggilnya (di `notifyReviewersAndUserCreateBS`/`notifyReviewersAndUserRBS`), fungsi `markAsMaker` (onCall), case `'maker'`/`'makerCompleted'` di `createEmailTemplate`
+- `src/utils/statusBadge.js`: case `'Menunggu Maker'`/`'Sudah Dimaker'`
+- Badge "Status Pencairan" di `BsTable.jsx`, `ReimbursementTable.jsx`, `DetailBs.jsx`, `DetailRbs.jsx` (kolom/baris beserta importnya)
+
+**Catatan data**: dokumen BS/RBS yang sempat mencapai status "Disetujui" selama fitur ini live (2026-10-03, durasi singkat) mungkin masih menyimpan field `makerStatus`/`makerBy`/`makerByName`/`makerAt`/`makerNotifiedAt` di Firestore -- field ini sekarang SEPENUHNYA tidak dibaca kode mana pun (dead field, tidak berbahaya), TIDAK dihapus dari data yang sudah ada (tidak ada migrasi/bulk-delete dijalankan, sesuai prinsip tidak mengubah data user tanpa izin eksplisit untuk operasi massal).
+
+## 73.3 Fitur Baru: Reminder Finance untuk RBS
+
+Meniru PERSIS pola `sendBsFinanceReminder`/`handleSendFinanceReminder` di `BsTable.jsx` (termasuk validasi kepemilikan, pencocokan Unit Bisnis submitter<->Validator, defense-in-depth di server, modal pilih Finance kalau submitter terdaftar di >1 Unit Bisnis):
+
+- **`functions/index.js`**: `sendRbsFinanceReminder` (onCall baru) -- validasi login & kepemilikan RBS, status harus "Disetujui", Validator tujuan harus role "Validator" & attachment Unit Bisnis yang sama dengan submitter, ambil PDF dari `pdfUrl` sebagai lampiran, kirim email "Mohon dibantu maker atas Reimbursement berikut" (subjek "Reminder Pencairan Reimbursement - ...").
+- **`src/components/ReimbursementTable.jsx`**: state (`submitterUnits`, `financeValidators`, `reminderSendingId`, `financePickerModal`) + effect fetch data pendukung + `sendFinanceReminder`/`handleSendFinanceReminder`/`handlePickFinance` + tombol amplop di kolom Aksi (muncul berdampingan dengan checklist "Transferred" yang sudah ada, keduanya tetap independen) + modal pilih Finance (portal) -- semuanya salinan sejajar dari `BsTable.jsx`.
+
+## 73.4 Task Development — Bagian BK
+
+- [x] Hapus `src/components/Maker.jsx`, `src/pages/MakerPage.jsx`
+- [x] Hapus route `/maker` (`App.jsx`) & link Sidebar (2 tempat)
+- [x] `functions/index.js`: hapus `notifyValidatorsForMaker`, `markAsMaker`, case `'maker'`/`'makerCompleted'`
+- [x] `src/utils/statusBadge.js`: hapus case Maker
+- [x] Hapus badge "Status Pencairan" di `BsTable.jsx`/`ReimbursementTable.jsx`/`DetailBs.jsx`/`DetailRbs.jsx`
+- [x] `functions/index.js`: `sendRbsFinanceReminder` (onCall baru, salinan sejajar `sendBsFinanceReminder`)
+- [x] `src/components/ReimbursementTable.jsx`: tombol + modal "Kirim Reminder ke Finance" (salinan sejajar `BsTable.jsx`)
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `CI=true npx eslint` untuk semua file yang diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + functions: hapus `markAsMaker`, update `notifyReviewersAndUserCreateBS`/`notifyReviewersAndUserRBS`, tambah `sendRbsFinanceReminder`)
+- [ ] Tes manual: menu Maker & route `/maker` sudah tidak ada/404 untuk semua role
+- [ ] Tes manual: sebagai pengaju RBS, buka Reimbursement berstatus Disetujui, klik ikon amplop "Send Reminder to Finance", konfirmasi email terkirim ke Finance (Validator) dengan lampiran PDF

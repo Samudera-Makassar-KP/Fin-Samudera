@@ -11,7 +11,6 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 import { getEditHistoryEntries } from '../utils/editHistory'
-import { getStatusBadgeClass } from '../utils/statusBadge'
 
 const DetailRbs = () => {
     const [userData, setUserData] = useState(null)
@@ -547,19 +546,6 @@ const DetailRbs = () => {
                                     <p className="text-left">:</p>
                                     <p className="break-words">{getStatusWithNextApprover(reimbursementDetail, reviewers)}</p>
                                 </div>
-                                {/* Bagian BJ: penanda ke pengaju apakah dana Reimbursement yang
-                                    sudah Disetujui ini sudah dicairkan (di-maker) oleh Validator. */}
-                                {reimbursementDetail?.status === 'Disetujui' && (
-                                    <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
-                                        <p>Status Pencairan</p>
-                                        <p className="text-left">:</p>
-                                        <p>
-                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(reimbursementDetail.makerStatus || 'Menunggu Maker')}`}>
-                                                {reimbursementDetail.makerStatus || 'Menunggu Maker'}
-                                            </span>
-                                        </p>
-                                    </div>
-                                )}
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>
                                         {reimbursementDetail?.status === 'Ditolak'
@@ -604,16 +590,6 @@ const DetailRbs = () => {
                         <p>: {reimbursementDetail?.user?.bankName ?? 'N/A'}</p>
                         <p>Status</p>
                         <p>: {getStatusWithNextApprover(reimbursementDetail, reviewers)}</p>
-                        {reimbursementDetail?.status === 'Disetujui' && (
-                            <>
-                                <p>Status Pencairan</p>
-                                <p>
-                                    : <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(reimbursementDetail.makerStatus || 'Menunggu Maker')}`}>
-                                        {reimbursementDetail.makerStatus || 'Menunggu Maker'}
-                                    </span>
-                                </p>
-                            </>
-                        )}
                         <p>
                             {reimbursementDetail?.status === 'Ditolak'
                                 ? 'Ditolak Oleh'

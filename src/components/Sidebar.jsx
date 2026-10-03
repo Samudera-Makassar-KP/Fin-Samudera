@@ -132,19 +132,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                         Rekapan
                                     </NavLink>
                                 </li>
-                                <li>
-                                    <hr className="border-red-500" />
-                                    <NavLink
-                                        to="/maker"
-                                        className={({ isActive }) =>
-                                            isActive
-                                                ? 'block w-full py-2 pl-8 text-white bg-[#FF5B5F]'
-                                                : 'block w-full py-2 pl-8 text-white hover:bg-[#FF5B5F]'
-                                        }
-                                    >
-                                        Maker
-                                    </NavLink>
-                                </li>
                             </>
                         ) : (
                             <>
@@ -296,21 +283,6 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                                             }
                                         >
                                             Rekapan
-                                        </NavLink>
-                                    </li>
-                                )}
-                                {(role === 'Validator' || role === 'Admin') && (
-                                    <li>
-                                        <hr className="border-red-500" />
-                                        <NavLink
-                                            to="/maker"
-                                            className={({ isActive }) =>
-                                                isActive
-                                                    ? 'block w-full py-2 pl-8 text-white bg-[#FF5B5F]'
-                                                    : 'block w-full py-2 pl-8 text-white hover:bg-[#FF5B5F]'
-                                            }
-                                        >
-                                            Maker
                                         </NavLink>
                                     </li>
                                 )}

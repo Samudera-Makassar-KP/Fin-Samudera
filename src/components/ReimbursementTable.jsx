@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import ReactDOM from 'react-dom'
 import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore'
-import { db } from '../firebaseConfig'
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore'
+import { db, functions } from '../firebaseConfig'
+import { httpsCallable } from 'firebase/functions'
 import EmptyState from '../assets/images/EmptyState.png'
 import Select from 'react-select'
 import Modal from '../components/Modal'
@@ -10,8 +12,8 @@ import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faMoneyBillWave, faCheckCircle } from '@fortawesome/free-solid-svg-icons'
-import { getStatusBadgeClass } from '../utils/statusBadge'
+import { faMoneyBillWave, faCheckCircle, faEnvelope, faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { generateReimbursementPDF } from '../utils/ReimbursementPdf'
 
 // Bagian AQ: status yang disembunyikan dari list milik user sendiri (lihat
 // catatan di filterOptions.status di bawah).
@@ -42,6 +44,14 @@ const ReimbursementTable = () => {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [selectedReport, setSelectedReport] = useState(null)
     const [cancelReason, setCancelReason] = useState('')
+
+    // Bagian BK: Kirim Reminder ke Finance (Validator) untuk Reimbursement
+    // berstatus Disetujui -- versi RBS dari mekanisme yang sudah ada di
+    // BsTable.jsx (pola & state identik, lihat catatan di sana).
+    const [submitterUnits, setSubmitterUnits] = useState([])
+    const [financeValidators, setFinanceValidators] = useState([])
+    const [reminderSendingId, setReminderSendingId] = useState(null)
+    const [financePickerModal, setFinancePickerModal] = useState(null) // { item, candidates }
 
 
     // Bagian AQ: pengajuan Ditolak/Dibatalkan sengaja TIDAK ditampilkan lagi
@@ -118,6 +128,37 @@ const ReimbursementTable = () => {
         }
 
         fetchUserAndReimbursements()
+    }, [])
+
+    // Data pendukung untuk tombol "Kirim Reminder ke Finance" -- unit bisnis
+    // milik user yang login (self-read, selalu diizinkan) & daftar semua
+    // Validator lintas user (dari /userDirectory, aman dibaca siapa saja
+    // login). Pola identik dengan BsTable.jsx.
+    useEffect(() => {
+        const fetchFinanceReminderData = async () => {
+            try {
+                const uid = localStorage.getItem('userUid')
+                if (!uid) return
+
+                const userDoc = await getDoc(doc(db, 'users', uid))
+                setSubmitterUnits(Array.isArray(userDoc.data()?.unit) ? userDoc.data().unit : [])
+
+                const validatorSnapshot = await getDocs(
+                    query(collection(db, 'userDirectory'), where('role', '==', 'Validator'))
+                )
+                setFinanceValidators(
+                    validatorSnapshot.docs.map((docSnap) => ({
+                        uid: docSnap.id,
+                        nama: docSnap.data().nama || 'Validator',
+                        unit: Array.isArray(docSnap.data().unit) ? docSnap.data().unit : []
+                    }))
+                )
+            } catch (error) {
+                console.error('Error fetching data reminder finance:', error)
+            }
+        }
+
+        fetchFinanceReminderData()
     }, [])
 
     const formatDate = (dateString) => {
@@ -227,6 +268,57 @@ const ReimbursementTable = () => {
             console.error('Error cancelling reimbursement:', error?.code, error?.message, error)
             toast.error('Gagal membatalkan reimbursement. Silakan coba lagi.')
         }
+    }
+
+    // Bagian BK: Kirim Reminder ke Finance -- versi RBS dari sendFinanceReminder
+    // di BsTable.jsx (logika identik).
+    const sendFinanceReminder = async (item, validator) => {
+        setReminderSendingId(item.id)
+        try {
+            const pdfUrl = await generateReimbursementPDF(item)
+            if (!pdfUrl) {
+                toast.error('Gagal membuat PDF Reimbursement untuk lampiran reminder')
+                return
+            }
+
+            const sendRbsFinanceReminder = httpsCallable(functions, 'sendRbsFinanceReminder')
+            await sendRbsFinanceReminder({ rbsId: item.id, validatorUid: validator.uid, pdfUrl })
+
+            toast.success(`Reminder terkirim ke ${validator.nama}`)
+        } catch (error) {
+            console.error('Error sending finance reminder:', error)
+            toast.error(error?.message || 'Gagal mengirim reminder ke Finance')
+        } finally {
+            setReminderSendingId(null)
+        }
+    }
+
+    const handleSendFinanceReminder = (item) => {
+        const candidates = financeValidators.filter((validator) =>
+            validator.unit.some((unit) => submitterUnits.includes(unit))
+        )
+
+        if (candidates.length === 0) {
+            toast.error('Tidak ada Finance (Validator) yang terdaftar untuk Unit Bisnis Anda. Hubungi Admin.')
+            return
+        }
+
+        // Cuma 1 perusahaan terdaftar di profil pengaju -> tidak ada pilihan yang
+        // perlu diambil, langsung kirim ke semua Finance yang match unit tsb.
+        if (submitterUnits.length <= 1) {
+            candidates.forEach((validator) => sendFinanceReminder(item, validator))
+            return
+        }
+
+        // Terdaftar di lebih dari 1 perusahaan -> minta pilih salah satu Finance
+        setFinancePickerModal({ item, candidates })
+    }
+
+    const handlePickFinance = (validator) => {
+        if (!financePickerModal) return
+        const { item } = financePickerModal
+        setFinancePickerModal(null)
+        sendFinanceReminder(item, validator)
     }
 
     const handleMarkTransferred = async (item) => {
@@ -373,7 +465,6 @@ const ReimbursementTable = () => {
                                             <th className="px-4 py-2 border dark:border-gray-600">Jumlah</th>
                                             <th className="px-4 py-2 border dark:border-gray-600">Tanggal Pengajuan</th>
                                             <th className="py-2 border dark:border-gray-600 text-center">Status</th>
-                                            <th className="py-2 border dark:border-gray-600 text-center">Status Pencairan</th>
                                             <th className="py-2 border dark:border-gray-600 text-center">Aksi</th>
                                         </tr>
                                     </thead>
@@ -426,36 +517,36 @@ const ReimbursementTable = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
-                                                    {/* Bagian BJ: penanda ke pengaju apakah dana Reimbursement yang
-                                                        sudah Disetujui ini sudah dicairkan (di-maker) oleh Validator
-                                                        -- beda dari checklist "Transferred" di kolom Aksi (itu
-                                                        konfirmasi SENDIRI oleh pengaju bahwa dana sudah diterima). */}
                                                     {item.status === 'Disetujui' ? (
-                                                        <span className={`px-4 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(item.makerStatus || 'Menunggu Maker')}`}>
-                                                            {item.makerStatus || 'Menunggu Maker'}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">-</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-2 py-2 border text-center">
-                                                    {item.status === 'Disetujui' ? (
-                                                        item.transferred ? (
-                                                            <span
-                                                                className="inline-flex items-center justify-center text-gray-400 dark:text-gray-500 cursor-not-allowed"
-                                                                title="Transferred"
-                                                            >
-                                                                <FontAwesomeIcon icon={faCheckCircle} />
-                                                            </span>
-                                                        ) : (
+                                                        <div className="inline-flex items-center justify-center gap-3">
+                                                            {item.transferred ? (
+                                                                <span
+                                                                    className="inline-flex items-center justify-center text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                                                                    title="Transferred"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faCheckCircle} />
+                                                                </span>
+                                                            ) : (
+                                                                <button
+                                                                    className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                                                    onClick={() => handleMarkTransferred(item)}
+                                                                    title="Transferred"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faMoneyBillWave} />
+                                                                </button>
+                                                            )}
                                                             <button
-                                                                className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                                                                onClick={() => handleMarkTransferred(item)}
-                                                                title="Transferred"
+                                                                className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                onClick={() => handleSendFinanceReminder(item)}
+                                                                disabled={reminderSendingId === item.id}
+                                                                title="Send Reminder to Finance"
                                                             >
-                                                                <FontAwesomeIcon icon={faMoneyBillWave} />
+                                                                <FontAwesomeIcon
+                                                                    icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
+                                                                    className={reminderSendingId === item.id ? 'animate-spin' : ''}
+                                                                />
                                                             </button>
-                                                        )
+                                                        </div>
                                                     ) : (
                                                         <button
                                                             className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed hover"
@@ -738,6 +829,46 @@ const ReimbursementTable = () => {
                 reasonLabel='Alasan Pembatalan'
                 reasonPlaceholder='Masukkan alasan pembatalan...'
             />
+
+            {financePickerModal && ReactDOM.createPortal(
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                    onClick={() => setFinancePickerModal(null)}
+                >
+                    <div
+                        className="bg-white dark:bg-gray-800 rounded-lg p-4 lg:p-6 max-w-md w-full mx-4 relative transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 className="text-lg md:text-xl font-semibold mb-1 md:mb-2 dark:text-gray-100">
+                            Pilih Finance
+                        </h2>
+                        <p className="mb-3 text-gray-600 dark:text-gray-300 text-sm">
+                            Anda terdaftar di lebih dari satu Unit Bisnis. Pilih Finance (Validator) yang akan menerima reminder untuk {financePickerModal.item.displayId}:
+                        </p>
+                        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                            {financePickerModal.candidates.map((validator) => (
+                                <button
+                                    key={validator.uid}
+                                    className="w-full text-left px-4 py-2 rounded-md border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => handlePickFinance(validator)}
+                                >
+                                    <div className="font-medium">{validator.nama}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">{validator.unit.join(', ')}</div>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex justify-end mt-4">
+                            <button
+                                className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-100 transition-colors"
+                                onClick={() => setFinancePickerModal(null)}
+                            >
+                                Batal
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     )
 }

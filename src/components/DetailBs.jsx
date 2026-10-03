@@ -10,7 +10,6 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 import { getEditHistoryEntries } from '../utils/editHistory'
-import { getStatusBadgeClass } from '../utils/statusBadge'
 
 const DetailBs = () => {
     const [userData, setUserData] = useState(null)
@@ -533,19 +532,6 @@ const DetailBs = () => {
                                     <p className="text-left">:</p>
                                     <p className="break-words">{renderStatus(getStatusWithNextReviewer(bonSementaraDetail, reviewers))}</p>
                                 </div>
-                                {/* Bagian BJ: penanda ke pengaju apakah dana BS yang sudah
-                                    Disetujui ini sudah dicairkan (di-maker) oleh Validator. */}
-                                {bonSementaraDetail?.status === 'Disetujui' && (
-                                    <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
-                                        <p>Status Pencairan</p>
-                                        <p className="text-left">:</p>
-                                        <p>
-                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(bonSementaraDetail.makerStatus || 'Menunggu Maker')}`}>
-                                                {bonSementaraDetail.makerStatus || 'Menunggu Maker'}
-                                            </span>
-                                        </p>
-                                    </div>
-                                )}
                                 <div className="grid grid-cols-[120px_auto_1fr] gap-x-1 text-sm items-start">
                                     <p>
                                         {bonSementaraDetail?.status === 'Ditolak'
@@ -585,16 +571,6 @@ const DetailBs = () => {
                         <p>: {bonSementaraDetail?.user?.accountNumber ?? 'N/A'}</p>
                         <p>Status</p>
                         <p>: {renderStatus(getStatusWithNextReviewer(bonSementaraDetail, reviewers))}</p>
-                        {bonSementaraDetail?.status === 'Disetujui' && (
-                            <>
-                                <p>Status Pencairan</p>
-                                <p>
-                                    : <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(bonSementaraDetail.makerStatus || 'Menunggu Maker')}`}>
-                                        {bonSementaraDetail.makerStatus || 'Menunggu Maker'}
-                                    </span>
-                                </p>
-                            </>
-                        )}
                         <p>
                             {bonSementaraDetail?.status === 'Ditolak'
                                 ? 'Ditolak Oleh'
