@@ -2500,3 +2500,58 @@ Perbaikan Bagian BF (`alignItems: 'stretch'`) TETAP dipertahankan (tidak salah, 
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-09-18, diverifikasi hash bundle live (`main.d4573da9.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: cetak ulang PDF BS/RBS/LPJ, konfirmasi kotak tabel sekarang punya garis lengkap di keempat sisi (atas, kiri, kanan, bawah) -- termasuk BS2609SMDR0000504, RBS.GAU.KEJS.260916.0010, dan LPJ yang dilaporkan
+
+---
+
+# BAGIAN BH — Fitur Baru: Menu "Maker" untuk Validator + Notifikasi Email Pencairan (2026-10-03)
+
+## 70.1 Permintaan User
+
+User meminta 1 menu baru bernama "Maker", khusus untuk role Validator, beserta notifikasi email ke semua user Validator sesuai Unit Bisnis yang ditetapkan ke mereka -- begitu ada pengajuan (misalnya RBS) yang siap diproses, email berbunyi "1 permintaan RBS dengan nomor xxx menunggu untuk di-maker" dan mereka bisa melihatnya juga di menu Maker.
+
+## 70.2 Klarifikasi (lewat AskUserQuestion, sebelum implementasi)
+
+"Maker" BELUM PERNAH ada di sistem ini dalam bentuk apa pun (dicek: bukan role/status/menu yang sudah ada) -- satu-satunya petunjuk adalah istilah "mohon dibantu maker" di email reminder finance yang sudah ada (`sendBsFinanceReminder`). Dikonfirmasi ke user:
+1. **Arti "Maker"**: proses pencairan dana SETELAH dokumen Disetujui penuh (BUKAN tahap sebelum validasi).
+2. **Cakupan dokumen**: BS dan RBS saja (LPJ TIDAK termasuk).
+3. **Pelacakan status**: dicatat formal sebagai field/status baru (`makerStatus`) + jejak siapa & kapan -- bukan cuma daftar/pengingat tanpa status.
+4. **Penerima email**: SEMUA user ber-role Validator yang field `unit`-nya cocok dengan unit bisnis dokumen (bukan cuma Validator yang sudah ditetapkan di dokumen itu) -- logika pencarian BARU, beda dari pola existing (`user.validator` per-dokumen).
+
+## 70.3 Desain & Implementasi
+
+**Prinsip utama**: `makerStatus` adalah field TERPISAH dari `status` approval utama -- sengaja TIDAK mengubah/menimpa `status` (tetap "Disetujui" selamanya) supaya seluruh logika lain yang sudah menggantungkan diri pada `status === 'Disetujui'` (cetak PDF BS/RBS, Rekapan, dst) sama sekali tidak terganggu.
+
+- **`functions/index.js`**:
+  - `createEmailTemplate`: tambah `case 'maker'` untuk header email "Menunggu Diproses (Maker)".
+  - `notifyValidatorsForMaker(docType, docRef, newData)` (helper baru): dipanggil dari dalam trigger `onDocumentUpdated` yang SUDAH ADA (`notifyReviewersAndUserCreateBS` untuk BS, `notifyReviewersAndUserRBS` untuk RBS) tepat di titik transisi ke `status === 'Disetujui'` penuh. Query `users` where `role == 'Validator'` AND `unit array-contains <unit dokumen>`, kirim email ke semua yang cocok, lalu set `makerStatus: 'Menunggu Maker'` + `makerNotifiedAt` di dokumen. Idempoten (guard `if (newData.makerStatus) return`) -- aman dari infinite loop karena update ini TIDAK mengubah `status`, jadi guard `newData.status === oldData.status` di awal kedua fungsi pemanggil menghentikan re-trigger berikutnya.
+  - `markAsMaker` (onCall baru): dipanggil dari menu Maker saat Validator menandai 1 dokumen selesai diproses. Validasi: login wajib, role harus Validator/Admin/Super Admin, dokumen harus `status === 'Disetujui'`, belum pernah ditandai "Sudah Dimaker" sebelumnya (cegah double-processing), dan KHUSUS Validator (bukan Admin/Super Admin) -- unit bisnis dokumen harus termasuk dalam `unit` milik Validator tsb (pembatasan sama seperti Rekapan). Menulis `makerStatus: 'Sudah Dimaker'`, `makerBy`, `makerByName`, `makerAt`, plus entri baru di `statusHistory` untuk jejak audit.
+- **`src/components/Maker.jsx`** (BARU): halaman daftar BS & RBS berstatus Disetujui, difilter otomatis ke unit bisnis milik Validator yang login (Admin/Super Admin melihat semua unit, dengan filter dropdown opsional) -- pola fetch/filter unit sama persis dengan `RekapanUnitBisnis.jsx`. Kolom: Jenis, Nomor (link ke detail), Unit Bisnis, Pengaju, Nominal, Tanggal Pengajuan, Status Maker (badge), Aksi ("Tandai Sudah Dimaker" via `markAsMaker`). Filter status (Menunggu Maker/Sudah Dimaker/Semua) + filter unit.
+- **`src/pages/MakerPage.jsx`** (BARU): wrapper `Layout` standar, mengikuti pola `RekapanPage.jsx`.
+- **`src/App.jsx`**: route baru `/maker`, `allowedRoles={['Validator', 'Admin', 'Super Admin']}` -- sama persis dengan pola akses `/rekapan`.
+- **`src/components/Sidebar.jsx`**: link navigasi "Maker" ditambahkan di 2 tempat (menu Super Admin & menu role lain, gated `role === 'Validator' || role === 'Admin'`), persis di sebelah link "Rekapan" yang sudah ada.
+- **`src/utils/statusBadge.js`**: tambah 2 case baru (`'Menunggu Maker'` oranye, `'Sudah Dimaker'` hijau) di helper badge status yang sudah dipakai di tempat lain, supaya tampilannya konsisten.
+
+**Catatan desain**: menu/route diizinkan untuk Validator+Admin+Super Admin (ikut pola akses "Rekapan" yang sudah ada di app ini), TAPI notifikasi email HANYA ke Validator (sesuai jawaban klarifikasi user poin 4) -- Admin/Super Admin tidak mendapat email tapi tetap bisa melihat & bertindak di menu Maker untuk keperluan pengawasan.
+
+**Catatan risiko belum terverifikasi**: query gabungan `where('role','==','Validator').where('unit','array-contains', unit)` di Cloud Function SEHARUSNYA tidak butuh composite index (kombinasi 1 equality + 1 array-contains didukung index otomatis Firestore), tapi belum bisa dipastikan 100% tanpa data produksi nyata -- kalau Cloud Functions log menunjukkan error `FAILED_PRECONDITION` soal index saat pertama kali 1 BS/RBS mencapai "Disetujui" setelah deploy ini, perlu dibuatkan composite index manual lewat link yang disediakan error tsb.
+
+## 70.4 Task Development — Bagian BH
+
+- [x] `functions/index.js`: `createEmailTemplate` case `'maker'`
+- [x] `functions/index.js`: `notifyValidatorsForMaker` helper, dipanggil dari `notifyReviewersAndUserCreateBS` (BS) & `notifyReviewersAndUserRBS` (RBS) di titik transisi ke "Disetujui"
+- [x] `functions/index.js`: `markAsMaker` (onCall) -- validasi role+unit+status, tulis `makerStatus`/`makerBy`/`makerByName`/`makerAt` + jejak `statusHistory`
+- [x] `src/components/Maker.jsx` (baru): daftar BS/RBS Disetujui, filter unit otomatis, aksi tandai selesai
+- [x] `src/pages/MakerPage.jsx` (baru)
+- [x] `src/App.jsx`: route `/maker`
+- [x] `src/components/Sidebar.jsx`: link "Maker" (2 tempat)
+- [x] `src/utils/statusBadge.js`: badge "Menunggu Maker"/"Sudah Dimaker"
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 23 test tetap PASS
+- [x] `CI=true npx eslint` untuk semua file baru/diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + functions: `notifyReviewersAndUserCreateBS`, `notifyReviewersAndUserRBS`, `markAsMaker`)
+- [ ] Tes manual: ajukan & setujui penuh 1 BS/RBS test (sampai status "Disetujui"), konfirmasi (a) semua Validator dengan unit yang cocok menerima email "menunggu di-maker", (b) dokumen itu muncul di menu Maker dengan status "Menunggu Maker"
+- [ ] Tes manual: sebagai Validator, klik "Tandai Sudah Dimaker" pada 1 dokumen, konfirmasi status berubah jadi "Sudah Dimaker" + muncul nama & waktu pemroses, dan dokumen TIDAK bisa ditandai dua kali
+- [ ] Tes manual: cetak PDF BS/RBS yang sudah di-maker, konfirmasi PDF tetap berhasil seperti biasa (makerStatus tidak mengganggu `status` approval)
+- [ ] Pantau Cloud Functions log setelah deploy untuk BS/RBS PERTAMA yang mencapai "Disetujui" -- pastikan query `users` (role+unit) tidak melempar error index

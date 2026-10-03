@@ -206,6 +206,9 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
         case 'financeReminder':
             headerText = 'Reminder untuk Finance';
             break;
+        case 'maker':
+            headerText = 'Menunggu Diproses (Maker)';
+            break;
         case 'pengembalianReminder':
             headerText = 'Reminder Bukti Pengembalian BS';
             break;
@@ -630,6 +633,54 @@ exports.notifyReviewer1OnCreateBS = onDocumentCreated("bonSementara/{docId}", as
     );
 });
 
+// Bagian BH: begitu BS/RBS mencapai status akhir "Disetujui", beri tahu SEMUA
+// user ber-role Validator yang unit bisnisnya cocok dengan unit pengaju
+// dokumen ini -- supaya proses pencairan ("maker") bisa langsung ditindak-
+// lanjuti, bukan menunggu reminder manual ke SATU validator pilihan seperti
+// sebelumnya (lihat sendBsFinanceReminder). Field `makerStatus` dipakai menu
+// "Maker" baru (src/components/Maker.jsx) untuk melacak status pencairan
+// TERPISAH dari `status` approval utama -- supaya tidak mengganggu logika
+// lain yang sudah menggantungkan diri pada `status === 'Disetujui'` (cetak
+// PDF, dst). Dipanggil dari dalam trigger onDocumentUpdated yang sama (BS &
+// RBS) -- aman dari infinite loop karena update di sini TIDAK mengubah
+// `status`, jadi guard `newData.status === oldData.status` di awal kedua
+// fungsi pemanggil langsung menghentikan re-trigger berikutnya.
+const notifyValidatorsForMaker = async (docType, docRef, newData) => {
+    if (newData.makerStatus) return; // idempoten -- cegah notifikasi dobel
+
+    const unit = newData.user?.unit;
+    if (!unit) return;
+
+    const validatorsSnapshot = await db.collection("users")
+        .where("role", "==", "Validator")
+        .where("unit", "array-contains", unit)
+        .get();
+
+    await docRef.update({
+        makerStatus: "Menunggu Maker",
+        makerNotifiedAt: new Date().toISOString()
+    });
+
+    const jenisLabel = docType === "bonSementara" ? "BS" : "Reimbursement";
+    const emailPromises = validatorsSnapshot.docs
+        .map((doc) => doc.data())
+        .filter((validatorData) => validatorData?.email)
+        .map((validatorData) => {
+            const subject = `Menunggu Maker: ${jenisLabel} ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+            const emailContent = `
+                Dear <strong>${validatorData.nama}</strong>,
+                <br><br>1 permintaan ${jenisLabel} dengan nomor <strong>${newData.displayId}</strong> sudah Disetujui dan menunggu untuk di-maker.
+                <br>Silakan buka menu <strong>Maker</strong> di aplikasi untuk memprosesnya.
+            `;
+            return sendEmail(
+                validatorData.email,
+                subject,
+                createEmailTemplate(emailContent, null, newData, false, 'maker')
+            );
+        });
+    await Promise.all(emailPromises);
+};
+
 // Trigger saat status BS berubah
 exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}", async (event) => {
     const newData = event.data.after.data();
@@ -711,6 +762,7 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
 
     if (newData.status === "Disetujui" && oldData.status === "Diproses") {
         await docRef.update({ currentApproverUid: null }); // Hapus current approver
+        await notifyValidatorsForMaker("bonSementara", docRef, newData);
         const subject = `Pengajuan BS Disetujui - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const firstApproval = newData.statusHistory.find(
             status => status.status.includes('Disetujui') &&
@@ -839,6 +891,80 @@ exports.sendBsFinanceReminder = onCall(async (request) => {
     }
 
     return { sent: true, to: validatorData.email };
+});
+
+// Bagian BH: dipanggil dari menu "Maker" (src/components/Maker.jsx) saat
+// Validator menandai 1 BS/RBS sudah selesai diproses pencairannya. Menyimpan
+// `makerStatus`/`makerBy`/`makerByName`/`makerAt` + jejak di `statusHistory`
+// -- TIDAK mengubah `status` approval utama sama sekali (tetap "Disetujui"),
+// supaya logika lain (cetak PDF, dst) yang menggantungkan diri pada
+// `status === 'Disetujui'` tidak terganggu.
+exports.markAsMaker = onCall(async (request) => {
+    if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
+    }
+
+    const requesterData = await syncAuthenticatedUserProfile(request.auth);
+    const requesterRole = requesterData?.role;
+    const isSuperAdmin = requesterRole === "Super Admin";
+    const isAdmin = requesterRole === "Admin";
+    const isValidator = requesterRole === "Validator";
+    if (!isSuperAdmin && !isAdmin && !isValidator) {
+        throw new HttpsError("permission-denied", "Hanya Validator/Admin/Super Admin yang dapat menandai Maker.");
+    }
+
+    const docType = normalizeText(request.data?.docType, "Jenis dokumen", 20);
+    if (!["bonSementara", "reimbursement"].includes(docType)) {
+        throw new HttpsError("invalid-argument", "Jenis dokumen tidak dikenali.");
+    }
+    const docId = normalizeText(request.data?.docId, "ID dokumen", 200);
+
+    const docRef = db.collection(docType).doc(docId);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+        throw new HttpsError("not-found", "Dokumen tidak ditemukan.");
+    }
+    const data = docSnap.data();
+
+    if (data.status !== "Disetujui") {
+        throw new HttpsError("failed-precondition", "Dokumen belum Disetujui sepenuhnya, belum bisa ditandai di-maker.");
+    }
+    if (data.makerStatus === "Sudah Dimaker") {
+        throw new HttpsError("failed-precondition", "Dokumen ini sudah ditandai selesai di-maker sebelumnya.");
+    }
+
+    // Validator (bukan Admin/Super Admin) cuma boleh menandai dokumen yang
+    // unit bisnisnya termasuk dalam unit yang ditugaskan ke akun mereka --
+    // pembatasan yang sama dengan Rekapan (RekapanUnitBisnis.jsx).
+    if (isValidator) {
+        const ownUnits = Array.isArray(requesterData?.unit)
+            ? requesterData.unit
+            : (requesterData?.unit ? [requesterData.unit] : []);
+        if (!ownUnits.includes(data.user?.unit)) {
+            throw new HttpsError("permission-denied", "Unit bisnis dokumen ini bukan tanggung jawab Anda.");
+        }
+    }
+
+    const now = new Date().toISOString();
+    const statusHistory = Array.isArray(data.statusHistory) ? data.statusHistory : [];
+    const updatedHistory = [
+        ...statusHistory,
+        {
+            status: `Sudah Dimaker oleh ${requesterData?.nama || "Validator"}`,
+            actor: request.auth.uid,
+            timestamp: now
+        }
+    ];
+
+    await docRef.update({
+        makerStatus: "Sudah Dimaker",
+        makerBy: request.auth.uid,
+        makerByName: requesterData?.nama || "",
+        makerAt: now,
+        statusHistory: updatedHistory
+    });
+
+    return { success: true };
 });
 
 // Baca teks dari bukti pengembalian (foto/PDF struk transfer) lewat Google Cloud
@@ -1228,6 +1354,7 @@ exports.notifyReviewersAndUserRBS = onDocumentUpdated("reimbursement/{docId}", a
     } else if ((latestStatusType === "Disetujui oleh Reviewer 2" || latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)")
         && newData.status === "Disetujui") {
         nextApproverUid = null; // Approval selesai, tidak ada lagi approver
+        await notifyValidatorsForMaker("reimbursement", docRef, newData);
         const subject = `Pengajuan Reimbursement Disetujui - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const hasValidatorReviewer1Status = statusHistory.some(status =>
             status.status === "Disetujui oleh Reviewer 1 Sekaligus Validator"

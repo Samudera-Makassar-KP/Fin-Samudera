@@ -21,6 +21,7 @@ import DetailBsPage from './pages/DetailBsPage';
 import ReportExportPage from './pages/ReportExportPage';
 import Dashboard from './pages/Dashboard';
 import RekapanPage from './pages/RekapanPage';
+import MakerPage from './pages/MakerPage';
 import AnnouncementManagerPage from './pages/AnnouncementManagerPage';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import AnnouncementPopup from './components/AnnouncementPopup';
@@ -158,6 +159,14 @@ const AppContent = () => {
                     <Route path="/rekapan" element={
                         <ProtectedRoute allowedRoles={['Validator', 'Admin', 'Super Admin']}>
                             <RekapanPage />
+                        </ProtectedRoute>
+                    } />
+
+                    {/* Bagian BH: menu Maker -- khusus Validator (Admin/Super Admin ikut
+                        bisa akses untuk pengawasan, sama seperti pola /rekapan). */}
+                    <Route path="/maker" element={
+                        <ProtectedRoute allowedRoles={['Validator', 'Admin', 'Super Admin']}>
+                            <MakerPage />
                         </ProtectedRoute>
                     } />
 
