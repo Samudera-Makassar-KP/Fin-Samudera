@@ -2730,6 +2730,6 @@ Ditelusuri `textContainsAmount` di `functions/lib/pengembalianMatcher.js` -- fun
 - [x] `CI=true npx eslint` untuk file yang diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 113 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + functions: hapus `debugPengembalianGagalBaca`, tambah `backfillPengembalianValidation`)
+- [x] Deploy ke produksi (hosting + functions: hapus `debugPengembalianGagalBaca`, tambah `backfillPengembalianValidation`, update `validatePengembalianBukti`) — sukses 2026-10-03, diverifikasi hash bundle live (`main.f4501a38.js`) cocok dengan hasil build lokal terbaru
 - [ ] Minta user (Super Admin): klik tombol "Validasi Ulang Bukti Pengembalian" di "Manage Users", konfirmasi 5 LPJ yang dilaporkan sebelumnya berubah jadi "valid"
 - [ ] Tes manual: upload bukti pengembalian JPG/PNG BARU dengan format serupa (nominal berakhir tanpa separator sen di hasil OCR), konfirmasi langsung "valid" tanpa perlu backfill lagi
