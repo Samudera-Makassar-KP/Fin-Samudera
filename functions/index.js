@@ -21,7 +21,17 @@ const emailPasswordSecret = defineSecret("EMAIL_PASSWORD");
 
 setGlobalOptions({
     region: "asia-southeast2",
-    secrets: [emailUserSecret, emailPasswordSecret]
+    secrets: [emailUserSecret, emailPasswordSecret],
+    // Bagian BO: kuota Cloud Run "Total CPU allocation" project ini di
+    // asia-southeast2 hanya 20 vCPU AKTIF bersamaan (semua instance yang
+    // sedang hidup, termasuk yang masih hangat setelah melayani request).
+    // Default Firebase memberi tiap fungsi 1 vCPU penuh, jadi ~20 instance
+    // hangat dari 23 fungsi sudah menghabiskan kuota dan revisi baru gagal
+    // start ("Quota exceeded for total allowable CPU"). "gcf_gen1" memberi CPU
+    // pecahan sesuai memori (256MiB = 1/6 vCPU, 512MiB = 1/3 vCPU) -- cukup
+    // untuk fungsi yang kerjanya kirim email/panggil API.
+    cpu: "gcf_gen1",
+    maxInstances: 20
 });
 
 // Inisialisasi Firebase Admin

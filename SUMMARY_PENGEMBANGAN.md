@@ -2799,6 +2799,8 @@ Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasiona
 
 **Catatan lingkungan**: mesin ini belum punya `node_modules` dan npm gagal verifikasi SSL registry (sertifikat proxy/antivirus perusahaan hanya dikenal Windows). Solusi aman tanpa mematikan verifikasi SSL: `NODE_OPTIONS=--use-system-ca` saat `npm ci`/`npm install`.
 
+**Insiden deploy (kuota Cloud Run)**: deploy pertama gagal untuk sebagian fungsi -- "Quota exceeded for total allowable CPU per project per region". Dicek lewat Service Usage API: kuota `run.googleapis.com/cpu_allocation` project ini di asia-southeast2 hanya 20000 mili-vCPU (20 vCPU AKTIF bersamaan), sementara semua fungsi memakai 1 vCPU penuh per instance -- ~20 instance hangat dari 23 fungsi sudah menghabiskan kuota, revisi baru gagal start. Fungsi yang gagal update TETAP melayani dengan revisi lama (tidak ada downtime). Perbaikan di `setGlobalOptions`: `cpu: "gcf_gen1"` (CPU pecahan sesuai memori: 256MiB = 1/6 vCPU, 512MiB = 1/3 vCPU) + `maxInstances: 20`. Setelah itu deploy ulang per batch 4 fungsi -- 23/23 fungsi UP-TO-DATE (dicek via Cloud Run API: latestReadyRevision == latestCreatedRevision untuk semua service). Kalau suatu saat butuh CPU penuh lagi, ajukan kenaikan kuota "Total CPU allocation" di Google Cloud Console (IAM & Admin > Quotas).
+
 ## 77.4 Task Development — Bagian BO
 
 - [x] `BsPdf.jsx`: kotak rekening (poin 1)
@@ -2815,7 +2817,8 @@ Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasiona
 - [x] `cd functions && npx jest` -- 28 test PASS
 - [x] `CI=true npm test -- --watchAll=false` -- 132 test PASS (19 test baru di `approvalRules.test.js` & `bonSementara.test.js`)
 - [x] `CI=true npm run build` sukses tanpa warning
-- [ ] Deploy ke produksi (hosting + functions)
+- [x] Deploy functions ke produksi -- 23/23 sukses 2026-10-17 (setelah perbaikan kuota CPU di atas)
+- [ ] Deploy hosting ke produksi
 - [ ] Tes manual: ajukan BS > Rp3 juta tanpa lampiran -> ditolak form; dengan lampiran -> "Lihat Lampiran" muncul di Detail BS; cetak PDF BS -> kotak rekening muncul
 - [ ] Tes manual: ajukan LPJ dengan nomor BS diketik manual (bukan dari daftar) -> email ke Validator berjudul "Permintaan Approval LPJ" tanpa baris Nomor/Jumlah BS
 - [ ] Tes manual: RBS Disetujui + klik Transferred -> ikon amplop abu-abu & tidak bisa diklik
