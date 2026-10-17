@@ -2861,7 +2861,7 @@ Saat "Reminder ke Finance", form RBS dan LPJ langsung menyatu dengan lampirannya
 - [x] `cd functions && npx jest` -- 28 test PASS
 - [x] `CI=true npm test -- --watchAll=false` -- 132 test PASS
 - [x] `CI=true npm run build` sukses; `.env` dicek ada & config Firebase tertanam di bundle (pelajaran Bagian BO)
-- [ ] Deploy ke produksi (functions: `sendBsFinanceReminder`, `sendRbsFinanceReminder`, `sendLpjFinanceReminder`, `sendApprovedDocToValidators` + hosting)
+- [x] Deploy ke produksi -- sukses 2026-10-17: 4 functions (sendLpjFinanceReminder dibuat baru) + hosting, live `main.ebc2ab25.js` cocok dengan build lokal, config Firebase tertanam
 - [ ] Tes manual: RBS Disetujui (belum Transferred) -> klik amplop -> email Finance berisi 1 PDF = form RBS + lampiran
 - [ ] Tes manual: LPJ Disetujui -> ikon amplop muncul di tabel LPJ -> email Finance berisi 1 PDF = form LPJ + lampiran
 - [ ] Tes manual: BS > Rp3 juta Disetujui -> reminder berisi form BS + lampiran; BS <= Rp3 juta -> form BS saja
