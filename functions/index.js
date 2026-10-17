@@ -789,193 +789,123 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
     }
 });
 
-// Dipanggil dari tombol "Kirim Reminder ke Finance" di BsTable.jsx (kolom Aksi,
-// khusus BS berstatus Disetujui). Finance = user role Validator. Mengirim satu
-// email berisi narasi permintaan bantuan pencairan + detail BS (format sama
-// seperti email notifikasi lain, lihat createEmailTemplate) + lampiran PDF BS
-// (format sama seperti PDF hasil "Print", digenerate & di-upload client lewat
-// generateBsPDF sebelum memanggil ini, lalu diambil ulang di sini lewat
-// pdfUrl -- downloadURL Firebase Storage sudah membawa token akses sendiri,
-// jadi bisa di-fetch tanpa Admin SDK Storage).
-exports.sendBsFinanceReminder = onCall(async (request) => {
-    if (!request.auth?.uid) {
-        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
-    }
-
-    const bsId = normalizeText(request.data?.bsId, "ID BS", 200);
-    const validatorUid = normalizeText(request.data?.validatorUid, "UID Validator", 128);
-    const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
-
-    const bsDoc = await db.collection("bonSementara").doc(bsId).get();
-    if (!bsDoc.exists) {
-        throw new HttpsError("not-found", "Data Bon Sementara tidak ditemukan.");
-    }
-    const bsData = bsDoc.data();
-
-    if (bsData.user?.uid !== request.auth.uid) {
-        throw new HttpsError("permission-denied", "Anda hanya bisa mengirim reminder untuk BS milik sendiri.");
-    }
-    if (bsData.status !== "Disetujui") {
-        throw new HttpsError("failed-precondition", "BS belum berstatus Disetujui.");
-    }
-
-    const [validatorData, submitterData] = await Promise.all([
-        getUserData(validatorUid),
-        getUserData(request.auth.uid)
-    ]);
-
-    if (!validatorData || validatorData.role !== "Validator") {
-        throw new HttpsError("invalid-argument", "Finance (Validator) yang dipilih tidak ditemukan atau bukan role Validator.");
-    }
-    if (!validatorData.email) {
-        throw new HttpsError("failed-precondition", "Finance yang dipilih tidak memiliki alamat email terdaftar.");
-    }
-
-    // Defense-in-depth: jangan percaya begitu saja validatorUid dari client --
-    // pastikan Validator ini memang ditugaskan di salah satu Unit Bisnis yang
-    // sama dengan submitter (mencegah kirim reminder ke Validator unit lain).
-    const submitterUnits = Array.isArray(submitterData?.unit) ? submitterData.unit : [];
-    const validatorUnits = Array.isArray(validatorData?.unit) ? validatorData.unit : [];
-    const sharesUnit = submitterUnits.some((unit) => validatorUnits.includes(unit));
-    if (!sharesUnit) {
-        throw new HttpsError("permission-denied", "Finance yang dipilih tidak terdaftar di Unit Bisnis Anda.");
-    }
-
-    let attachments = [];
-    if (pdfUrl) {
-        try {
-            const response = await fetch(pdfUrl);
-            if (response.ok) {
-                const arrayBuffer = await response.arrayBuffer();
-                attachments = [{
-                    filename: `${bsData.displayId}.pdf`,
-                    content: Buffer.from(arrayBuffer),
-                    contentType: "application/pdf"
-                }];
-            } else {
-                console.error("Gagal mengambil PDF BS untuk lampiran reminder, status:", response.status);
-            }
-        } catch (error) {
-            console.error("Gagal mengambil PDF BS untuk lampiran reminder:", error);
+// Bagian BP: satu pembuat handler untuk semua tombol "Kirim Reminder ke
+// Finance" (BS -- Bagian L, RBS -- Bagian BK, LPJ -- baru). Validasinya
+// identik dengan versi lama per-modul: login wajib, dokumen milik pemanggil,
+// status "Disetujui", Validator tujuan benar-benar role Validator dan berbagi
+// Unit Bisnis dengan pengaju (defense-in-depth, jangan percaya validatorUid
+// dari client). Bedanya: email sekarang melampirkan form + lampiran dokumen
+// yang SUDAH DIGABUNG jadi satu PDF (buildFormWithLampiranAttachments).
+const createFinanceReminderHandler = ({ collectionName, idField, notFoundLabel, ownLabel, rejectIfTransferred = false, describe }) =>
+    async (request) => {
+        if (!request.auth?.uid) {
+            throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
         }
-    }
 
-    const subject = `Reminder Pencairan BS - ${bsData.displayId}`;
-    const emailContent = `
-        Dear <strong>${validatorData.nama}</strong>,
-        <br><br>Mohon dibantu maker atas BS berikut:
-    `;
+        const docId = normalizeText(request.data?.[idField], `ID ${notFoundLabel}`, 200);
+        const validatorUid = normalizeText(request.data?.validatorUid, "UID Validator", 128);
+        const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
 
-    const sent = await sendEmail(
-        validatorData.email,
-        subject,
-        createEmailTemplate(emailContent, submitterData, bsData, true, "financeReminder"),
-        attachments
-    );
-
-    if (!sent) {
-        throw new HttpsError("internal", "Gagal mengirim email reminder ke Finance.");
-    }
-
-    return { sent: true, to: validatorData.email };
-});
-
-// Bagian BK: versi RBS dari sendBsFinanceReminder di atas -- dipanggil dari
-// tombol "Kirim Reminder ke Finance" di ReimbursementTable.jsx (kolom Aksi,
-// khusus Reimbursement berstatus Disetujui), pola & validasi identik persis
-// (copy-sejajar) dengan sendBsFinanceReminder, cuma koleksi & field yang beda.
-// Menggantikan rencana awal (menu "Maker" otomatis, Bagian BI/BJ) yang
-// dibatalkan user -- fitur ini sengaja TETAP manual (reminder, bukan status
-// terlacak) supaya benar-benar jadi "pengingat kalau finance lama
-// memprosesnya", bukan tahap approval baru.
-exports.sendRbsFinanceReminder = onCall(async (request) => {
-    if (!request.auth?.uid) {
-        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
-    }
-
-    const rbsId = normalizeText(request.data?.rbsId, "ID Reimbursement", 200);
-    const validatorUid = normalizeText(request.data?.validatorUid, "UID Validator", 128);
-    const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
-
-    const rbsDoc = await db.collection("reimbursement").doc(rbsId).get();
-    if (!rbsDoc.exists) {
-        throw new HttpsError("not-found", "Data Reimbursement tidak ditemukan.");
-    }
-    const rbsData = rbsDoc.data();
-
-    if (rbsData.user?.uid !== request.auth.uid) {
-        throw new HttpsError("permission-denied", "Anda hanya bisa mengirim reminder untuk Reimbursement milik sendiri.");
-    }
-    if (rbsData.status !== "Disetujui") {
-        throw new HttpsError("failed-precondition", "Reimbursement belum berstatus Disetujui.");
-    }
-    // Bagian BO: tombolnya sudah dikunci di ReimbursementTable.jsx begitu
-    // pengaju menandai Transferred -- dijaga juga di server supaya Finance
-    // tidak dapat reminder "mohon dibantu maker" untuk dana yang sudah cair.
-    if (rbsData.transferred) {
-        throw new HttpsError("failed-precondition", "Reimbursement ini sudah ditandai Transferred.");
-    }
-
-    const [validatorData, submitterData] = await Promise.all([
-        getUserData(validatorUid),
-        getUserData(request.auth.uid)
-    ]);
-
-    if (!validatorData || validatorData.role !== "Validator") {
-        throw new HttpsError("invalid-argument", "Finance (Validator) yang dipilih tidak ditemukan atau bukan role Validator.");
-    }
-    if (!validatorData.email) {
-        throw new HttpsError("failed-precondition", "Finance yang dipilih tidak memiliki alamat email terdaftar.");
-    }
-
-    // Defense-in-depth: sama seperti sendBsFinanceReminder -- jangan percaya
-    // begitu saja validatorUid dari client, pastikan Validator ini memang
-    // ditugaskan di salah satu Unit Bisnis yang sama dengan submitter.
-    const submitterUnits = Array.isArray(submitterData?.unit) ? submitterData.unit : [];
-    const validatorUnits = Array.isArray(validatorData?.unit) ? validatorData.unit : [];
-    const sharesUnit = submitterUnits.some((unit) => validatorUnits.includes(unit));
-    if (!sharesUnit) {
-        throw new HttpsError("permission-denied", "Finance yang dipilih tidak terdaftar di Unit Bisnis Anda.");
-    }
-
-    let attachments = [];
-    if (pdfUrl) {
-        try {
-            const response = await fetch(pdfUrl);
-            if (response.ok) {
-                const arrayBuffer = await response.arrayBuffer();
-                attachments = [{
-                    filename: `${rbsData.displayId}.pdf`,
-                    content: Buffer.from(arrayBuffer),
-                    contentType: "application/pdf"
-                }];
-            } else {
-                console.error("Gagal mengambil PDF Reimbursement untuk lampiran reminder, status:", response.status);
-            }
-        } catch (error) {
-            console.error("Gagal mengambil PDF Reimbursement untuk lampiran reminder:", error);
+        const docSnap = await db.collection(collectionName).doc(docId).get();
+        if (!docSnap.exists) {
+            throw new HttpsError("not-found", `Data ${notFoundLabel} tidak ditemukan.`);
         }
+        const data = docSnap.data();
+
+        if (data.user?.uid !== request.auth.uid) {
+            throw new HttpsError("permission-denied", `Anda hanya bisa mengirim reminder untuk ${ownLabel} milik sendiri.`);
+        }
+        if (data.status !== "Disetujui") {
+            throw new HttpsError("failed-precondition", `${notFoundLabel} belum berstatus Disetujui.`);
+        }
+        // Bagian BO: RBS yang sudah ditandai Transferred tidak perlu reminder.
+        if (rejectIfTransferred && data.transferred) {
+            throw new HttpsError("failed-precondition", `${notFoundLabel} ini sudah ditandai Transferred.`);
+        }
+
+        const [validatorData, submitterData] = await Promise.all([
+            getUserData(validatorUid),
+            getUserData(request.auth.uid)
+        ]);
+
+        if (!validatorData || validatorData.role !== "Validator") {
+            throw new HttpsError("invalid-argument", "Finance (Validator) yang dipilih tidak ditemukan atau bukan role Validator.");
+        }
+        if (!validatorData.email) {
+            throw new HttpsError("failed-precondition", "Finance yang dipilih tidak memiliki alamat email terdaftar.");
+        }
+
+        const submitterUnits = Array.isArray(submitterData?.unit) ? submitterData.unit : [];
+        const validatorUnits = Array.isArray(validatorData?.unit) ? validatorData.unit : [];
+        if (!submitterUnits.some((unit) => validatorUnits.includes(unit))) {
+            throw new HttpsError("permission-denied", "Finance yang dipilih tidak terdaftar di Unit Bisnis Anda.");
+        }
+
+        const { subject, request: requestText } = await describe(data);
+        const { attachments, note } = await buildFormWithLampiranAttachments(data.displayId, pdfUrl, data.lampiranUrl);
+
+        const sent = await sendEmail(
+            validatorData.email,
+            subject,
+            createEmailTemplate(`
+                Dear <strong>${validatorData.nama}</strong>,
+                <br><br>${requestText}
+                <br>${note}
+            `, submitterData, data, true, "financeReminder"),
+            attachments
+        );
+
+        if (!sent) {
+            throw new HttpsError("internal", "Gagal mengirim email reminder ke Finance.");
+        }
+
+        return { sent: true, to: validatorData.email };
+    };
+
+// Dipanggil dari tombol "Kirim Reminder ke Finance" di BsTable.jsx (khusus BS
+// Disetujui). Lampiran BS hanya ada untuk BS > Rp3 juta (Bagian BO).
+exports.sendBsFinanceReminder = onCall({ memory: "512MiB", timeoutSeconds: 120 }, createFinanceReminderHandler({
+    collectionName: "bonSementara",
+    idField: "bsId",
+    notFoundLabel: "Bon Sementara",
+    ownLabel: "BS",
+    describe: async (data) => ({
+        subject: `Reminder Pencairan BS - ${data.displayId}`,
+        request: "Mohon dibantu maker atas BS berikut:"
+    })
+}));
+
+// Bagian BK: versi RBS -- dipanggil dari ReimbursementTable.jsx. Sengaja tetap
+// manual (pengingat kalau Finance lama memproses), bukan tahap approval baru.
+exports.sendRbsFinanceReminder = onCall({ memory: "512MiB", timeoutSeconds: 120 }, createFinanceReminderHandler({
+    collectionName: "reimbursement",
+    idField: "rbsId",
+    notFoundLabel: "Reimbursement",
+    ownLabel: "Reimbursement",
+    rejectIfTransferred: true,
+    describe: async (data) => ({
+        subject: `Reminder Pencairan Reimbursement - ${data.displayId}`,
+        request: "Mohon dibantu maker atas Reimbursement berikut:"
+    })
+}));
+
+// Bagian BP: versi LPJ -- dipanggil dari LpjBsTable.jsx. Label "LPJ"/"LPJ BS"
+// mengikuti apakah BS-nya dibuat lewat sistem (Bagian BO).
+exports.sendLpjFinanceReminder = onCall({ memory: "512MiB", timeoutSeconds: 120 }, createFinanceReminderHandler({
+    collectionName: "lpj",
+    idField: "lpjId",
+    notFoundLabel: "LPJ",
+    ownLabel: "LPJ",
+    describe: async (data) => {
+        data.bsFromSystem = await resolveLpjBsFromSystem(data);
+        const label = getLpjLabel(data);
+        return {
+            subject: `Reminder ${label} - ${data.displayId}`,
+            request: `Mohon dibantu proses atas ${label} berikut:`
+        };
     }
+}));
 
-    const subject = `Reminder Pencairan Reimbursement - ${rbsData.displayId}`;
-    const emailContent = `
-        Dear <strong>${validatorData.nama}</strong>,
-        <br><br>Mohon dibantu maker atas Reimbursement berikut:
-    `;
-
-    const sent = await sendEmail(
-        validatorData.email,
-        subject,
-        createEmailTemplate(emailContent, submitterData, rbsData, true, "financeReminder"),
-        attachments
-    );
-
-    if (!sent) {
-        throw new HttpsError("internal", "Gagal mengirim email reminder ke Finance.");
-    }
-
-    return { sent: true, to: validatorData.email };
-});
 
 // Baca teks dari bukti pengembalian (foto/PDF struk transfer) lewat Google Cloud
 // Vision OCR. Gambar pakai textDetection biasa; PDF butuh endpoint terpisah
@@ -1148,6 +1078,53 @@ const mergePdfBuffers = async (buffers) => {
 // Batas lampiran Gmail 25MB -- disisakan ruang untuk overhead encoding email.
 const EMAIL_ATTACHMENT_MAX_BYTES = 18 * 1024 * 1024;
 
+// Bagian BP: lampiran email ke Finance = PDF form resmi + lampiran dokumen,
+// digabung jadi SATU file. Dipakai email "Disetujui - Siap Diproses" dan
+// semua tombol "Reminder ke Finance" (BS/RBS/LPJ). Kalau penggabungan gagal
+// (mis. PDF lampiran rusak), dikirim sebagai dua file terpisah; kalau terlalu
+// besar untuk email, tidak dilampirkan dan `note` meminta Finance membuka
+// website. `note` siap disisipkan ke isi email.
+const buildFormWithLampiranAttachments = async (displayId, formPdfUrl, lampiranUrl) => {
+    const pdfParts = [];
+    for (const url of [formPdfUrl, lampiranUrl]) {
+        if (!isOwnStorageUrl(url)) continue;
+        try {
+            pdfParts.push((await fetchStorageFile(url)).buffer);
+        } catch (error) {
+            console.error(`Gagal mengambil file untuk ${displayId}:`, error);
+        }
+    }
+
+    if (pdfParts.length === 0) {
+        return { attachments: [], note: "Form/lampiran tidak berhasil dilampirkan, silakan buka & cetak melalui website." };
+    }
+
+    let combined;
+    try {
+        combined = await mergePdfBuffers(pdfParts);
+    } catch (error) {
+        console.error(`Gagal menggabungkan PDF ${displayId}, dikirim terpisah:`, error);
+    }
+    const files = combined
+        ? [{ filename: `${displayId}.pdf`, content: combined }]
+        : pdfParts.map((content, index) => ({
+            filename: index === 0 ? `${displayId}.pdf` : `Lampiran_${displayId}.pdf`,
+            content
+        }));
+
+    const totalBytes = files.reduce((sum, file) => sum + file.content.length, 0);
+    if (totalBytes > EMAIL_ATTACHMENT_MAX_BYTES) {
+        return { attachments: [], note: "File form + lampiran terlalu besar untuk dikirim lewat email, silakan buka & cetak melalui website." };
+    }
+
+    return {
+        attachments: files.map((file) => ({ ...file, contentType: "application/pdf" })),
+        note: pdfParts.length > 1
+            ? "Terlampir form beserta lampirannya dalam satu file PDF."
+            : "Terlampir form dalam file PDF."
+    };
+};
+
 // Dipanggil client (utils/approvalWorkflow.js) tepat setelah RBS/LPJ mencapai
 // "Disetujui" penuh -- client lebih dulu men-generate & mengunggah PDF form resmi
 // (react-pdf cuma bisa dirender di client), lalu fungsi ini menggabungkan form +
@@ -1215,41 +1192,7 @@ exports.sendApprovedDocToValidators = onCall({ memory: "512MiB", timeoutSeconds:
             return { sent: 0, reason: "no-validator" };
         }
 
-        const pdfParts = [];
-        for (const url of [pdfUrl, data.lampiranUrl]) {
-            if (!isOwnStorageUrl(url)) continue;
-            try {
-                const file = await fetchStorageFile(url);
-                pdfParts.push(file.buffer);
-            } catch (error) {
-                console.error(`Gagal mengambil file untuk ${data.displayId}:`, error);
-            }
-        }
-
-        let attachments = [];
-        let attachmentNote = "Terlampir form beserta lampirannya dalam satu file PDF.";
-        if (pdfParts.length > 0) {
-            let combined;
-            try {
-                combined = await mergePdfBuffers(pdfParts);
-            } catch (error) {
-                console.error(`Gagal menggabungkan PDF ${data.displayId}, dikirim terpisah:`, error);
-            }
-            const files = combined
-                ? [{ filename: `${data.displayId}.pdf`, content: combined }]
-                : pdfParts.map((content, index) => ({
-                    filename: index === 0 ? `${data.displayId}.pdf` : `Lampiran_${data.displayId}.pdf`,
-                    content
-                }));
-            const totalBytes = files.reduce((sum, file) => sum + file.content.length, 0);
-            if (totalBytes <= EMAIL_ATTACHMENT_MAX_BYTES) {
-                attachments = files.map((file) => ({ ...file, contentType: "application/pdf" }));
-            } else {
-                attachmentNote = "File form + lampiran terlalu besar untuk dikirim lewat email, silakan buka & cetak melalui website.";
-            }
-        } else {
-            attachmentNote = "Form/lampiran tidak berhasil dilampirkan, silakan buka & cetak melalui website.";
-        }
+        const { attachments, note: attachmentNote } = await buildFormWithLampiranAttachments(data.displayId, pdfUrl, data.lampiranUrl);
 
         const submitterData = await getUserData(data.user?.uid);
         const subject = `${docLabel} Disetujui - ${data.displayId} - Siap Diproses`;

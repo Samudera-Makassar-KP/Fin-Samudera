@@ -2826,3 +2826,42 @@ Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasiona
 - [ ] Tes manual: tombol Kembali di Detail kembali ke tab Cek Pengajuan yang sama
 - [ ] Tes manual: Detail LPJ -> "Lihat Bukti" (gambar) -> tombol Print membuka dialog cetak
 - [ ] Tes manual: ajukan LPJ dengan sisa lebih, bukti transfer pengembalian ditaruh di halaman terakhir Lampiran (tanpa upload bukti terpisah) -> beberapa detik kemudian status pengembalian di Detail LPJ jadi valid
+
+---
+
+# BAGIAN BP — Reminder ke Finance: Form + Lampiran Digabung Jadi Satu PDF, Reminder LPJ Baru (2026-10-17)
+
+## 78.1 Permintaan User
+
+Saat "Reminder ke Finance", form RBS dan LPJ langsung menyatu dengan lampirannya.
+
+## 78.2 Temuan
+
+- Reminder RBS (Bagian BK) dan BS (Bagian L) sudah ada, tapi hanya melampirkan PDF form -- lampiran dokumen tidak ikut.
+- Reminder Finance untuk **LPJ belum pernah ada** -- dibuat baru dengan pola identik RBS.
+- BS sekarang juga bisa punya lampiran (BS > Rp3 juta, Bagian BO), jadi reminder BS ikut digabung dengan cara yang sama.
+
+## 78.3 Implementasi
+
+- **`functions/index.js`**:
+  - `buildFormWithLampiranAttachments(displayId, formPdfUrl, lampiranUrl)` (helper baru): ambil form + lampiran (hanya URL Storage project sendiri), gabung dengan `pdf-lib` jadi 1 PDF; kalau gagal digabung -> 2 file terpisah; kalau > 18MB -> tidak dilampirkan, email berisi catatan "buka lewat website". Dipakai juga oleh `sendApprovedDocToValidators` (Bagian BO, blok inline-nya diganti helper ini).
+  - `createFinanceReminderHandler(config)` (baru): SATU implementasi validasi reminder (login, kepemilikan, status Disetujui, Validator tujuan berbagi Unit Bisnis, khusus RBS tolak kalau Transferred) -- menggantikan dua salinan sejajar `sendBsFinanceReminder`/`sendRbsFinanceReminder`. Nama callable & parameter TIDAK berubah (`bsId`/`rbsId`), jadi BsTable/ReimbursementTable tidak perlu diubah.
+  - `sendLpjFinanceReminder` (callable baru, param `lpjId`): subjek "Reminder LPJ"/"Reminder LPJ BS" mengikuti `bsFromSystem` (Bagian BO).
+  - Ketiga reminder: `memory: "512MiB", timeoutSeconds: 120` (sekarang ikut mengunduh & menggabung PDF).
+- **`src/hooks/useFinanceReminder.jsx`** (baru): alur pilih Finance (fetch unit pengaju + daftar Validator, langsung kirim kalau pengaju 1 unit, modal pilih kalau > 1 unit) dibungkus jadi hook -- dipakai `LpjBsTable.jsx` (BS/RBS masih memakai salinan lamanya, perilaku sama; bisa dimigrasi ke hook ini nanti).
+- **`src/components/LpjBsTable.jsx`**: LPJ "Disetujui" menampilkan ikon amplop "Send Reminder to Finance" di kolom Aksi (menggantikan tombol "Batalkan" yang memang selalu nonaktif di status itu), generate PDF form LPJ lalu panggil `sendLpjFinanceReminder`.
+
+## 78.4 Task Development — Bagian BP
+
+- [x] `buildFormWithLampiranAttachments` + dipakai email Disetujui & semua reminder
+- [x] `createFinanceReminderHandler` menggantikan 2 salinan reminder BS/RBS
+- [x] `sendLpjFinanceReminder` (baru)
+- [x] `useFinanceReminder.jsx` + tombol reminder di `LpjBsTable.jsx`
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 28 test PASS
+- [x] `CI=true npm test -- --watchAll=false` -- 132 test PASS
+- [x] `CI=true npm run build` sukses; `.env` dicek ada & config Firebase tertanam di bundle (pelajaran Bagian BO)
+- [ ] Deploy ke produksi (functions: `sendBsFinanceReminder`, `sendRbsFinanceReminder`, `sendLpjFinanceReminder`, `sendApprovedDocToValidators` + hosting)
+- [ ] Tes manual: RBS Disetujui (belum Transferred) -> klik amplop -> email Finance berisi 1 PDF = form RBS + lampiran
+- [ ] Tes manual: LPJ Disetujui -> ikon amplop muncul di tabel LPJ -> email Finance berisi 1 PDF = form LPJ + lampiran
+- [ ] Tes manual: BS > Rp3 juta Disetujui -> reminder berisi form BS + lampiran; BS <= Rp3 juta -> form BS saja
