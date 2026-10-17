@@ -2818,7 +2818,7 @@ Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasiona
 - [x] `CI=true npm test -- --watchAll=false` -- 132 test PASS (19 test baru di `approvalRules.test.js` & `bonSementara.test.js`)
 - [x] `CI=true npm run build` sukses tanpa warning
 - [x] Deploy functions ke produksi -- 23/23 sukses 2026-10-17 (setelah perbaikan kuota CPU di atas)
-- [ ] Deploy hosting ke produksi
+- [x] Deploy hosting ke produksi -- sukses 2026-10-17, diverifikasi hash bundle live (`main.8c7ac856.js`) cocok dengan build lokal dari `main`, dan string fitur baru (Bank Penerima, BSLAMPIRAN, sendApprovedDocToValidators, Sudah Transferred) ada di bundle live
 - [ ] Tes manual: ajukan BS > Rp3 juta tanpa lampiran -> ditolak form; dengan lampiran -> "Lihat Lampiran" muncul di Detail BS; cetak PDF BS -> kotak rekening muncul
 - [ ] Tes manual: ajukan LPJ dengan nomor BS diketik manual (bukan dari daftar) -> email ke Validator berjudul "Permintaan Approval LPJ" tanpa baris Nomor/Jumlah BS
 - [ ] Tes manual: RBS Disetujui + klik Transferred -> ikon amplop abu-abu & tidak bisa diklik
