@@ -2886,6 +2886,6 @@ Kalau BS sudah Reported, ikon reminder ke Finance hilang; begitu pula di RBS (ya
 - [x] `ReimbursementTable.jsx`: sembunyikan amplop untuk RBS Transferred
 - [x] `sendBsFinanceReminder`: tolak BS Reported di server
 - [x] `node --check` + functions jest 28 PASS + frontend 132 PASS + build sukses, config Firebase tertanam di bundle
-- [ ] Deploy ke produksi (functions: `sendBsFinanceReminder` + hosting)
+- [x] Deploy ke produksi -- sukses 2026-10-17, live `main.81f8957e.js` cocok dengan build lokal, config Firebase tertanam
 - [ ] Tes manual: tabel "Bon Sementara Diajukan" -- BS dengan "Sudah LPJ" tidak lagi menampilkan ikon amplop; BS Disetujui yang "Belum LPJ"/"Sedang LPJ" tetap ada amplopnya
 - [ ] Tes manual: tabel Reimbursement -- RBS yang sudah Transferred hanya menampilkan ikon centang, tanpa amplop
