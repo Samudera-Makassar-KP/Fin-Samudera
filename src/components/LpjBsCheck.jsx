@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
+import { approveWorkflowDoc, rejectWorkflowDoc } from '../utils/approvalWorkflow'
 import Modal from './Modal'
 import Select from 'react-select'
 import { useTheme } from '../context/ThemeContext'
@@ -100,7 +101,7 @@ const SuperAdminAllStatusTable = ({
                                         <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                         <td className="px-4 py-2 border dark:border-gray-600">
                                             <Link
-                                                to={`/lpj/${item.id}`}
+                                                to={`/lpj/${item.id}`} state={{ from: '/lpj/cek-pengajuan' }}
                                                 className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                             >
                                                 {item.displayId}
@@ -172,7 +173,10 @@ const SuperAdminAllStatusTable = ({
 
 const LpjBsCheck = () => {
     const { theme } = useTheme()
-    const [activeTab, setActiveTab] = useState('pending')
+    // Bagian BO: tab dipulihkan saat kembali dari halaman Detail (lihat
+    // state `from`/`tab` yang dikirim lewat Link ke Detail di bawah).
+    const location = useLocation()
+    const [activeTab, setActiveTab] = useState(location.state?.tab || 'pending')
     const [data, setData] = useState({ lpj: [] })
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
     const [approvedData, setApprovedData] = useState({ lpj: [] })
@@ -505,134 +509,54 @@ const LpjBsCheck = () => {
         })
     }
 
-    // Handle Approve
+    // Handle Approve -- aturan transisinya di utils/approvalRules.js (Bagian BO),
+    // dipakai bersama tombol Setujui di halaman Detail.
     const handleApprove = (item) => {
         openModal({
             title: 'Konfirmasi Approve',
             message: `Apakah Anda yakin ingin menyetujui LPJ Bon Sementara dengan Nomor Dokumen ${item.displayId}?`,
             onConfirm: async () => {
                 try {
-                    const uid = localStorage.getItem('userUid')
-                    const userRole = localStorage.getItem('userRole')
-                    const lpjRef = doc(db, 'lpj', item.id)
+                    const result = await approveWorkflowDoc('lpj', item)
+                    if (!result) {
+                        toast.error('Anda tidak berhak menyetujui dokumen ini pada tahap saat ini.')
+                        return
+                    }
+                    const { updatedData, newStatus, notifyError } = result
 
-                    // Cek apakah UID termasuk dalam super admin, validator, reviewer1, atau reviewer2
-                    const isSuperAdmin = userRole === 'Super Admin'
-                    const isValidator = item.user.validator.includes(uid)
-                    const isReviewer1 = item.user.reviewer1.includes(uid)
-                    const isReviewer2 = item.user.reviewer2.includes(uid)
-                    const isValidatorAndReviewer1 = isValidator && isReviewer1
+                    const shouldRemoveFromPending = localStorage.getItem('userRole') !== 'Super Admin' || newStatus === 'Disetujui'
 
-                    let updateData = {}
-                    const newStatusHistory = {
-                        timestamp: new Date().toISOString(),
-                        actor: uid
+                    if (shouldRemoveFromPending) {
+                        setData((prevData) => ({
+                            lpj: prevData.lpj.filter((r) => r.id !== item.id)
+                        }))
+                    } else {
+                        setData((prevData) => ({
+                            lpj: prevData.lpj.map((r) => (r.id === item.id ? updatedData : r))
+                        }))
                     }
 
-                    if (isSuperAdmin) {
-                        // Super Admin approval logic
-                        if (item.status === 'Diajukan') {
-                            newStatusHistory.status = 'Disetujui oleh Super Admin (Pengganti Validator)'
-                            updateData = {
-                                status: 'Divalidasi',
-                                approvedByValidator: false,
-                                approvedBySuperAdmin: true
-                            }
-                        } else if (item.status === 'Divalidasi') {
-                            newStatusHistory.status = 'Disetujui oleh Super Admin (Pengganti Reviewer 1)'
-                            updateData = {
-                                status: 'Diproses',
-                                approvedByReviewer1Status: 'superadmin',
-                                approvedBySuperAdmin: true
-                            }
-                        } else if (item.status === 'Diproses') {
-                            newStatusHistory.status = 'Disetujui oleh Super Admin (Pengganti Reviewer 2)'
-                            updateData = {
-                                status: 'Disetujui',
-                                approvedByReviewer2Status: 'superadmin',
-                                approvedBySuperAdmin: true
-                            }
-                        }
-                    } else if (item.status === 'Diajukan') {
-                        if (isValidatorAndReviewer1) {
-                            newStatusHistory.status = 'Disetujui oleh Reviewer 1 Sekaligus Validator'
-                            updateData = {
-                                status: 'Diproses',
-                                approvedByValidator: true,
-                                approvedByReviewer1: true,
-                                approvedByReviewer1Status: 'reviewer'
-                            }
-                        } else if (isValidator) {
-                            newStatusHistory.status = 'Disetujui oleh Validator'
-                            updateData = {
-                                status: 'Divalidasi',
-                                approvedByValidator: true
-                            }
-                        }
-                    } else if (item.status === 'Divalidasi' && isReviewer1) {
-                        newStatusHistory.status = 'Disetujui oleh Reviewer 1'
-                        updateData = {
-                            status: 'Diproses',
-                            approvedByReviewer1: true,
-                            approvedByReviewer1Status: 'reviewer'
-                        }
-                    } else if (item.status === 'Diproses' && isReviewer2) {
-                        if (
-                            item.approvedByReviewer1Status === 'reviewer' ||
-                            item.approvedByReviewer1Status === 'superadmin'
-                        ) {
-                            newStatusHistory.status = 'Disetujui oleh Reviewer 2'
-                            updateData = {
-                                status: 'Disetujui',
-                                approvedByReviewer2: true,
-                                approvedByReviewer2Status: 'reviewer'
-                            }
-                        }
-                    }
+                    // Update approved list dengan data terbaru dari Firestore
+                    setApprovedData((prevData) => {
+                        const existingIndex = prevData.lpj.findIndex((r) => r.id === item.id)
+                        const newList = [...prevData.lpj]
 
-                    // Update the document
-                    if (Object.keys(updateData).length > 0) {
-                        // Add statusHistory to updateData
-                        updateData.statusHistory = arrayUnion(newStatusHistory)
-
-                        // Update Firestore
-                        await updateDoc(lpjRef, updateData)
-
-                        // Get updated document after update
-                        const updatedDoc = await getDoc(lpjRef)
-                        const updatedData = { id: updatedDoc.id, ...updatedDoc.data() }
-
-                        const shouldRemoveFromPending = !isSuperAdmin || updateData.status === 'Disetujui'
-
-                        if (shouldRemoveFromPending) {
-                            setData((prevData) => ({
-                                lpj: prevData.lpj.filter((r) => r.id !== item.id)
-                            }))
+                        if (existingIndex !== -1) {
+                            newList[existingIndex] = updatedData
                         } else {
-                            setData((prevData) => ({
-                                lpj: prevData.lpj.map((r) => (r.id === item.id ? updatedData : r))
-                            }))
+                            newList.unshift(updatedData)
                         }
 
-                        // Update approved list dengan data terbaru dari Firestore
-                        setApprovedData((prevData) => {
-                            const existingIndex = prevData.lpj.findIndex((r) => r.id === item.id)
-                            const newLpj = [...prevData.lpj]
+                        return {
+                            lpj: newList
+                        }
+                    })
 
-                            if (existingIndex !== -1) {
-                                newLpj[existingIndex] = updatedData
-                            } else {
-                                newLpj.unshift(updatedData)
-                            }
-
-                            return {
-                                lpj: newLpj
-                            }
-                        })
-
-                        toast.success('LPJ berhasil disetujui')
-                        closeModal()
+                    toast.success('LPJ berhasil disetujui')
+                    if (notifyError) {
+                        toast.warning('Disetujui, tapi email ke Finance (form + lampiran) gagal terkirim. Coba cetak & kirim manual.')
                     }
+                    closeModal()
                 } catch (error) {
                     console.error('Error approving lpj:', error?.code, error?.message, error)
                     toast.error('Gagal menyetujui LPJ Bon Sementara')
@@ -660,144 +584,7 @@ const LpjBsCheck = () => {
         }
 
         try {
-            const uid = localStorage.getItem('userUid')
-            const userRole = localStorage.getItem('userRole')
-            const lpjRef = doc(db, 'lpj', selectedReport.id)
-
-            // Cek apakah UID termasuk dalam super admin, validator reviewer1, atau reviewer2
-            const isSuperAdmin = userRole === 'Super Admin'
-            const isValidator = selectedReport.user.validator.includes(uid)
-            const isReviewer1 = selectedReport.user.reviewer1.includes(uid)
-            const isReviewer2 = selectedReport.user.reviewer2.includes(uid)
-            const isValidatorAndReviewer1 = isValidator && isReviewer1
-
-            let updateData = {}
-
-            // PENTING: cabang ditentukan dari selectedReport.status (tahap approval
-            // saat ini), BUKAN dari field approvedByValidatorStatus/
-            // approvedByReviewer1Status -- field itu HANYA pernah diisi lewat alur
-            // reject ini sendiri, TIDAK PERNAH diisi saat approve normal
-            // (handleApprove cuma set approvedByValidator: true / boolean, bukan
-            // approvedByValidatorStatus). Kalau reject dicabangkan dari field itu,
-            // Reviewer1/Reviewer2 murni (bukan Validator) yang menolak dokumen yang
-            // sudah lolos tahap sebelumnya secara normal akan selalu jatuh ke
-            // updateData kosong {} -- updateDoc(ref, {}) sukses tanpa efek apa pun,
-            // sementara UI optimis menghapus item + toast sukses, padahal status di
-            // Firestore tidak berubah (baru ketahuan setelah reload).
-            if (isSuperAdmin) {
-                // Super Admin rejection logic
-                if (selectedReport.status === 'Diajukan') {
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByValidatorStatus: 'superadmin',
-                        rejectedBySuperAdmin: true,
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Super Admin (Pengganti Validator)',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else if (selectedReport.status === 'Divalidasi') {
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByReviewer1Status: 'superadmin',
-                        rejectedBySuperAdmin: true,
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Super Admin (Pengganti Reviewer 1)',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else if (selectedReport.status === 'Diproses') {
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByReviewer2Status: 'superadmin',
-                        rejectedBySuperAdmin: true,
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Super Admin (Pengganti Reviewer 2)',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else {
-                    throw new Error('LPJ Bon Sementara ini tidak bisa ditolak pada status saat ini.')
-                }
-            } else if (selectedReport.status === 'Diajukan') {
-                if (isValidatorAndReviewer1) {
-                    // User is both validator and reviewer1, reject with both roles
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByValidatorStatus: 'validator',
-                        approvedByReviewer1Status: 'reviewer',
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion(
-                            {
-                                status: 'Ditolak oleh Reviewer 1',
-                                timestamp: new Date().toISOString(),
-                                actor: uid,
-                                reason: rejectReason || 'Alasan tidak diberikan'
-                            }
-                        )
-                    }
-                } else if (isValidator) {
-                    // Regular validator rejection
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByValidatorStatus: 'validator',
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Validator',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else {
-                    throw new Error('Anda tidak memiliki akses untuk menolak lpj ini.')
-                }
-            } else if (selectedReport.status === 'Divalidasi') {
-                if (isReviewer1) {
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByReviewer1Status: 'reviewer',
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Reviewer 1',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else {
-                    throw new Error('Anda tidak memiliki akses untuk menolak lpj ini.')
-                }
-            } else if (selectedReport.status === 'Diproses') {
-                if (isReviewer2) {
-                    updateData = {
-                        status: 'Ditolak',
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Reviewer 2',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else {
-                    throw new Error('Anda tidak memiliki akses untuk menolak lpj ini.')
-                }
-            } else {
-                throw new Error('LPJ Bon Sementara ini tidak bisa ditolak pada status saat ini.')
-            }
-
-            // Update the document
-            await updateDoc(lpjRef, updateData)
+            await rejectWorkflowDoc('lpj', selectedReport, rejectReason)
 
             // Remove the rejected item from the list
             setData(prevData => ({
@@ -808,7 +595,7 @@ const LpjBsCheck = () => {
             handleCloseRejectModal()
         } catch (error) {
             console.error('Error rejecting lpj:', error?.code, error?.message, error)
-            toast.error('Gagal menolak LPJ Bon Sementara')
+            toast.error(error?.message?.includes('tidak') ? error.message : 'Gagal menolak LPJ Bon Sementara')
         }
     }
 
@@ -1102,7 +889,7 @@ const LpjBsCheck = () => {
                                                     <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                                     <td className="px-4 py-2 border dark:border-gray-600">
                                                         <Link
-                                                            to={`/lpj/${item.id}`}
+                                                            to={`/lpj/${item.id}`} state={{ from: '/lpj/cek-pengajuan', tab: activeTab }}
                                                             className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                         >
                                                             {item.displayId}
@@ -1241,7 +1028,7 @@ const LpjBsCheck = () => {
                                                         <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                                         <td className="p-4 border dark:border-gray-600">
                                                             <Link
-                                                                to={`/lpj/${item.id}`}
+                                                                to={`/lpj/${item.id}`} state={{ from: '/lpj/cek-pengajuan', tab: activeTab }}
                                                                 className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
@@ -1333,7 +1120,7 @@ const LpjBsCheck = () => {
                                                         <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                                         <td className="p-4 border dark:border-gray-600">
                                                             <Link
-                                                                to={`/lpj/${item.id}`}
+                                                                to={`/lpj/${item.id}`} state={{ from: '/lpj/cek-pengajuan', tab: activeTab }}
                                                                 className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}

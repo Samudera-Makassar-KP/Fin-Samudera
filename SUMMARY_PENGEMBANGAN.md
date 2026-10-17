@@ -2760,3 +2760,66 @@ Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasiona
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-10-03, diverifikasi hash bundle live (`main.84c80ac9.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: ketik "10,5" di field Liter (RBS BBM/Operasional/Umum), konfirmasi diterima & tersimpan benar sebagai 10.5
+
+---
+
+# BAGIAN BO — Catatan SMDR-Finance: Norek PDF BS, Lampiran BS > 3 Juta, Approval dari Detail, PDF Gabungan ke Finance, OCR Lampiran LPJ (2026-10-17)
+
+## 77.1 Permintaan User (Catatan SMDR-Finance)
+
+1. Tambah nomor rekening di form BS (model sama dengan RBS).
+2. Upload lampiran di BS kalau nominal melebihi Rp3 juta.
+3. Email ke Finance untuk LPJ yang dibuat tanpa BS dari sistem ini masih menyebut "BS".
+4. Kalau RBS sudah dicentang Transferred, tombol email reminder Finance tidak bisa ditekan lagi.
+5. Saat LPJ/RBS Disetujui, langsung terkirim ke semua Validator unit masing-masing, dengan form + lampiran digabung jadi satu.
+6. Tombol approval di halaman Detail BS/RBS/LPJ.
+7. Navigasi "kembali" yang rapi untuk approver.
+8. "Lihat bukti pengembalian" bisa di-print.
+9. Kalau bukti pengembalian dilampirkan di lampiran LPJ biasa, sistem membacanya otomatis.
+
+## 77.2 Klarifikasi (lewat AskUserQuestion, sebelum implementasi)
+
+- Poin 1: form INPUT BS ternyata sudah menampilkan Nomor Rekening (sama seperti RBS) -- yang belum ada adalah kotak rekening di **PDF cetak BS** (PDF RBS punya kotak "Nama Account / Bank Penerima / No Rekening"). Itu yang dikerjakan.
+- Poin 3: isi email yang menyebut BS (subjek "LPJ BS" + baris Nomor/Jumlah BS) -- BUKAN email BS terpisah.
+- Poin 5: penerima = SEMUA user role Validator yang Unit Bisnis-nya sama dengan dokumen.
+- Poin 7: setelah approve/tolak di Detail, dan tombol Kembali, membawa ke daftar Cek Pengajuan asal (tab yang sama).
+- Poin 9: bukti transfer yang ditaruh di Lampiran LPJ (bukan di kolom Upload Bukti Pengembalian).
+
+## 77.3 Implementasi
+
+- **Poin 1 -- `src/utils/BsPdf.jsx`**: kotak `bankInfo` (border terpisah, bukan shorthand -- lihat Bagian BG) di footer kiri, di bawah "Diajukan oleh".
+- **Poin 2 -- `src/components/FormBs.jsx` + `src/constants/bonSementara.js` (baru)**: kolom lampiran (multi-file PDF/JPG/PNG, digabung jadi 1 PDF seperti RBS) muncul & WAJIB hanya kalau total BS > `BS_LAMPIRAN_THRESHOLD` (3.000.000). Nomor BS final baru diketahui di dalam transaksi, jadi lampiran diupload DULU dengan kunci unik per-upload (`BSLAMPIRAN-<uid>-<timestamp>`, lolos mode `displayIdOwners` di `uploadOwnedFile` karena belum terdaftar), lalu `lampiranUrl` ditulis di transaksi yang SAMA dengan dokumen BS -- tidak mungkin ada BS > 3 juta tersimpan tanpa lampiran. `DetailBs.jsx`: tombol "Lihat Lampiran" kalau ada.
+- **Poin 3 -- `functions/index.js`**: `resolveLpjBsFromSystem()` mengecek apakah `nomorBS` LPJ ada di koleksi `bonSementara`; hasilnya disimpan sebagai `bsFromSystem` saat LPJ dibuat (`notifyValidatorOnCreateLPJ`). `getLpjLabel()` -> "LPJ" atau "LPJ BS" dipakai di semua subjek/isi email LPJ (18 tempat di `notifyReviewersAndUserLPJ`). `createEmailTemplate` tidak menampilkan baris Nomor BS/Jumlah BS kalau `bsFromSystem === false`.
+- **Poin 4 -- `ReimbursementTable.jsx`**: tombol amplop `disabled` + handler menolak kalau `item.transferred`; `sendRbsFinanceReminder` juga menolak di server.
+- **Poin 5 -- `src/utils/approvalWorkflow.js` (baru) + `sendApprovedDocToValidators` (callable baru)**: tepat setelah RBS/LPJ mencapai "Disetujui", client men-generate & mengunggah PDF form resmi (react-pdf hanya bisa di client), lalu callable mengambil form + `lampiranUrl`, menggabungkan dengan `pdf-lib` (dependency baru di functions), dan mengirim ke semua Validator unit tsb. Idempoten (`approvedNotifClaimedAt`/`approvedNotifSentAt`, klaim via transaksi), hanya mau fetch URL Storage project sendiri, hanya approver dokumen/Super Admin yang boleh memanggil. Lampiran > 18MB tidak dilampirkan (batas Gmail), diganti catatan "buka lewat website". Gagal kirim TIDAK membatalkan approval -- UI memberi peringatan.
+- **Poin 6 -- `src/utils/approvalRules.js` (baru) + `src/components/DetailApprovalActions.jsx` (baru)**: aturan approve/tolak yang tadinya tersalin 3x di `BsCheck`/`ReimbursementCheck`/`LpjBsCheck` dipindah ke satu modul murni (dites di `approvalRules.test.js`), dipakai bersama oleh halaman Cek Pengajuan DAN tombol Setujui/Tolak baru di ketiga halaman Detail. Tombol hanya muncul untuk approver yang sedang ditunggu (atau Super Admin).
+- **Poin 7**: Link dari Cek Pengajuan ke Detail membawa `state: { from, tab }`; halaman Cek Pengajuan memulihkan tab dari state itu. Detail punya tombol "Kembali" (ke daftar asal; kalau tidak ada asal -> mundur di riwayat browser; kalau dibuka langsung dari email -> Dashboard). Setelah approve/tolak dari Detail -> kembali ke daftar Cek Pengajuan.
+- **Poin 8 -- `ModalPDF.jsx`**: tombol Print. Gambar (bukti pengembalian JPG/PNG) dicetak lewat jendela kecil berisi `<img>` yang langsung `print()`; PDF dibuka di tab baru (viewer PDF browser punya tombol print sendiri, `print()` dari iframe lintas-domain diblokir browser).
+- **Poin 9 -- `autoValidatePengembalianFromLampiran` (trigger baru, `onDocumentWritten lpj/{docId}`)**: jalan saat LPJ dibuat atau `lampiranUrl` berubah, kalau `sisaLebih > 0` dan pengembalian belum valid. OCR (Cloud Vision) lampiran dari halaman TERAKHIR mundur (maks 30 halaman, 5 per request), berhenti di halaman pertama yang memuat nominal `sisaLebih` (`textContainsAmount`) DAN kata khas bukti transfer (transfer/berhasil/rekening/nama bank/dst) -- supaya nota belanja yang kebetulan bernilai sama tidak dianggap bukti. Kalau ketemu: `pengembalianStatus: 'valid'`, `pengembalianSource: 'lampiran_lpj'`, `pengembalianBuktiUrl` = lampiran. Kalau TIDAK ketemu: tidak menulis apa pun (tidak menandai "tidak sesuai").
+
+**Catatan lingkungan**: mesin ini belum punya `node_modules` dan npm gagal verifikasi SSL registry (sertifikat proxy/antivirus perusahaan hanya dikenal Windows). Solusi aman tanpa mematikan verifikasi SSL: `NODE_OPTIONS=--use-system-ca` saat `npm ci`/`npm install`.
+
+## 77.4 Task Development — Bagian BO
+
+- [x] `BsPdf.jsx`: kotak rekening (poin 1)
+- [x] `FormBs.jsx` + `constants/bonSementara.js`: lampiran wajib BS > 3 juta, atomik dengan transaksi nomor BS (poin 2)
+- [x] `DetailBs.jsx`: tombol "Lihat Lampiran"
+- [x] `functions/index.js`: `bsFromSystem` + label LPJ di semua email LPJ (poin 3)
+- [x] `ReimbursementTable.jsx` + `sendRbsFinanceReminder`: kunci reminder setelah Transferred (poin 4)
+- [x] `approvalWorkflow.js` + `sendApprovedDocToValidators` + `pdf-lib`: PDF gabungan form+lampiran ke semua Validator unit (poin 5)
+- [x] `approvalRules.js` + refactor 3 halaman Cek Pengajuan + `DetailApprovalActions.jsx` di 3 halaman Detail (poin 6)
+- [x] Navigasi Kembali + pemulihan tab (poin 7)
+- [x] `ModalPDF.jsx`: tombol Print (poin 8)
+- [x] `autoValidatePengembalianFromLampiran` (poin 9)
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 28 test PASS
+- [x] `CI=true npm test -- --watchAll=false` -- 132 test PASS (19 test baru di `approvalRules.test.js` & `bonSementara.test.js`)
+- [x] `CI=true npm run build` sukses tanpa warning
+- [ ] Deploy ke produksi (hosting + functions)
+- [ ] Tes manual: ajukan BS > Rp3 juta tanpa lampiran -> ditolak form; dengan lampiran -> "Lihat Lampiran" muncul di Detail BS; cetak PDF BS -> kotak rekening muncul
+- [ ] Tes manual: ajukan LPJ dengan nomor BS diketik manual (bukan dari daftar) -> email ke Validator berjudul "Permintaan Approval LPJ" tanpa baris Nomor/Jumlah BS
+- [ ] Tes manual: RBS Disetujui + klik Transferred -> ikon amplop abu-abu & tidak bisa diklik
+- [ ] Tes manual: sebagai Reviewer 2, buka Detail RBS/LPJ dari Cek Pengajuan -> klik Setujui -> kembali ke daftar; semua Validator unit tsb menerima email "... Disetujui - Siap Diproses" dengan 1 PDF (form + lampiran)
+- [ ] Tes manual: tombol Kembali di Detail kembali ke tab Cek Pengajuan yang sama
+- [ ] Tes manual: Detail LPJ -> "Lihat Bukti" (gambar) -> tombol Print membuka dialog cetak
+- [ ] Tes manual: ajukan LPJ dengan sisa lebih, bukti transfer pengembalian ditaruh di halaman terakhir Lampiran (tanpa upload bukti terpisah) -> beberapa detik kemudian status pengembalian di Detail LPJ jadi valid

@@ -73,6 +73,14 @@ const styles = StyleSheet.create({
         height: '100%',
         justifyContent: 'center'
     },
+    // Bagian BO: kotak rekening tujuan pencairan, disamakan persis dengan
+    // `bankInfo` di ReimbursementPdf.jsx (borderWidth terpisah, bukan shorthand
+    // `border` -- lihat catatan Bagian BG di tableContainer).
+    bankInfo: {
+        borderWidth: 2,
+        fontWeight: 'semibold',
+        padding: 4
+    },
     footer: {
         marginTop: 8,
         fontSize: 8,
@@ -409,6 +417,28 @@ const BsPDF = ({ bonSementaraDetail, approvedReviewers, editHistory = [] }) => {
                                 >
                                     Dokumen Ini Sudah Mendukung Signature Digital
                                 </Text>
+                                <View
+                                    style={[
+                                        styles.bankInfo,
+                                        { flexDirection: 'row', columnGap: 4, alignItems: 'flex-start', alignSelf: 'flex-start', marginTop: 6 }
+                                    ]}
+                                >
+                                    <View style={{ flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+                                        <Text>Nama Account</Text>
+                                        <Text>Bank Penerima</Text>
+                                        <Text>No Rekening</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+                                        <Text>:</Text>
+                                        <Text>:</Text>
+                                        <Text>:</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'column', gap: 2, paddingRight: 32 }}>
+                                        <Text>{bonSementaraDetail.user?.nama || '-'}</Text>
+                                        <Text>{bonSementaraDetail.user?.bankName || '-'}</Text>
+                                        <Text>{bonSementaraDetail.user?.accountNumber || '-'}</Text>
+                                    </View>
+                                </View>
                             </View>
                             <View
                                 style={{
