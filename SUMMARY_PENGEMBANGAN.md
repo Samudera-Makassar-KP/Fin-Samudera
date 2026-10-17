@@ -2865,3 +2865,27 @@ Saat "Reminder ke Finance", form RBS dan LPJ langsung menyatu dengan lampirannya
 - [ ] Tes manual: RBS Disetujui (belum Transferred) -> klik amplop -> email Finance berisi 1 PDF = form RBS + lampiran
 - [ ] Tes manual: LPJ Disetujui -> ikon amplop muncul di tabel LPJ -> email Finance berisi 1 PDF = form LPJ + lampiran
 - [ ] Tes manual: BS > Rp3 juta Disetujui -> reminder berisi form BS + lampiran; BS <= Rp3 juta -> form BS saja
+
+---
+
+# BAGIAN BQ — Ikon Reminder Finance Hilang untuk BS Reported & RBS Transferred (2026-10-17)
+
+## 79.1 Permintaan User
+
+Kalau BS sudah Reported, ikon reminder ke Finance hilang; begitu pula di RBS (yang sudah Transferred).
+
+## 79.2 Implementasi
+
+- **`BsTable.jsx`**: BS Disetujui yang `lpjStatus` = "Sudah LPJ" (= ada LPJ Disetujui untuk nomor BS tsb, aturan yang sama dengan ikon "Reported") -> kolom Aksi menampilkan "-" alih-alih ikon amplop.
+- **`ReimbursementTable.jsx`**: ikon amplop TIDAK dirender sama sekali kalau `item.transferred` (Bagian BO cuma menguncinya jadi abu-abu); ikon centang "Transferred" tetap tampil.
+- **`functions/index.js`**: `createFinanceReminderHandler` dapat opsi `rejectReason(data)`; `sendBsFinanceReminder` menolak BS yang sudah punya LPJ Disetujui (`lpj where nomorBS == displayId`) -- penjaga di server, sejajar dengan penolakan RBS Transferred.
+
+## 79.3 Task Development — Bagian BQ
+
+- [x] `BsTable.jsx`: sembunyikan amplop untuk BS Reported
+- [x] `ReimbursementTable.jsx`: sembunyikan amplop untuk RBS Transferred
+- [x] `sendBsFinanceReminder`: tolak BS Reported di server
+- [x] `node --check` + functions jest 28 PASS + frontend 132 PASS + build sukses, config Firebase tertanam di bundle
+- [ ] Deploy ke produksi (functions: `sendBsFinanceReminder` + hosting)
+- [ ] Tes manual: tabel "Bon Sementara Diajukan" -- BS dengan "Sudah LPJ" tidak lagi menampilkan ikon amplop; BS Disetujui yang "Belum LPJ"/"Sedang LPJ" tetap ada amplopnya
+- [ ] Tes manual: tabel Reimbursement -- RBS yang sudah Transferred hanya menampilkan ikon centang, tanpa amplop

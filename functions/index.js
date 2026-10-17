@@ -796,7 +796,7 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
 // Unit Bisnis dengan pengaju (defense-in-depth, jangan percaya validatorUid
 // dari client). Bedanya: email sekarang melampirkan form + lampiran dokumen
 // yang SUDAH DIGABUNG jadi satu PDF (buildFormWithLampiranAttachments).
-const createFinanceReminderHandler = ({ collectionName, idField, notFoundLabel, ownLabel, rejectIfTransferred = false, describe }) =>
+const createFinanceReminderHandler = ({ collectionName, idField, notFoundLabel, ownLabel, rejectIfTransferred = false, rejectReason, describe }) =>
     async (request) => {
         if (!request.auth?.uid) {
             throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
@@ -821,6 +821,10 @@ const createFinanceReminderHandler = ({ collectionName, idField, notFoundLabel, 
         // Bagian BO: RBS yang sudah ditandai Transferred tidak perlu reminder.
         if (rejectIfTransferred && data.transferred) {
             throw new HttpsError("failed-precondition", `${notFoundLabel} ini sudah ditandai Transferred.`);
+        }
+        const blockedReason = rejectReason ? await rejectReason(data) : null;
+        if (blockedReason) {
+            throw new HttpsError("failed-precondition", blockedReason);
         }
 
         const [validatorData, submitterData] = await Promise.all([
@@ -869,6 +873,15 @@ exports.sendBsFinanceReminder = onCall({ memory: "512MiB", timeoutSeconds: 120 }
     idField: "bsId",
     notFoundLabel: "Bon Sementara",
     ownLabel: "BS",
+    // Bagian BQ: BS yang sudah Reported (ada LPJ Disetujui untuk nomor BS ini,
+    // aturan sama dengan "Sudah LPJ" di BsTable.jsx) tidak perlu reminder lagi.
+    rejectReason: async (data) => {
+        const lpjSnapshot = await db.collection("lpj")
+            .where("nomorBS", "==", data.displayId)
+            .get();
+        const reported = lpjSnapshot.docs.some((lpjDoc) => lpjDoc.data().status === "Disetujui");
+        return reported ? "BS ini sudah Reported (LPJ Disetujui), reminder ke Finance tidak diperlukan." : null;
+    },
     describe: async (data) => ({
         subject: `Reminder Pencairan BS - ${data.displayId}`,
         request: "Mohon dibantu maker atas BS berikut:"

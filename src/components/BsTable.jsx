@@ -717,7 +717,11 @@ const BsTable = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
-                                                    {item.status === 'Disetujui' ? (
+                                                    {item.status === 'Disetujui' && lpjStatus[item.id]?.status === 'Sudah LPJ' ? (
+                                                        // Bagian BQ: BS sudah Reported (LPJ-nya Disetujui) -> urusan
+                                                        // pencairan BS sudah selesai, reminder ke Finance tidak relevan.
+                                                        <span className="text-gray-400 dark:text-gray-500" title="Reported -- reminder tidak diperlukan">-</span>
+                                                    ) : item.status === 'Disetujui' ? (
                                                         <button
                                                             className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                                             onClick={() => handleSendFinanceReminder(item)}

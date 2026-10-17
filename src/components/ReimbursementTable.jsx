@@ -540,20 +540,22 @@ const ReimbursementTable = () => {
                                                                     <FontAwesomeIcon icon={faMoneyBillWave} />
                                                                 </button>
                                                             )}
-                                                            {/* Dana sudah dikonfirmasi diterima (Transferred) -> reminder ke
-                                                                Finance tidak relevan lagi, tombolnya dikunci supaya Finance
-                                                                tidak dapat email "mohon dibantu maker" untuk yang sudah cair. */}
-                                                            <button
-                                                                className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
-                                                                onClick={() => handleSendFinanceReminder(item)}
-                                                                disabled={item.transferred || reminderSendingId === item.id}
-                                                                title={item.transferred ? 'Sudah Transferred -- reminder tidak diperlukan' : 'Send Reminder to Finance'}
-                                                            >
-                                                                <FontAwesomeIcon
-                                                                    icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
-                                                                    className={reminderSendingId === item.id ? 'animate-spin' : ''}
-                                                                />
-                                                            </button>
+                                                            {/* Bagian BQ: dana sudah dikonfirmasi diterima (Transferred) ->
+                                                                reminder ke Finance tidak relevan lagi, ikonnya disembunyikan
+                                                                (sebelumnya cuma abu-abu/dikunci, Bagian BO). */}
+                                                            {!item.transferred && (
+                                                                <button
+                                                                    className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+                                                                    onClick={() => handleSendFinanceReminder(item)}
+                                                                    disabled={reminderSendingId === item.id}
+                                                                    title="Send Reminder to Finance"
+                                                                >
+                                                                    <FontAwesomeIcon
+                                                                        icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
+                                                                        className={reminderSendingId === item.id ? 'animate-spin' : ''}
+                                                                    />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     ) : (
                                                         <button
