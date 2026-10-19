@@ -2923,7 +2923,7 @@ Di Rekapan, khusus Super Admin, 3 kartu:
 - [x] Integrasi di `RekapanUnitBisnis.jsx` (Super Admin only)
 - [x] `firestore.rules`: `rekapanSettings`
 - [x] `CI=true npm test` -- 140 test PASS; `CI=true npm run build` sukses tanpa warning; `.env` ada & config Firebase tertanam di bundle
-- [ ] Deploy ke produksi (firestore rules + hosting)
+- [x] Deploy ke produksi -- sukses 2026-10-19: firestore rules + hosting, live `main.c9faa30c.js` cocok dengan build lokal, config Firebase tertanam
 - [ ] Tes manual (login Super Admin): buka Rekapan -> 3 kartu muncul di atas tabel; angka kartu 2 cocok dengan penjumlahan tabel bulan Jan s.d. bulan ini
 - [ ] Tes manual: ubah target % di kartu 3 -> Simpan -> refresh halaman, nilai tetap tersimpan; nominal target berubah
 - [ ] Tes manual: klik baris BBM di panel analisa -> plat terboros & saran BBM muncul; ganti filter Unit Bisnis -> semua angka ikut berubah
