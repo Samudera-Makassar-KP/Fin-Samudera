@@ -2928,3 +2928,16 @@ Di Rekapan, khusus Super Admin, 3 kartu:
 - [ ] Tes manual: ubah target % di kartu 3 -> Simpan -> refresh halaman, nilai tetap tersimpan; nominal target berubah
 - [ ] Tes manual: klik baris BBM di panel analisa -> plat terboros & saran BBM muncul; ganti filter Unit Bisnis -> semua angka ikut berubah
 - [ ] Tes manual: login Validator/Admin -> kartu TIDAK muncul
+
+## 80.5 Revisi (2026-10-19) -- Masukan User: "Bingung Cara Baca" & "Card Harus Ikut Filter"
+
+**Temuan data** (dicek read-only ke Firestore produksi): data 2026 punya **1.974 nama kategori berbeda** -- mayoritas item LPJ Marketing/Operasional yang namanya diketik bebas (LO/LO, STRIPPING, DEMMURAGE, tiket pesawat, dst). Total biaya (~Rp2,78 M Jan-Okt 2026) memang benar, tapi tersebar ke ribuan kategori kecil, sehingga kategori "terbesar" (BBM) cuma 3,4% -- ditambah daftar tanpa judul kolom, membingungkan. Saran untuk Admin: gabungkan label-label sejenis lewat "Kelola Kategori" supaya analisa per bagian lebih bermakna.
+
+**Perbaikan:**
+- Kartu & analisa sekarang mengikuti SEMUA filter: Unit Bisnis, **Bulan** (bulan dipilih -> bulan itu vs bulan yang sama tahun lalu, target = bulan itu tahun depan, tanpa proyeksi), dan **Tampilkan Rekapan** (hanya kategori yang dipilih; kedua tabel BBM = kategori "BBM"). Helper baru `filterCategories` (+1 test).
+- Memo `costInsights` dipindah ke SETELAH deklarasi `tableFilter` (sebelumnya dideklarasi lebih awal).
+- Tampilan ditulis ulang: label periode eksplisit di tiap kartu (mis. "2 · Biaya Jan-Okt 2026", "Pembanding (Jan-Okt 2025)"), baris label-nilai rata kanan; panel analisa jadi **tabel berjudul kolom** (Bagian | periode lalu | periode ini | Naik/Turun | Porsi | Target) dengan baris **Total**, hanya **10 bagian terbesar** + satu baris "Bagian lainnya (N)" yang merangkum sisanya (bisa "tampilkan semua"). Klik baris -> rincian Data + Saran penghematan.
+
+- [x] Revisi diimplementasi; eslint bersih; 141 test PASS; build sukses; config Firebase tertanam
+- [ ] Deploy hosting revisi
+- [ ] Tes manual: ganti filter Bulan/Unit/Tampilkan Rekapan -> angka kartu & tabel ikut berubah; label periode di kartu sesuai filter

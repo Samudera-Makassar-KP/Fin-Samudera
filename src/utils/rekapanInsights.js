@@ -31,6 +31,14 @@ export function totalsByCategory(categoryData, bbmTotals, monthIndexes) {
     return result
 }
 
+// Bagian BR (revisi): kartu mengikuti filter "Tampilkan Rekapan" -- kalau
+// user memilih sebagian rekapan saja, hanya kategori itu yang dihitung.
+// `allowedCategories` null/kosong = semua kategori.
+export function filterCategories(byCategory, allowedCategories) {
+    if (!allowedCategories || allowedCategories.size === 0) return byCategory
+    return Object.fromEntries(Object.entries(byCategory || {}).filter(([category]) => allowedCategories.has(category)))
+}
+
 export const sumValues = (byCategory) => Object.values(byCategory || {}).reduce((total, value) => total + value, 0)
 
 export const percentChange = (previous, current) => (previous > 0 ? ((current - previous) / previous) * 100 : null)

@@ -3,6 +3,7 @@ import {
     buildCategoryDetail,
     buildCategorySuggestions,
     buildCostOutlook,
+    filterCategories,
     monthRange,
     percentChange,
     projectFullYear,
@@ -20,6 +21,15 @@ describe('totalsByCategory', () => {
         const categoryData = { ATK: { 'PT A': months({ 0: 100, 5: 50 }), 'PT B': months({ 1: 20 }) } }
         const bbmTotals = { 'PT A': months({ 0: 300, 11: 999 }) }
         expect(totalsByCategory(categoryData, bbmTotals, monthRange(6))).toEqual({ [BBM_INSIGHT_KEY]: 300, ATK: 170 })
+    })
+})
+
+describe('filterCategories', () => {
+    it('hanya menyisakan kategori yang dipilih, kosong = semua', () => {
+        const byCat = { BBM: 10, ATK: 5, RTG: 1 }
+        expect(filterCategories(byCat, new Set(['BBM', 'RTG']))).toEqual({ BBM: 10, RTG: 1 })
+        expect(filterCategories(byCat, new Set())).toBe(byCat)
+        expect(filterCategories(byCat, null)).toBe(byCat)
     })
 })
 
