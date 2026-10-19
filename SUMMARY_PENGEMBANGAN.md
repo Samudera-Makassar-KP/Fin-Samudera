@@ -2939,5 +2939,5 @@ Di Rekapan, khusus Super Admin, 3 kartu:
 - Tampilan ditulis ulang: label periode eksplisit di tiap kartu (mis. "2 · Biaya Jan-Okt 2026", "Pembanding (Jan-Okt 2025)"), baris label-nilai rata kanan; panel analisa jadi **tabel berjudul kolom** (Bagian | periode lalu | periode ini | Naik/Turun | Porsi | Target) dengan baris **Total**, hanya **10 bagian terbesar** + satu baris "Bagian lainnya (N)" yang merangkum sisanya (bisa "tampilkan semua"). Klik baris -> rincian Data + Saran penghematan.
 
 - [x] Revisi diimplementasi; eslint bersih; 141 test PASS; build sukses; config Firebase tertanam
-- [ ] Deploy hosting revisi
+- [x] Deploy hosting revisi -- sukses 2026-10-19, live `main.e62b027c.js` cocok dengan build lokal, config Firebase tertanam
 - [ ] Tes manual: ganti filter Bulan/Unit/Tampilkan Rekapan -> angka kartu & tabel ikut berubah; label periode di kartu sesuai filter
