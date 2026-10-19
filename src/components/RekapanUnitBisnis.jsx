@@ -25,6 +25,14 @@ import {
     BBM_JENIS_OPTIONS
 } from '../utils/rekapanAggregation'
 import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from '../constants/rekapanSharing'
+import RekapanCostInsights from './RekapanCostInsights'
+import {
+    DEFAULT_TARGET_REDUCTION_PCT,
+    buildCategoryDetail,
+    buildCostOutlook,
+    monthRange,
+    totalsByCategory
+} from '../utils/rekapanInsights'
 
 // Sama seperti BUSINESS_UNITS di FormBs.jsx -- daftar semua Unit Bisnis untuk opsi
 // dropdown Admin/Super Admin ("Semua Unit Bisnis" melihat seluruhnya sekaligus).
@@ -186,6 +194,44 @@ const RekapanUnitBisnis = () => {
     }, [])
 
     const isAdmin = role === 'Admin' || role === 'Super Admin'
+    const isSuperAdmin = role === 'Super Admin'
+
+    // Bagian BR: target penurunan biaya tahun depan (kartu ke-3 Ringkasan
+    // Biaya). Disimpan di Firestore supaya sama untuk semua Super Admin.
+    const [targetReductionPct, setTargetReductionPct] = useState(DEFAULT_TARGET_REDUCTION_PCT)
+    const [isSavingTarget, setIsSavingTarget] = useState(false)
+
+    useEffect(() => {
+        if (!isSuperAdmin) return
+        const fetchTarget = async () => {
+            try {
+                const snapshot = await getDoc(doc(db, 'rekapanSettings', 'costTarget'))
+                const saved = Number(snapshot.data()?.targetReductionPct)
+                if (snapshot.exists() && Number.isFinite(saved)) setTargetReductionPct(saved)
+            } catch (error) {
+                console.error('Error fetching target penurunan biaya:', error?.code, error?.message, error)
+            }
+        }
+        fetchTarget()
+    }, [isSuperAdmin])
+
+    const handleSaveTarget = async (pct) => {
+        setIsSavingTarget(true)
+        try {
+            await setDoc(doc(db, 'rekapanSettings', 'costTarget'), {
+                targetReductionPct: pct,
+                updatedAt: new Date().toISOString(),
+                updatedBy: localStorage.getItem('userUid')
+            })
+            setTargetReductionPct(pct)
+            toast.success(`Target penurunan biaya disimpan: ${pct}%`)
+        } catch (error) {
+            console.error('Error saving target penurunan biaya:', error?.code, error?.message, error)
+            toast.error('Gagal menyimpan target penurunan biaya')
+        } finally {
+            setIsSavingTarget(false)
+        }
+    }
 
     // 2. Susun opsi checkbox Unit Bisnis sesuai role -- Admin/Super Admin bisa
     // pilih kombinasi bebas (1, beberapa, atau semua) dari 10 Unit Bisnis,
@@ -1056,6 +1102,34 @@ const RekapanUnitBisnis = () => {
         })
     }, [reimbursementDocs, lpjDocs, selectedYear, unitsFilter, sharingClassification, defaultPoolShares])
 
+    // Bagian BR: data pembanding untuk Ringkasan Biaya (Super Admin saja) --
+    // tahun sebelumnya dihitung dengan agregasi & filter yang SAMA dengan tabel.
+    // Tahun berjalan dibandingkan per periode yang sama (Jan s.d. bulan ini).
+    const insightMonthsElapsed = selectedYear.value === CURRENT_YEAR ? new Date().getMonth() + 1 : 12
+
+    const costInsights = useMemo(() => {
+        if (!isSuperAdmin) return null
+        const previousYear = selectedYear.value - 1
+        const aggregateOptions = { units: unitsFilter, sharingClassification, defaultPoolShares }
+        const previousCategoryData = aggregateByCategory(reimbursementDocs, lpjDocs, { ...aggregateOptions, year: previousYear, categoryGroups })
+        const previousBbmData = aggregateBbm(reimbursementDocs, lpjDocs, { ...aggregateOptions, year: previousYear })
+
+        const fullYear = monthRange(12)
+        const elapsed = monthRange(insightMonthsElapsed)
+        const outlook = buildCostOutlook({
+            prevFullByCat: totalsByCategory(previousCategoryData, previousBbmData.totals, fullYear),
+            prevSamePeriodByCat: totalsByCategory(previousCategoryData, previousBbmData.totals, elapsed),
+            currentByCat: totalsByCategory(categoryData, bbmData.totals, elapsed),
+            monthsElapsed: insightMonthsElapsed,
+            targetReductionPct
+        })
+        const details = Object.fromEntries(outlook.categories.map((row) => [
+            row.category,
+            buildCategoryDetail(row.category, { categoryData, bbmData, monthIndexes: elapsed })
+        ]))
+        return { outlook, details }
+    }, [isSuperAdmin, selectedYear, unitsFilter, sharingClassification, defaultPoolShares, categoryGroups, reimbursementDocs, lpjDocs, categoryData, bbmData, insightMonthsElapsed, targetReductionPct])
+
     const orderedCategories = useMemo(() => {
         const found = Object.keys(categoryData)
         const known = CATEGORY_ORDER.filter((c) => found.includes(c))
@@ -1570,6 +1644,18 @@ const RekapanUnitBisnis = () => {
                 </div>
             ) : (
                 <>
+                    {costInsights && (
+                        <RekapanCostInsights
+                            year={selectedYear.value}
+                            monthsElapsed={insightMonthsElapsed}
+                            outlook={costInsights.outlook}
+                            details={costInsights.details}
+                            getUnitLabel={getUnitLabel}
+                            targetPct={targetReductionPct}
+                            isSavingTarget={isSavingTarget}
+                            onSaveTarget={handleSaveTarget}
+                        />
+                    )}
                     {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable(
                         'BBM (Form Resmi) -- Total Biaya per Unit Bisnis',
                         bbmData.totals,

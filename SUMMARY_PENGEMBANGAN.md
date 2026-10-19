@@ -2889,3 +2889,42 @@ Kalau BS sudah Reported, ikon reminder ke Finance hilang; begitu pula di RBS (ya
 - [x] Deploy ke produksi -- sukses 2026-10-17, live `main.81f8957e.js` cocok dengan build lokal, config Firebase tertanam
 - [ ] Tes manual: tabel "Bon Sementara Diajukan" -- BS dengan "Sudah LPJ" tidak lagi menampilkan ikon amplop; BS Disetujui yang "Belum LPJ"/"Sedang LPJ" tetap ada amplopnya
 - [ ] Tes manual: tabel Reimbursement -- RBS yang sudah Transferred hanya menampilkan ikon centang, tanpa amplop
+
+---
+
+# BAGIAN BR — Rekapan (Super Admin): Ringkasan Biaya Tahun Lalu / Tahun Berjalan / Target Tahun Depan + Analisa per Bagian (2026-10-19)
+
+## 80.1 Permintaan User
+
+Di Rekapan, khusus Super Admin, 3 kartu:
+1. Pencapaian/biaya tahun sebelumnya.
+2. Tahun berjalan naik/turun berapa persen dari tahun sebelumnya -- tampilkan nominal & persentase.
+3. Target tahun depan: reduce biaya berapa %, plus analisa data & saran yang harus dilakukan per bagian (mis. BBM menampilkan data terkait BBM, ATK, dst).
+
+## 80.2 Keputusan Desain (diambil sendiri, bisa diubah)
+
+- Semua angka memakai agregasi yang SAMA dengan tabel Rekapan (`aggregateByCategory` + `aggregateBbm`), jadi sharing antar unit, entri manual, item dikecualikan, dan filter Unit Bisnis ikut berlaku -- kartu tidak pernah selisih dengan tabel.
+- "Tahun berjalan" = tahun yang dipilih di filter Tahun; "tahun lalu" = tahun itu - 1. Filter Bulan TIDAK berlaku untuk kartu (ringkasan tahunan).
+- Kartu 2 membandingkan PERIODE YANG SAMA: kalau tahun yang dipilih adalah tahun ini, Jan s.d. bulan berjalan vs Jan s.d. bulan yang sama tahun lalu (membandingkan 10 bulan dengan 12 bulan selalu terlihat "turun" palsu).
+- Kartu 3: target % disimpan di Firestore `rekapanSettings/costTarget` (default 10%, bisa diedit langsung di kartu oleh Super Admin). Target = proyeksi biaya setahun penuh tahun ini (rata-rata bulanan x 12) x (1 - target%).
+- Analisa per bagian = daftar kategori (BBM digabung jadi satu kategori "BBM (semua form)") diurutkan dari biaya terbesar; klik baris untuk melihat periode pembanding, total tahun lalu, unit penyumbang terbesar, khusus BBM: 3 plat terboros (biaya + liter) & porsi jenis BBM, lalu saran. Saran = aturan dari data (naik >= 10% -> prioritas; turun <= -5% -> pertahankan; porsi >= 25% -> paling berdampak; 1 unit >= 50% -> review unit itu; BBM: plat terboros, porsi BBM non-subsidi >= 50%, kuota liter + foto odometer) + saran praktis per jenis biaya (ATK, RTK/RTG, meals/meeting/entertain, parkir/tol, lembur/buruh, utilitas, IT/maintenance; lainnya -> anggaran bulanan per unit) + target nominal per kategori. Tidak memakai AI -- murni dari data, sehingga bisa dijelaskan & konsisten.
+
+## 80.3 Implementasi
+
+- **`src/utils/rekapanInsights.js`** (baru, murni): `totalsByCategory`, `buildCostOutlook`, `buildCategoryDetail`, `buildCategorySuggestions`, `projectFullYear`, `percentChange`. Dites di `rekapanInsights.test.js` (8 test).
+- **`src/components/RekapanCostInsights.jsx`** (baru): 3 kartu + panel "Analisa & Saran Penghematan per Bagian" (accordion). Naik = merah, turun = hijau.
+- **`src/components/RekapanUnitBisnis.jsx`**: `isSuperAdmin`, load/simpan target, `costInsights` (useMemo, hanya dihitung untuk Super Admin), render di atas tabel Rekapan.
+- **`firestore.rules`**: `match /rekapanSettings/{docId}` -- baca & tulis hanya Super Admin, field terbatas, `targetReductionPct` angka 0-100.
+
+## 80.4 Task Development — Bagian BR
+
+- [x] `rekapanInsights.js` + 8 unit test
+- [x] `RekapanCostInsights.jsx`
+- [x] Integrasi di `RekapanUnitBisnis.jsx` (Super Admin only)
+- [x] `firestore.rules`: `rekapanSettings`
+- [x] `CI=true npm test` -- 140 test PASS; `CI=true npm run build` sukses tanpa warning; `.env` ada & config Firebase tertanam di bundle
+- [ ] Deploy ke produksi (firestore rules + hosting)
+- [ ] Tes manual (login Super Admin): buka Rekapan -> 3 kartu muncul di atas tabel; angka kartu 2 cocok dengan penjumlahan tabel bulan Jan s.d. bulan ini
+- [ ] Tes manual: ubah target % di kartu 3 -> Simpan -> refresh halaman, nilai tetap tersimpan; nominal target berubah
+- [ ] Tes manual: klik baris BBM di panel analisa -> plat terboros & saran BBM muncul; ganti filter Unit Bisnis -> semua angka ikut berubah
+- [ ] Tes manual: login Validator/Admin -> kartu TIDAK muncul
