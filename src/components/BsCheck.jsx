@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
+import { fetchDocsByApproverRole, uniqueById } from '../utils/approverDocs'
 import { approveWorkflowDoc, rejectWorkflowDoc } from '../utils/approvalWorkflow'
 import Modal from './Modal'
 import Select from 'react-select'
@@ -250,55 +251,15 @@ const BsCheck = () => {
                     }))
                     setAllSuperAdminData(allDocs)
                 } else {
-                    // Get all documents where user is assigned in any role
-                    const [reviewer1Docs, reviewer2Docs] = await Promise.all([
-                        // Get documents where user is assigned as reviewer1
-                        getDocs(
-                            query(
-                                collection(db, 'bonSementara'),
-                                where('user.reviewer1', 'array-contains', uid),
-                                where('status', '==', 'Diajukan')
-                            )
-                        ),
-                        // Get documents where user is assigned as reviewer2
-                        getDocs(
-                            query(
-                                collection(db, 'bonSementara'),
-                                where('user.reviewer2', 'array-contains', uid),
-                                where('status', '==', 'Diproses')
-                            )
-                        )
-                    ])
+                    const { byRole, all } = await fetchDocsByApproverRole('bonSementara', ['reviewer1', 'reviewer2'], uid)
 
-                    pendingBonSementara = [
-                        ...reviewer1Docs.docs.map(doc => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data(),
-                        })),
-                        ...reviewer2Docs.docs.map(doc => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
-                    ]
-
-                    // Remove duplicates if any
-                    pendingBonSementara = Array.from(new Set(pendingBonSementara.map(item => item.id)))
-                        .map(id => pendingBonSementara.find(item => item.id === id))
-
-                    // Get approved documents
-                    const approvedQ = query(
-                        collection(db, 'bonSementara'),
-                        where('status', 'in', ['Diproses', 'Disetujui'])
+                    pendingBonSementara = uniqueById(
+                        byRole.reviewer1.filter((doc) => doc.status === 'Diajukan'),
+                        byRole.reviewer2.filter((doc) => doc.status === 'Diproses')
                     )
-                    const approvedSnapshot = await getDocs(approvedQ)
-                    approvedBonSementara = approvedSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data(),
-                        }))
+
+                    approvedBonSementara = all
+                        .filter((doc) => ['Diproses', 'Disetujui'].includes(doc.status))
                         .filter((doc) => {
                             const isAssignedAsReviewer1 = doc.user.reviewer1?.includes(uid)
                             const isAssignedAsReviewer2 = doc.user.reviewer2?.includes(uid)
@@ -313,22 +274,9 @@ const BsCheck = () => {
                             )
                         })
 
-                    // Get canceled documents
-                    const canceledQ = query(
-                        collection(db, 'bonSementara'),
-                        where('status', '==', 'Dibatalkan'),
-                        where('user.reviewer1', 'array-contains', uid)
-                    );
-                    const canceledSnapshot = await getDocs(canceledQ);
-                    canceledBonSementara = canceledSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
-                        .filter(doc =>
-                            doc.statusHistory.some(history => history.status === 'Dibatalkan')
-                        );
+                    canceledBonSementara = byRole.reviewer1
+                        .filter((doc) => doc.status === 'Dibatalkan')
+                        .filter((doc) => doc.statusHistory.some((history) => history.status === 'Dibatalkan'))
 
                     setIsValidatorForAny(canceledBonSementara.length > 0);
                 }

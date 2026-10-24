@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
+import { fetchDocsByApproverRole, uniqueById } from '../utils/approverDocs'
 import { approveWorkflowDoc, rejectWorkflowDoc } from '../utils/approvalWorkflow'
 import Modal from './Modal'
 import Select from 'react-select'
@@ -252,69 +253,16 @@ const LpjBsCheck = () => {
                     }))
                     setAllSuperAdminData(allDocs)
                 } else {
-                    // Get all documents where user is assigned in any role
-                    const [validatorDocs, reviewer1Docs, reviewer2Docs] = await Promise.all([
-                        // Get documents where user is assigned as validator
-                        getDocs(
-                            query(
-                                collection(db, 'lpj'),
-                                where('user.validator', 'array-contains', uid),
-                                where('status', '==', 'Diajukan')
-                            )
-                        ),
-                        // Get documents where user is assigned as reviewer1
-                        getDocs(
-                            query(
-                                collection(db, 'lpj'),
-                                where('user.reviewer1', 'array-contains', uid),
-                                where('status', '==', 'Divalidasi')
-                            )
-                        ),
-                        // Get documents where user is assigned as reviewer2
-                        getDocs(
-                            query(
-                                collection(db, 'lpj'),
-                                where('user.reviewer2', 'array-contains', uid),
-                                where('status', '==', 'Diproses')
-                            )
-                        )
-                    ])
+                    const { byRole, all } = await fetchDocsByApproverRole('lpj', ['validator', 'reviewer1', 'reviewer2'], uid)
 
-                    pendingLpj = [
-                        ...validatorDocs.docs.map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        })),
-                        ...reviewer1Docs.docs.map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        })),
-                        ...reviewer2Docs.docs.map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
-                    ]
-
-                    // Remove duplicates if any
-                    pendingLpj = Array.from(new Set(pendingLpj.map((item) => item.id))).map(
-                        (id) => pendingLpj.find((item) => item.id === id)
+                    pendingLpj = uniqueById(
+                        byRole.validator.filter((doc) => doc.status === 'Diajukan'),
+                        byRole.reviewer1.filter((doc) => doc.status === 'Divalidasi'),
+                        byRole.reviewer2.filter((doc) => doc.status === 'Diproses')
                     )
 
-                    // Get approved documents
-                    const approvedQ = query(
-                        collection(db, 'lpj'),
-                        where('status', 'in', ['Divalidasi', 'Diproses', 'Disetujui'])
-                    )
-                    const approvedSnapshot = await getDocs(approvedQ)
-                    approvedLpj = approvedSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
+                    approvedLpj = all
+                        .filter((doc) => ['Divalidasi', 'Diproses', 'Disetujui'].includes(doc.status))
                         .filter((doc) => {
                             const isAssignedAsValidator = doc.user.validator?.includes(uid)
                             const isAssignedAsReviewer1 = doc.user.reviewer1?.includes(uid)
@@ -329,22 +277,9 @@ const LpjBsCheck = () => {
                             )
                         })
 
-                    // Get canceled documents
-                    const canceledQ = query(
-                        collection(db, 'lpj'),
-                        where('status', '==', 'Dibatalkan'),
-                        where('user.validator', 'array-contains', uid)
-                    );
-                    const canceledSnapshot = await getDocs(canceledQ);
-                    canceledLpj = canceledSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
-                        .filter(doc =>
-                            doc.statusHistory.some(history => history.status === 'Dibatalkan')
-                        );
+                    canceledLpj = byRole.validator
+                        .filter((doc) => doc.status === 'Dibatalkan')
+                        .filter((doc) => doc.statusHistory.some((history) => history.status === 'Dibatalkan'))
 
                     setIsValidatorForAny(canceledLpj.length > 0);
                 }
