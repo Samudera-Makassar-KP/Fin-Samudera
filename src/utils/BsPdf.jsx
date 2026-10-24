@@ -352,7 +352,7 @@ const BsPDF = ({ bonSementaraDetail, approvedReviewers, editHistory = [] }) => {
                                 <Text>{item.aktivitas}</Text>
                             </View>
                             <View style={[styles.tableCell, { width: '20%', textAlign: 'right', borderRight: 0 }]}>
-                                <Text>{item?.jumlahBS.toLocaleString('id-ID') ?? 'N/A'}</Text>
+                                <Text>{item?.jumlahBS.toLocaleString('en-US') ?? 'N/A'}</Text>
                             </View>
                         </View>
                     ))}
@@ -395,7 +395,7 @@ const BsPDF = ({ bonSementaraDetail, approvedReviewers, editHistory = [] }) => {
                                 <Text>TOTAL:</Text>
                             </View>
                             <View style={[styles.tableCell, { width: '20%', borderRight: 0, textAlign: 'right' }]}>
-                                <Text>{item.jumlahBS.toLocaleString('id-ID') ?? 'N/A'}</Text>
+                                <Text>{item.jumlahBS.toLocaleString('en-US') ?? 'N/A'}</Text>
                             </View>
                         </View>
                     ))}

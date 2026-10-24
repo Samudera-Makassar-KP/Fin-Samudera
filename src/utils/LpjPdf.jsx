@@ -504,7 +504,7 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory =
                             <Text>{lpjDetail?.aktivitas} </Text>
                         </View>
                         <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
-                            <Text>{lpjDetail?.jumlahBS.toLocaleString('id-ID') ?? 'N/A'}</Text>
+                            <Text>{lpjDetail?.jumlahBS.toLocaleString('en-US') ?? 'N/A'}</Text>
                         </View>
                         <View style={[styles.tableCell, { width: '7%' }]}>
                             <Text> </Text>
@@ -641,10 +641,10 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory =
                                     <Text>{isBbmItem ? 'Liter' : ' '}</Text>
                                 </View>
                                 <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
-                                    <Text>{item?.biaya.toLocaleString('id-ID') || '-'}</Text>
+                                    <Text>{item?.biaya.toLocaleString('en-US') || '-'}</Text>
                                 </View>
                                 <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
-                                    <Text>{item?.jumlahBiaya.toLocaleString('id-ID') || '-'}</Text>
+                                    <Text>{item?.jumlahBiaya.toLocaleString('en-US') || '-'}</Text>
                                 </View>
                                 <View style={[styles.tableCell, { width: '10%', borderRight: 0 }]}>
                                     <Text style={{ flexWrap: 'wrap', textAlign: 'left', overflow: 'hidden' }}>
@@ -753,7 +753,7 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory =
                                 { width: '12%', textAlign: 'right', fontWeight: 'bold', borderTopWidth: 1 }
                             ]}
                         >
-                            <Text>{lpjDetail?.jumlahBS.toLocaleString('id-ID') ?? 'N/A'}</Text>
+                            <Text>{lpjDetail?.jumlahBS.toLocaleString('en-US') ?? 'N/A'}</Text>
                         </View>
                         <View style={[styles.tableCell, { width: '7%', borderTopWidth: 1 }]}>
                             <Text> </Text>
@@ -793,7 +793,7 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory =
                             <Text> </Text>
                         </View>
                         <View style={[styles.tableCell, { width: '12%', textAlign: 'right' }]}>
-                            <Text>{lpjDetail?.jumlahBS.toLocaleString('id-ID') ?? 'N/A'}</Text>
+                            <Text>{lpjDetail?.jumlahBS.toLocaleString('en-US') ?? 'N/A'}</Text>
                         </View>
                         <View style={[styles.tableCell, { width: '10%', borderRight: 0 }]}>
                             <Text> </Text>
@@ -821,7 +821,7 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory =
                             <Text> </Text>
                         </View>
                         <View style={[styles.tableCell, { width: '12%', textAlign: 'right', fontWeight: 'bold' }]}>
-                            <Text>{lpjDetail.totalBiaya.toLocaleString('id-ID') ?? 'N/A'}</Text>
+                            <Text>{lpjDetail.totalBiaya.toLocaleString('en-US') ?? 'N/A'}</Text>
                         </View>
                         <View style={[styles.tableCell, { width: '10%', borderRight: 0 }]}>
                             <Text> </Text>
@@ -852,7 +852,7 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory =
                             <Text>
                                 {lpjDetail.sisaLebih === 0
                                     ? ''
-                                    : `${lpjDetail.sisaLebih.toLocaleString('id-ID') ?? 'N/A'}`}
+                                    : `${lpjDetail.sisaLebih.toLocaleString('en-US') ?? 'N/A'}`}
                             </Text>
                         </View>
                         <View style={[styles.tableCell, { width: '10%', borderRight: 0 }]}>
@@ -884,7 +884,7 @@ const LpjPDF = ({ lpjDetail, approvedReviewers, approvedValidator, editHistory =
                             <Text>
                                 {lpjDetail.sisaKurang === 0
                                     ? ''
-                                    : `-${lpjDetail.sisaKurang.toLocaleString('id-ID') ?? 'N/A'}`}
+                                    : `-${lpjDetail.sisaKurang.toLocaleString('en-US') ?? 'N/A'}`}
                             </Text>
                         </View>
                         <View style={[styles.tableCell, { width: '10%', borderRight: 0, borderBottom: 1 }]}>
