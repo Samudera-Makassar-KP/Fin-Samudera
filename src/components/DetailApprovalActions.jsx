@@ -71,9 +71,6 @@ export const DetailApprovalActions = ({ docType, item }) => {
                 return
             }
             toast.success(`${workflow.label} berhasil disetujui`)
-            if (result.notifyError) {
-                toast.warning('Disetujui, tapi email ke Finance (form + lampiran) gagal terkirim. Coba cetak & kirim manual.')
-            }
             setShowApproveModal(false)
             goBack(workflow.listPath)
         } catch (error) {

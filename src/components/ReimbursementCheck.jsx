@@ -504,7 +504,7 @@ const ReimbursementCheck = () => {
                         toast.error('Anda tidak berhak menyetujui dokumen ini pada tahap saat ini.')
                         return
                     }
-                    const { updatedData, newStatus, notifyError } = result
+                    const { updatedData, newStatus } = result
 
                     const shouldRemoveFromPending = localStorage.getItem('userRole') !== 'Super Admin' || newStatus === 'Disetujui'
 
@@ -535,9 +535,6 @@ const ReimbursementCheck = () => {
                     })
 
                     toast.success('Reimbursement berhasil disetujui')
-                    if (notifyError) {
-                        toast.warning('Disetujui, tapi email ke Finance (form + lampiran) gagal terkirim. Coba cetak & kirim manual.')
-                    }
                     closeModal()
                 } catch (error) {
                     console.error('Error approving reimbursement:', error?.code, error?.message, error)
