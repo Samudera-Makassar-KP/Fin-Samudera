@@ -464,7 +464,7 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                                     </Text>
                                 </View>
                                 <View style={[styles.tableCell, { width: '14%', textAlign: 'right', borderRight: 0 }]}>
-                                    <Text>{(item.biaya || 0).toLocaleString('id-ID')}</Text>
+                                    <Text>{(item.biaya || 0).toLocaleString('en-US')}</Text>
                                 </View>
                             </View>
                         )
@@ -511,7 +511,7 @@ const ReimbursementPDF = ({ reimbursementDetail, approvedReviewers, approvedVali
                             <Text>TOTAL:</Text>
                         </View>
                         <View style={[styles.tableCell, { width: '14%', borderRight: 0, textAlign: 'right' }]}>
-                            <Text>{reimbursementDetail.totalBiaya?.toLocaleString('id-ID') || '-'}</Text>
+                            <Text>{reimbursementDetail.totalBiaya?.toLocaleString('en-US') || '-'}</Text>
                         </View>
                     </View>
 
