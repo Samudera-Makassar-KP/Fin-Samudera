@@ -13,7 +13,7 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import BsTimerDisplay from './bsTimerDisplay'
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner, faEnvelope, faFileCircleCheck } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faEnvelope, faFileCircleCheck, faMoneyBillWave, faCheckCircle } from '@fortawesome/free-solid-svg-icons'
 import { generateBsPDF } from '../utils/BsPdf'
 
 // Bagian AQ: status yang disembunyikan dari list milik user sendiri (lihat
@@ -451,6 +451,29 @@ const BsTable = () => {
         sendFinanceReminder(item, validator)
     }
 
+    // Bagian CB: tombol "Transferred" untuk BS -- sebelumnya cuma ada di
+    // halaman "Mutasi Dana" (dihapus, prosesnya dianggap user kurang jelas).
+    // Dipindah ke sini, pola identik `handleMarkTransferred` di
+    // ReimbursementTable.jsx -- field `transferred`/`transferredAt` yang
+    // sama (lihat canMarkTransferred() di firestore.rules, sudah generik
+    // untuk bonSementara/reimbursement/lpj).
+    const handleMarkTransferred = async (item) => {
+        try {
+            const bsDocRef = doc(db, 'bonSementara', item.id)
+            const transferredAt = new Date().toISOString()
+            await updateDoc(bsDocRef, { transferred: true, transferredAt })
+            setData((prev) => ({
+                bonSementara: prev.bonSementara.map((b) =>
+                    b.id === item.id ? { ...b, transferred: true, transferredAt } : b
+                )
+            }))
+            toast.success('Ditandai sebagai sudah masuk')
+        } catch (error) {
+            console.error('Error marking transferred:', error)
+            toast.error('Gagal menandai sebagai Transferred')
+        }
+    }
+
     const shouldShowAlert = (item) => {
         // Check if the BS is approved
         if (item.status !== 'Disetujui') return false
@@ -717,22 +740,42 @@ const BsTable = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-2 py-2 border text-center">
-                                                    {item.status === 'Disetujui' && lpjStatus[item.id]?.status === 'Sudah LPJ' ? (
-                                                        // Bagian BQ: BS sudah Reported (LPJ-nya Disetujui) -> urusan
-                                                        // pencairan BS sudah selesai, reminder ke Finance tidak relevan.
-                                                        <span className="text-gray-400 dark:text-gray-500" title="Reported -- reminder tidak diperlukan">-</span>
-                                                    ) : item.status === 'Disetujui' ? (
-                                                        <button
-                                                            className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            onClick={() => handleSendFinanceReminder(item)}
-                                                            disabled={reminderSendingId === item.id}
-                                                            title="Send Reminder to Finance"
-                                                        >
-                                                            <FontAwesomeIcon
-                                                                icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
-                                                                className={reminderSendingId === item.id ? 'animate-spin' : ''}
-                                                            />
-                                                        </button>
+                                                    {item.status === 'Disetujui' ? (
+                                                        <div className="inline-flex items-center justify-center gap-3">
+                                                            {item.transferred ? (
+                                                                <span
+                                                                    className="inline-flex items-center justify-center text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                                                                    title="Transferred"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faCheckCircle} />
+                                                                </span>
+                                                            ) : (
+                                                                <button
+                                                                    className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                                                    onClick={() => handleMarkTransferred(item)}
+                                                                    title="Transferred"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faMoneyBillWave} />
+                                                                </button>
+                                                            )}
+                                                            {lpjStatus[item.id]?.status === 'Sudah LPJ' ? (
+                                                                // Bagian BQ: BS sudah Reported (LPJ-nya Disetujui) -> urusan
+                                                                // pencairan BS sudah selesai, reminder ke Finance tidak relevan.
+                                                                <span className="text-gray-400 dark:text-gray-500" title="Reported -- reminder tidak diperlukan">-</span>
+                                                            ) : (
+                                                                <button
+                                                                    className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    onClick={() => handleSendFinanceReminder(item)}
+                                                                    disabled={reminderSendingId === item.id}
+                                                                    title="Send Reminder to Finance"
+                                                                >
+                                                                    <FontAwesomeIcon
+                                                                        icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
+                                                                        className={reminderSendingId === item.id ? 'animate-spin' : ''}
+                                                                    />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     ) : (
                                                         <button
                                                             className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed hover"

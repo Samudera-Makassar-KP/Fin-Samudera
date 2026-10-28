@@ -1,6 +1,18 @@
-import React, { useEffect, useState } from 'react'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import React, { useEffect, useState, useCallback } from 'react'
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
+
+// Bagian CB: menu "Mutasi Dana" dihapus (user: "agak kacau prosesnya" --
+// dropdown/tab periode yang berganti-ganti bikin bingung). Rekonsiliasi
+// dana (Saldo Bank/Selisih/RBS-BS sudah masuk/LPJ dikembalikan/menunggu
+// konfirmasi) dipindah jadi kartu di sini, SELALU untuk bulan berjalan
+// (konsisten dengan kartu "Ringkasan bulan ini" yang sudah ada) -- tidak
+// ada lagi pemilihan periode independen yang bisa mismatch. Tombol
+// konfirmasi "Transferred" (BS/RBS) & "Kekurangan Dibayar" (LPJ) dipindah
+// ke tabelnya masing-masing (BsTable.jsx/ReimbursementTable.jsx sudah ada
+// sejak lama/LpjBsTable.jsx) -- halaman ini murni tampilan, tidak ada
+// tombol aksi.
+const HIDDEN_LPJ_STATUSES = ['Ditolak', 'Dibatalkan']
 
 const DashboardSummary = ({ uid, role }) => {
     const [summary, setSummary] = useState({
@@ -17,9 +29,68 @@ const DashboardSummary = ({ uid, role }) => {
         jumlahRbsDiproses: 0,
         nominalRbsDiproses: 0,
         jumlahBsDiapprove: 0,
-        nominalBsDiapprove: 0
+        nominalBsDiapprove: 0,
+        // Bagian CB: rekonsiliasi dana bulan ini (sebelumnya di Mutasi Dana)
+        rbsBsMasukNominal: 0,
+        rbsBsMasukCount: 0,
+        lpjDikembalikanNominal: 0,
+        lpjDikembalikanCount: 0,
+        pendingNominal: 0,
+        pendingCount: 0,
+        saldoSistem: 0
     })
     const [loading, setLoading] = useState(true)
+
+    // Bagian CB: Saldo Bank diisi manual per bulan -- dipakai docId yang
+    // SAMA dengan yang dulu dipakai Mutasi Dana (`mutasiDanaSaldoBank`,
+    // pola `{uid}_{MM-YYYY}`), supaya nilai yang sudah pernah diisi bulan-
+    // bulan sebelumnya tidak hilang & tidak perlu rule Firestore baru.
+    const today = new Date()
+    const periodKey = `${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`
+    const saldoBankDocId = uid ? `${uid}_${periodKey}` : null
+    const [saldoBankInput, setSaldoBankInput] = useState('')
+    const [loadingBalance, setLoadingBalance] = useState(false)
+    const [savingBalance, setSavingBalance] = useState(false)
+
+    useEffect(() => {
+        if (!saldoBankDocId) return
+        let cancelled = false
+        setLoadingBalance(true)
+        getDoc(doc(db, 'mutasiDanaSaldoBank', saldoBankDocId))
+            .then((snap) => {
+                if (cancelled) return
+                setSaldoBankInput(snap.exists() ? String(snap.data().saldoBank ?? '') : '')
+            })
+            .catch((error) => console.error('Error fetching saldo bank:', error))
+            .finally(() => { if (!cancelled) setLoadingBalance(false) })
+        return () => { cancelled = true }
+    }, [saldoBankDocId])
+
+    const handleSaldoBankChange = (e) => {
+        const digits = e.target.value.replace(/[^\d]/g, '')
+        setSaldoBankInput(digits)
+    }
+
+    const handleSaldoBankBlur = useCallback(async () => {
+        if (!saldoBankDocId || saldoBankInput === '') return
+        setSavingBalance(true)
+        try {
+            await setDoc(doc(db, 'mutasiDanaSaldoBank', saldoBankDocId), {
+                saldoBank: Number(saldoBankInput) || 0,
+                updatedAt: new Date().toISOString()
+            })
+        } catch (error) {
+            console.error('Error saving saldo bank:', error)
+        } finally {
+            setSavingBalance(false)
+        }
+    }, [saldoBankDocId, saldoBankInput])
+
+    // Bagian CB: dinamakan `selisihBank` (bukan `selisih` saja) supaya tidak
+    // bentrok secara nama dengan `summary.selisih` ("Selisih belum LPJ" --
+    // konsep lain, tidak berhubungan dengan Saldo Bank).
+    const saldoBankNumber = saldoBankInput === '' ? null : Number(saldoBankInput)
+    const selisihBank = saldoBankNumber === null ? null : saldoBankNumber - summary.saldoSistem
 
     const isValidator = role === 'Validator'
     const isReviewer = role === 'Reviewer'
@@ -133,6 +204,59 @@ const DashboardSummary = ({ uid, role }) => {
                 }
                 const jumlahBsBelumLpj = bsDisetujui.length - jumlahBsSudahLpj
 
+                // Bagian CB: rekonsiliasi dana bulan ini (sebelumnya di Mutasi Dana) --
+                // hanya uang yang BENAR-BENAR sudah berpindah yang dihitung, sama
+                // seperti prinsip Mutasi Dana Bagian BU: BS/RBS Disetujui tapi belum
+                // "Transferred" belum dihitung masuk; LPJ sisaLebih yang belum
+                // dikembalikan/terverifikasi & sisaKurang yang belum dibayar juga
+                // belum dihitung -- semuanya masuk "Menunggu Konfirmasi" dulu.
+                const lpjAll = lpjSnapshot.docs.map((d) => ({ id: d.id, ...d.data() }))
+                const lpjThisMonth = lpjAll.filter(
+                    (item) => isThisMonth(item.tanggalPengajuan) && !HIDDEN_LPJ_STATUSES.includes(item.status)
+                )
+
+                const bsTransferredThisMonth = bsDisetujui.filter((item) => item.transferred)
+                const rbsDisetujuiThisMonth = rbsThisMonth.filter((item) => item.status === 'Disetujui')
+                const rbsTransferredThisMonth = rbsDisetujuiThisMonth.filter((item) => item.transferred)
+                const rbsBsMasukNominal =
+                    bsTransferredThisMonth.reduce((sum, item) => sum + (item.bonSementara?.[0]?.jumlahBS || 0), 0) +
+                    rbsTransferredThisMonth.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const rbsBsMasukCount = bsTransferredThisMonth.length + rbsTransferredThisMonth.length
+
+                const lpjSisaKurangThisMonth = lpjThisMonth.filter((item) => (Number(item.sisaKurang) || 0) > 0)
+                const lpjKekuranganDibayar = lpjSisaKurangThisMonth.filter((item) => item.sisaKurangDibayar)
+                const lpjSisaLebihThisMonth = lpjThisMonth.filter((item) => (Number(item.sisaLebih) || 0) > 0)
+                const lpjSudahDikembalikan = lpjSisaLebihThisMonth.filter(
+                    (item) => item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered'
+                )
+                const lpjDikembalikanNominal =
+                    lpjKekuranganDibayar.reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0) +
+                    lpjSudahDikembalikan.reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0)
+                const lpjDikembalikanCount = lpjKekuranganDibayar.length + lpjSudahDikembalikan.length
+
+                const bsBelumTransfer = bsDisetujui.filter((item) => !item.transferred)
+                const rbsBelumTransfer = rbsDisetujuiThisMonth.filter((item) => !item.transferred)
+                const lpjSisaKurangBelumDibayar = lpjSisaKurangThisMonth.filter((item) => !item.sisaKurangDibayar)
+                const lpjSisaLebihBelumKembali = lpjSisaLebihThisMonth.filter(
+                    (item) => !(item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered')
+                )
+                const pendingNominal =
+                    bsBelumTransfer.reduce((sum, item) => sum + (item.bonSementara?.[0]?.jumlahBS || 0), 0) +
+                    rbsBelumTransfer.reduce((sum, item) => sum + (item.totalBiaya || 0), 0) +
+                    lpjSisaKurangBelumDibayar.reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0) +
+                    lpjSisaLebihBelumKembali.reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0)
+                const pendingCount = bsBelumTransfer.length + rbsBelumTransfer.length + lpjSisaKurangBelumDibayar.length + lpjSisaLebihBelumKembali.length
+
+                // Saldo Sistem = uang masuk terkonfirmasi (BS/RBS Transferred + sisaKurang
+                // yang sudah dibayar) dikurangi uang keluar (total biaya LPJ bulan ini +
+                // sisaLebih yang sudah dikembalikan).
+                const lpjTotalBiayaThisMonth = lpjThisMonth.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const saldoSistem =
+                    rbsBsMasukNominal +
+                    lpjKekuranganDibayar.reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0) -
+                    lpjTotalBiayaThisMonth -
+                    lpjSudahDikembalikan.reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0)
+
                 // Khusus role Validator/Reviewer: hitung LPJ & RBS yang sudah mereka
                 // validasi/review bulan ini, beserta nominalnya. Query pakai array-contains
                 // pada user.validator / user.reviewer1 / user.reviewer2 - ini bisa dibuktikan
@@ -216,7 +340,14 @@ const DashboardSummary = ({ uid, role }) => {
                     jumlahRbsDiproses,
                     nominalRbsDiproses,
                     jumlahBsDiapprove,
-                    nominalBsDiapprove
+                    nominalBsDiapprove,
+                    rbsBsMasukNominal,
+                    rbsBsMasukCount,
+                    lpjDikembalikanNominal,
+                    lpjDikembalikanCount,
+                    pendingNominal,
+                    pendingCount,
+                    saldoSistem
                 })
             } catch (error) {
                 console.error('Error fetching dashboard summary:', error)
@@ -263,6 +394,32 @@ const DashboardSummary = ({ uid, role }) => {
                     : 'Semua BS sudah dipertanggungjawabkan',
             valueClass: summary.selisih > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100',
             bgClass: summary.selisih > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50'
+        },
+        // Bagian CB: rekonsiliasi dana (sebelumnya di Mutasi Dana, sekarang
+        // kartu di sini -- selalu bulan berjalan).
+        {
+            label: 'RBS/BS Sudah Masuk',
+            value: formatRupiah(summary.rbsBsMasukNominal),
+            caption: `${summary.rbsBsMasukCount} transaksi -- sudah "Transferred"`,
+            valueClass: 'text-green-700 dark:text-green-400',
+            bgClass: 'bg-green-50 dark:bg-green-900/20'
+        },
+        {
+            label: 'LPJ Dikembalikan/Dibayar',
+            value: formatRupiah(summary.lpjDikembalikanNominal),
+            caption: `${summary.lpjDikembalikanCount} LPJ -- sisa lebih dikembalikan / kekurangan dibayar`,
+            valueClass: 'text-green-700 dark:text-green-400',
+            bgClass: 'bg-green-50 dark:bg-green-900/20'
+        },
+        {
+            label: 'Menunggu Konfirmasi',
+            value: formatRupiah(summary.pendingNominal),
+            caption:
+                summary.pendingCount > 0
+                    ? `${summary.pendingCount} transaksi -- BS/RBS belum masuk atau LPJ belum dikembalikan/dibayar`
+                    : 'Semua transaksi bulan ini sudah dikonfirmasi',
+            valueClass: summary.pendingCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100',
+            bgClass: summary.pendingCount > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50'
         },
         ...(isApprover
             ? [
@@ -321,6 +478,45 @@ const DashboardSummary = ({ uid, role }) => {
                         )}
                     </div>
                 ))}
+            </div>
+
+            {/* Bagian CB: Saldo Bank (isi manual) & Selisih -- sebelumnya di
+                Mutasi Dana, sekarang di sini, selalu untuk bulan berjalan. */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                <div className="rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                        Saldo Bank <span className="text-xs">(isi manual)</span>
+                    </p>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-lg text-gray-400 dark:text-gray-500 font-semibold">Rp</span>
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            value={saldoBankInput === '' ? '' : Number(saldoBankInput).toLocaleString('id-ID')}
+                            onChange={handleSaldoBankChange}
+                            onBlur={handleSaldoBankBlur}
+                            placeholder={loadingBalance ? '...' : '0'}
+                            disabled={loadingBalance}
+                            className="text-2xl font-semibold bg-transparent outline-none w-full dark:text-gray-100 tabular-nums focus:text-blue-600 dark:focus:text-blue-400 disabled:opacity-50"
+                        />
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        {loadingBalance ? 'Memuat...' : savingBalance ? 'Menyimpan...' : 'Cek dari mutasi rekening, lalu ketik di sini'}
+                    </p>
+                </div>
+                <div className={`rounded-lg p-4 ${selisihBank === null ? 'bg-gray-50 dark:bg-gray-700/50' : selisihBank === 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}`}>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Selisih (Bank vs Sistem)</p>
+                    <p className={`text-2xl font-semibold ${selisihBank === null ? 'text-gray-900 dark:text-gray-100' : selisihBank === 0 ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                        {selisihBank === null ? '-' : formatRupiah(selisihBank)}
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        {selisihBank === null
+                            ? 'Isi Saldo Bank dulu'
+                            : selisihBank === 0
+                                ? 'Saldo sistem & bank sudah sama'
+                                : selisihBank > 0 ? 'Bank lebih besar dari sistem' : 'Sistem lebih besar dari bank'}
+                    </p>
+                </div>
             </div>
         </div>
     )

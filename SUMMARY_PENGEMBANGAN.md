@@ -3241,3 +3241,37 @@ Supaya TIDAK perlu mengubah Cloud Functions/storage.rules (upload file wajib lew
 - [ ] Deploy ke produksi (hosting + firestore rules)
 - [ ] **Belum ada pengujian UI manual sama sekali** -- sesi ini tidak punya alat untuk klik-jalan di browser dengan login sungguhan, cuma lint/test/build. Mohon ditest langsung: catat beberapa nota RBS & LPJ, cek sisa dana BS live-update, edit/hapus nota, rangkai draft RBS, dan buka Detail BS untuk BS yang sudah punya nota tercatat -- cek banner muncul & form LPJ ter-prefill dengan benar
 - [ ] Tes manual: submit LPJ/RBS yang item-nya pre-filled dari nota -- konfirmasi notaDraft yang dipakai otomatis terhapus dari halaman Catat Nota setelah submit berhasil
+
+---
+
+# BAGIAN CB — Hapus Mutasi Dana, Rekonsiliasi Dana Pindah ke Dashboard (2026-10-28)
+
+## 90.1 Konteks
+
+User minta menu "Mutasi Dana" dihapus total ("agak kacau prosesnya" -- dropdown/tab periode yang berganti-ganti antar Bagian BW/BX/BY jadi sumber bug berulang). Sebagai gantinya, info rekonsiliasi dana (Saldo Bank, Selisih, RBS/BS yang sudah masuk, LPJ yang sudah dikembalikan/dibayar, serta yang masih menunggu) dipindah jadi kartu tambahan di Dashboard yang sudah ada -- karena Dashboard SUDAH punya kerangka "Ringkasan bulan ini" yang baku (selalu bulan berjalan, tidak ada pilihan periode sama sekali), jadi kelas bug independent-dropdown-mismatch yang berulang di Mutasi Dana otomatis tidak mungkin terjadi lagi di sini.
+
+## 90.2 Perbaikan
+
+- **`src/components/MutasiDana.jsx` & `src/pages/MutasiDanaPage.jsx` dihapus**, route `/mutasi-dana` (App.jsx) & link sidebar "Mutasi Dana" dihapus.
+- **Tombol konfirmasi dipindah ke tabel aslinya** (bukan hilang -- cuma pindah tempat, supaya tidak perlu halaman terpisah):
+  - `src/components/BsTable.jsx`: tombol "Transferred" untuk BS (pola identik `handleMarkTransferred` yang sudah ada di `ReimbursementTable.jsx` untuk RBS) -- muncul di kolom Aksi untuk BS berstatus Disetujui.
+  - `src/components/LpjBsTable.jsx`: tombol "Tandai Kekurangan Sudah Dibayar" (field `sisaKurangDibayar`) + penanda ikon seru/centang di kolom Nomor Dokumen (pola identik penanda `pengembalianStatus`/sisaLebih yang sudah ada sejak Bagian BS).
+  - Fitur koreksi tanggal manual (ikon pensil, Bagian BZ) dan tombol borongan "Tandai Transaksi Lama" (Bagian BV) SENGAJA TIDAK dipindahkan -- itu alat bantu pembersihan data historis khusus untuk masa transisi saat field `transferred`/`sisaKurangDibayar` baru pertama kali ada, bukan fitur inti yang perlu terus dipakai.
+- **`src/components/DashboardSummary.jsx`**: 5 kartu baru di "Ringkasan bulan ini" (selalu bulan berjalan, prinsip sama dengan Mutasi Dana Bagian BU -- hanya uang yang BENAR-BENAR berpindah yang dihitung):
+  - **RBS/BS Sudah Masuk** -- nominal+jumlah BS/RBS Disetujui bulan ini yang sudah `transferred`.
+  - **LPJ Dikembalikan/Dibayar** -- nominal+jumlah LPJ bulan ini yang sisaLebih-nya sudah dikembalikan (`pengembalianStatus`) atau sisaKurang-nya sudah dibayar (`sisaKurangDibayar`).
+  - **Menunggu Konfirmasi** -- gabungan BS/RBS yang belum `transferred` + LPJ sisaLebih belum dikembalikan + sisaKurang belum dibayar, bulan ini.
+  - **Saldo Bank** (isi manual, editable langsung di kartu) -- dipakai docId `mutasiDanaSaldoBank/{uid}_{MM-YYYY}` yang SAMA dengan yang dulu dipakai Mutasi Dana (`firestore.rules` TIDAK berubah sama sekali di Bagian ini), jadi nilai yang sudah pernah diisi bulan-bulan sebelumnya tidak hilang.
+  - **Selisih (Bank vs Sistem)** -- `Saldo Bank - Saldo Sistem`, dengan Saldo Sistem dihitung dari BS/RBS Transferred + sisaKurang dibayar dikurangi total biaya LPJ + sisaLebih dikembalikan, bulan ini.
+
+## 90.3 Task Development — Bagian CB
+
+- [x] Hapus `src/components/MutasiDana.jsx`, `src/pages/MutasiDanaPage.jsx`, route & link sidebar
+- [x] `src/components/BsTable.jsx`: tombol "Transferred" untuk BS
+- [x] `src/components/LpjBsTable.jsx`: tombol "Kekurangan Sudah Dibayar" + penanda ikon
+- [x] `src/components/DashboardSummary.jsx`: 5 kartu rekonsiliasi dana bulan ini (RBS/BS Masuk, LPJ Dikembalikan, Menunggu Konfirmasi, Saldo Bank, Selisih)
+- [x] `CI=true npx eslint` (semua file terkait) -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses (bundle JS malah mengecil -2.98kB karena MutasiDana.jsx terhapus)
+- [ ] Deploy ke produksi (hosting saja -- TIDAK ada perubahan `firestore.rules` di Bagian ini)
+- [ ] **Belum ada pengujian UI manual** -- cek: tombol Transferred muncul di BsTable untuk BS Disetujui, tombol Kekurangan Dibayar muncul di LpjBsTable untuk LPJ bersisaKurang, 5 kartu baru muncul di Dashboard dengan angka yang masuk akal, Saldo Bank bisa diisi & tersimpan, link "Mutasi Dana" sudah tidak ada di sidebar
