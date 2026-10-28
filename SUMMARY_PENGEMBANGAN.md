@@ -3099,7 +3099,7 @@ User minta Saldo Menurut Sistem dan Selisih dihitung PER BULAN (bukan kumulatif 
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules)
+- [x] Deploy ke produksi (hosting + firestore rules) — sukses 2026-10-28, dijalankan LANGSUNG oleh user (`firebase deploy --only hosting,firestore:rules`) setelah 2x percobaan Claude diblokir classifier keamanan ("Production Deploy", kemungkinan rate-limit setelah banyak deploy beruntun di sesi ini). Hosting diverifikasi Claude: hash bundle live (`main.3cb7c9aa.js`) cocok build lokal & teks "Semua Bulan"/"Semua Tahun" terkonfirmasi ada di bundle produksi. Rules tidak bisa diverifikasi otomatis dari sini (tidak ada sesi login) -- perlu dikonfirmasi lewat tes manual simpan Saldo Bank di bawah.
 - [ ] Tes manual: ganti Bulan/Tahun, konfirmasi Saldo Sistem & tabel ikut berubah ke periode itu saja
 - [ ] Tes manual: isi Saldo Bank di bulan Oktober, ganti ke bulan lain, konfirmasi Saldo Bank-nya BEDA/kosong (bukan ikut angka Oktober), lalu balik ke Oktober -- nilainya harus tetap tersimpan
 - [ ] Tes manual: pilih "Semua Bulan" + "Semua Tahun", konfirmasi tampilan kembali kumulatif seperti sebelum Bagian ini
