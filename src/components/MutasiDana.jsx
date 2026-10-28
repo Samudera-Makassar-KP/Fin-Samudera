@@ -9,7 +9,7 @@ import 'react-loading-skeleton/dist/skeleton.css'
 import Select from 'react-select'
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCircleExclamation, faCircleCheck, faArrowUp, faArrowDown, faTriangleExclamation, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
+import { faCircleExclamation, faCircleCheck, faArrowUp, faArrowDown, faTriangleExclamation, faMoneyBillWave, faPen } from '@fortawesome/free-solid-svg-icons'
 
 // Bagian BY: koreksi dari user -- TAB per periode (Bagian BX) tampilannya
 // dianggap kurang rapi, diminta balik ke 2 dropdown (Bulan, Tahun). TAPI
@@ -56,6 +56,15 @@ const formatRupiah = (n) => 'Rp' + Math.round(Math.abs(n || 0)).toLocaleString('
 const formatDate = (iso) => {
     if (!iso) return '-'
     return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// Untuk value <input type="date"> (butuh format YYYY-MM-DD, pakai komponen
+// tanggal LOKAL -- bukan toISOString().slice(0,10) yang bisa mundur satu
+// hari untuk timezone di sebelah barat UTC).
+const toDateInputValue = (iso) => {
+    const d = new Date(iso || Date.now())
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 const MutasiDana = () => {
@@ -156,7 +165,11 @@ const MutasiDana = () => {
 
         bsDocs.forEach((item) => {
             if (item.status !== 'Disetujui') return
-            const amount = item.bonSementara?.[0]?.jumlahBS || 0
+            // Bagian BZ: satu BS BISA berisi beberapa item dengan nomorBS &
+            // jumlahBS masing-masing (lihat FormBs.jsx -- `multipleItems`),
+            // bukan selalu satu. Sebelumnya cuma `bonSementara[0]` yang
+            // dibaca -- item ke-2/ke-3 dst ikut lolos dari Saldo Sistem.
+            const amount = (item.bonSementara || []).reduce((sum, b) => sum + (Number(b.jumlahBS) || 0), 0)
             if (item.transferred) {
                 rows.push({
                     id: `bs-${item.id}`,
@@ -166,7 +179,8 @@ const MutasiDana = () => {
                     src: 'bs',
                     in: amount,
                     out: 0,
-                    link: `/bon-sementara/${item.id}`
+                    link: `/bon-sementara/${item.id}`,
+                    confirmCollection: 'bonSementara', confirmId: item.id, confirmField: 'transferred'
                 })
             } else {
                 pending.push({
@@ -194,7 +208,8 @@ const MutasiDana = () => {
                     src: 'rbs',
                     in: amount,
                     out: 0,
-                    link: `/reimbursement/${item.id}`
+                    link: `/reimbursement/${item.id}`,
+                    confirmCollection: 'reimbursement', confirmId: item.id, confirmField: 'transferred'
                 })
             } else {
                 pending.push({
@@ -272,7 +287,8 @@ const MutasiDana = () => {
                         src: 'lpj',
                         in: sisaKurang,
                         out: 0,
-                        link: `/lpj/${item.id}`
+                        link: `/lpj/${item.id}`,
+                        confirmCollection: 'lpj', confirmId: item.id, confirmField: 'sisaKurangDibayar'
                     })
                 } else {
                     pending.push({
@@ -355,6 +371,35 @@ const MutasiDana = () => {
             toast.error('Gagal menandai sudah masuk')
         } finally {
             setConfirmingId(null)
+        }
+    }
+
+    // Bagian BZ: koreksi dari user -- RBS/BS yang muncul di Oktober
+    // nominalnya ketinggian dibanding BS/RBS asli miliknya. Dugaan kuat:
+    // SEBELUM Bagian BY (perbaikan tanggal konfirmasi individual), beberapa
+    // item lama sempat diklik "Tandai Sudah Masuk" dengan kode LAMA (yang
+    // nulis tanggal HARI INI, bukan tanggal transaksi asli) -- data yang
+    // sudah tersimpan salah itu TIDAK ikut diperbaiki otomatis oleh
+    // perbaikan kode di Bagian BY. Disediakan tombol edit tanggal langsung
+    // di baris buku besar supaya user bisa koreksi sendiri per item, tanpa
+    // perlu akses database -- dipakai field yang sama (`confirmField`) jadi
+    // tidak perlu rule Firestore baru.
+    const [editingDateId, setEditingDateId] = useState(null)
+    const handleEditConfirmedDate = async (row, newDateValue) => {
+        if (!row.confirmCollection || !newDateValue) return
+        try {
+            const field = row.confirmField || 'transferred'
+            await updateDoc(doc(db, row.confirmCollection, row.confirmId), {
+                [field]: true,
+                [`${field}At`]: new Date(newDateValue).toISOString()
+            })
+            toast.success('Tanggal transaksi diperbarui')
+            await fetchData()
+        } catch (error) {
+            console.error('Error editing confirmed date:', error)
+            toast.error('Gagal memperbarui tanggal')
+        } finally {
+            setEditingDateId(null)
         }
     }
 
@@ -680,7 +725,31 @@ const MutasiDana = () => {
                             <tbody>
                                 {visibleTransactions.map((r) => (
                                     <tr key={r.id} className="border-t dark:border-gray-700">
-                                        <td className="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-300 tabular-nums">{formatDate(r.date)}</td>
+                                        <td className="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-300 tabular-nums">
+                                            {editingDateId === r.id ? (
+                                                <input
+                                                    type="date"
+                                                    autoFocus
+                                                    defaultValue={toDateInputValue(r.date)}
+                                                    onBlur={(e) => { if (e.target.value) handleEditConfirmedDate(r, e.target.value); else setEditingDateId(null) }}
+                                                    onKeyDown={(e) => { if (e.key === 'Escape') setEditingDateId(null) }}
+                                                    className="text-xs bg-white dark:bg-gray-800 border dark:border-gray-600 rounded px-1 py-0.5 dark:text-gray-100"
+                                                />
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 group">
+                                                    {formatDate(r.date)}
+                                                    {r.confirmCollection && (
+                                                        <button
+                                                            onClick={() => setEditingDateId(r.id)}
+                                                            title="Koreksi tanggal transaksi ini"
+                                                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                                                        >
+                                                            <FontAwesomeIcon icon={faPen} className="w-2.5 h-2.5" />
+                                                        </button>
+                                                    )}
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-2.5">
                                             <div className="flex items-center gap-1.5 font-medium dark:text-gray-100">
                                                 {r.flag === 'good' && <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 w-3.5 h-3.5 flex-shrink-0" title="Bukti pengembalian sudah terverifikasi" />}
@@ -716,7 +785,7 @@ const MutasiDana = () => {
                         </table>
                     </div>
                     <div className="px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-t dark:border-gray-700">
-                        Urut dari transaksi terbaru. Hanya uang yang sudah benar-benar berpindah (BS/RBS tercentang "Transferred", pengembalian LPJ sudah terverifikasi) yang dihitung di sini -- lihat bagian "Menunggu Konfirmasi" di atas untuk yang belum. Tanda <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 w-3 h-3 mx-0.5" /> = pengembalian LPJ sudah terverifikasi.
+                        Urut dari transaksi terbaru. Hanya uang yang sudah benar-benar berpindah (BS/RBS tercentang "Transferred", pengembalian LPJ sudah terverifikasi) yang dihitung di sini -- lihat bagian "Menunggu Konfirmasi" di atas untuk yang belum. Tanda <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 w-3 h-3 mx-0.5" /> = pengembalian LPJ sudah terverifikasi. Arahkan kursor ke tanggal BS/RBS/Kekurangan LPJ untuk koreksi tanggal kalau salah tercatat.
                     </div>
                 </div>
             )}

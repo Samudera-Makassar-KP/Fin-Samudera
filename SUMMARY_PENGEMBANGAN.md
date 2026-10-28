@@ -3167,7 +3167,41 @@ Poin (2) dikerjakan langsung sesuai permintaan. Untuk poin (1), ditelusuri ulang
 - [x] `CI=true npx eslint src/components/MutasiDana.jsx` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
-- [ ] Tes manual: pilih Bulan=Oktober & Tahun=2026, konfirmasi Saldo Sistem sekarang masuk akal (mendekati BS+RBS+LPJ Oktober saja, tidak lagi 163jt)
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini) — diblokir classifier keamanan ("Production Deploy") 2x berturut-turut di sesi ini, menyusul langsung ke Bagian BZ di bawah sebelum percobaan deploy berikutnya
+- [x] Tes manual: user coba di produksi (kode Bagian BY belum sempat ter-deploy saat ini, jadi kemungkinan besar masih menguji kode SEBELUMNYA/Bagian BX), lapor nominal RBS/BS Oktober "terlalu tinggi" -- jadi pemicu Bagian BZ di bawah
 - [ ] Tes manual: centang "Semua Periode", konfirmasi kedua dropdown jadi disabled & tampilan balik kumulatif
 - [ ] Tes manual: klik tombol centang individual pada item LAMA (bukan bulan berjalan) di "Menunggu Konfirmasi", lalu cek tanggalnya di tabel -- harus tercatat di bulan transaksi ASLINYA, bukan bulan saat tombol diklik
+
+---
+
+# BAGIAN BZ — Mutasi Dana: Koreksi Tanggal Manual & Perbaikan Penjumlahan BS Multi-Item (2026-10-28)
+
+## 88.1 Bug Report dari User
+
+User lapor detail sumber dana (RBS dan BS) di bulan Oktober nominalnya "terlalu tinggi, tidak sesuai" dibanding BS/RBS asli miliknya.
+
+## 88.2 Investigasi
+
+Dua kemungkinan sumber ditemukan:
+
+1. **Data lama yang sudah salah tersimpan.** Perbaikan tanggal di Bagian BY (`handleConfirmTransferred` pakai tanggal transaksi asli, bukan "hari ini") hanya berlaku untuk klik tombol SETELAH kode itu ter-deploy. Deploy Bagian BY sendiri sempat diblokir classifier keamanan -- kemungkinan besar user masih menguji kode Bagian BX (atau lebih lama) saat melaporkan ini, DAN kalaupun sudah ter-deploy, item yang SUDAH diklik "Tandai Sudah Masuk" sebelum perbaikan ini tetap membawa tanggal yang salah (tersimpan permanen di Firestore, kode baru tidak otomatis mengoreksi data lama).
+2. **Bug penjumlahan BS ditemukan terpisah saat audit ulang:** satu dokumen BS bisa berisi BEBERAPA item, masing-masing dengan `nomorBS` & `jumlahBS` sendiri (`FormBs.jsx` punya logic `multipleItems = bonSementara.length > 1`). `MutasiDana.jsx` sebelumnya cuma membaca `bonSementara[0].jumlahBS` -- item ke-2/ke-3 dst tidak ikut terhitung. ArahNYA under-count (bukan over-count seperti yang dilaporkan), tapi tetap bug nyata yang perlu diperbaiki terlepas dari laporan ini.
+
+Karena tidak ada akses langsung ke data Firestore user dari sesi ini untuk memverifikasi dokumen mana yang sebenarnya salah, solusi yang paling aman adalah memberi user kontrol untuk mengoreksi SENDIRI tanggal transaksi yang sudah terlanjur salah tercatat, daripada menerka heuristik otomatis yang berisiko mengubah data yang sebenarnya benar.
+
+## 88.3 Perbaikan
+
+`src/components/MutasiDana.jsx`:
+- **Koreksi tanggal manual**: baris BS/RBS (`transferred`) dan "Kekurangan LPJ dibayar" (`sisaKurangDibayar`) di tabel buku besar sekarang punya ikon pensil (muncul saat hover di kolom Tanggal) -- klik untuk membuka `<input type="date">` inline, ganti tanggalnya, otomatis tersimpan ke Firestore (field `confirmField`/`confirmField + 'At'` yang sama, lewat `canMarkTransferred()`/`canMarkSisaKurangDibayar()` yang sudah ada -- tidak perlu rule baru). Dipakai untuk membenahi data yang sempat tersimpan dengan tanggal salah sebelum Bagian BY.
+- **Penjumlahan BS diperbaiki**: `amount` BS sekarang `(item.bonSementara || []).reduce(...)` (sum semua item), bukan cuma `bonSementara[0].jumlahBS`.
+
+## 88.4 Task Development — Bagian BZ
+
+- [x] `src/components/MutasiDana.jsx`: ikon edit tanggal inline untuk baris BS/RBS/Kekurangan LPJ, BS amount dijumlah dari semua item
+- [x] `CI=true npx eslint src/components/MutasiDana.jsx` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: klik ikon pensil di tanggal BS/RBS yang sudah "Disetujui"/masuk, ganti tanggalnya, konfirmasi baris pindah periode sesuai tanggal baru & Saldo Sistem ikut berubah
+- [ ] Tes manual: cek ulang satu per satu baris Oktober yang dianggap "terlalu tinggi" -- pastikan tanggalnya memang bulan Oktober yang sebenarnya, koreksi lewat ikon pensil kalau salah
+- [ ] Tes manual: BS dengan lebih dari 1 item (nomorBS lebih dari satu) -- konfirmasi jumlah yang muncul di Mutasi Dana sekarang total semua item, bukan cuma item pertama
