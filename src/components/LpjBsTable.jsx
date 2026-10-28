@@ -521,26 +521,41 @@ const LpjBsTable = () => {
                                                 <td className="px-2 py-2 border text-center">
                                                     {item.status === 'Disetujui' ? (
                                                         <div className="inline-flex items-center justify-center gap-3">
-                                                            {item.sisaKurang > 0 && !item.sisaKurangDibayar && (
+                                                            {item.sisaKurang > 0 && (
+                                                                item.sisaKurangDibayar ? (
+                                                                    <span
+                                                                        className="inline-flex items-center justify-center text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                                                                        title="Kekurangan Sudah Dibayar"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faCircleCheck} />
+                                                                    </span>
+                                                                ) : (
+                                                                    <button
+                                                                        className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                                                        onClick={() => handleMarkSisaKurangDibayar(item)}
+                                                                        title="Tandai Kekurangan Sudah Dibayar"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faMoneyBillWave} />
+                                                                    </button>
+                                                                )
+                                                            )}
+                                                            {/* Bagian CD: koreksi dari user -- kalau kekurangan sudah
+                                                                dibayar, reminder ke Finance tidak relevan lagi, sama
+                                                                seperti pola RBS (ReimbursementTable.jsx) saat sudah
+                                                                Transferred. */}
+                                                            {!(item.sisaKurang > 0 && item.sisaKurangDibayar) && (
                                                                 <button
-                                                                    className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                                                                    onClick={() => handleMarkSisaKurangDibayar(item)}
-                                                                    title="Tandai Kekurangan Sudah Dibayar"
+                                                                    className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+                                                                    onClick={() => requestReminder(item)}
+                                                                    disabled={reminderSendingId === item.id}
+                                                                    title="Send Reminder to Finance"
                                                                 >
-                                                                    <FontAwesomeIcon icon={faMoneyBillWave} />
+                                                                    <FontAwesomeIcon
+                                                                        icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
+                                                                        className={reminderSendingId === item.id ? 'animate-spin' : ''}
+                                                                    />
                                                                 </button>
                                                             )}
-                                                            <button
-                                                                className="inline-flex items-center justify-center text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
-                                                                onClick={() => requestReminder(item)}
-                                                                disabled={reminderSendingId === item.id}
-                                                                title="Send Reminder to Finance"
-                                                            >
-                                                                <FontAwesomeIcon
-                                                                    icon={reminderSendingId === item.id ? faSpinner : faEnvelope}
-                                                                    className={reminderSendingId === item.id ? 'animate-spin' : ''}
-                                                                />
-                                                            </button>
                                                         </div>
                                                     ) : (
                                                         <button

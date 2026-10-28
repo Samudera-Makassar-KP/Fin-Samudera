@@ -3308,3 +3308,24 @@ Sebelum deploy, user minta "Catat Nota" RBS disamakan formatnya dengan form peng
 - [x] `CI=true npm run build` sukses
 - [ ] Deploy ke produksi (hosting + firestore rules)
 - [ ] **Belum ada pengujian UI manual sama sekali** -- mohon ditest: catat nota RBS untuk ketiga varian (Umum/Operasional/BBM) termasuk item BBM (cek auto-liter), catat nota LPJ (cek auto-biaya BBM), tambah beberapa item sekaligus lalu simpan, rangkai draft RBS per varian ke form yang benar, rangkai nota LPJ dari Detail BS -- pastikan dropdown jenis di form tujuan terisi benar (bukan jatuh ke "Lainnya")
+
+---
+
+# BAGIAN CD — LpjBsTable: Reminder Hilang Saat Kekurangan Sudah Dibayar (2026-10-28)
+
+## 92.1 Koreksi dari User
+
+Di `LpjBsTable.jsx` (Bagian CB), tombol "Tandai Kekurangan Sudah Dibayar" sudah berubah jadi disabled begitu `sisaKurangDibayar` true, TAPI tombol "Send Reminder to Finance" di sebelahnya tetap selalu tampil terlepas statusnya. User minta disamakan dengan pola RBS (`ReimbursementTable.jsx`): begitu sudah "Transferred"/dibayar, reminder-nya HILANG dan slot itu jadi ikon centang abu-abu (bukan tetap ada tombol reminder di sebelah centang).
+
+## 92.2 Perbaikan
+
+`src/components/LpjBsTable.jsx`: tombol reminder sekarang disembunyikan (`{!(item.sisaKurang > 0 && item.sisaKurangDibayar) && (...)}`) begitu kekurangan sudah dibayar -- persis kondisi `{!item.transferred && (...)}` yang sudah ada di `ReimbursementTable.jsx` untuk RBS. LPJ tanpa `sisaKurang` sama sekali tetap menampilkan reminder seperti biasa (tidak berubah).
+
+## 92.3 Task Development — Bagian CD
+
+- [x] `src/components/LpjBsTable.jsx`: reminder disembunyikan saat kekurangan sudah dibayar, konsisten dengan pola RBS
+- [x] `CI=true npx eslint src/components/LpjBsTable.jsx` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
+- [ ] Tes manual: klik "Tandai Kekurangan Sudah Dibayar" pada LPJ bersisaKurang, konfirmasi tombol reminder di sebelahnya langsung hilang & berubah jadi centang abu-abu
