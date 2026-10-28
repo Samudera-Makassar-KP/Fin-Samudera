@@ -6,18 +6,25 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import Select from 'react-select'
+import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleExclamation, faCircleCheck, faArrowUp, faArrowDown, faTriangleExclamation, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
 
-// Bagian BX: koreksi dari user -- dropdown Bulan & Tahun yang independen
-// (Bagian BW) bisa membentuk kombinasi yang membingungkan (mis. "Oktober" +
-// "Semua Tahun" mencampur Oktober dari banyak tahun sekaligus, atau "Semua
-// Bulan" + "Semua Tahun" kepencet tanpa sadar lalu terlihat seperti "masih
-// nunjukin total semua"). Diganti jadi TAB per periode -- bulan & tahun
-// digabung jadi SATU unit yang tidak bisa mismatch, dibangun dari tanggal
-// transaksi yang benar-benar ada (lihat periodTabs di bawah), + 1 tab
-// "Semua" di akhir untuk tampilan kumulatif (permintaan user sebelumnya).
-const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+// Bagian BY: koreksi dari user -- TAB per periode (Bagian BX) tampilannya
+// dianggap kurang rapi, diminta balik ke 2 dropdown (Bulan, Tahun). TAPI
+// supaya tidak jatuh lagi ke bug Bagian BW (dropdown independen bisa
+// membentuk kombinasi "nyeleneh" seperti Bulan=Oktober + Tahun=Semua Tahun
+// yang mencampur lintas tahun), opsi "Semua" TIDAK lagi ditaruh di masing-
+// masing dropdown -- keduanya SELALU berisi nilai bulan/tahun konkret.
+// Tampilan kumulatif jadi satu toggle terpisah (`showAllTime`), bukan nilai
+// tersembunyi di salah satu dropdown.
+const BULAN_OPTIONS = [
+    { value: 0, label: 'Januari' }, { value: 1, label: 'Februari' }, { value: 2, label: 'Maret' },
+    { value: 3, label: 'April' }, { value: 4, label: 'Mei' }, { value: 5, label: 'Juni' },
+    { value: 6, label: 'Juli' }, { value: 7, label: 'Agustus' }, { value: 8, label: 'September' },
+    { value: 9, label: 'Oktober' }, { value: 10, label: 'November' }, { value: 11, label: 'Desember' }
+]
 
 // Bagian BT: "Mutasi Dana" -- buku kas pribadi milik user yang login, dihitung
 // dari BS/RBS/LPJ miliknya sendiri (tidak ada koleksi transaksi baru di
@@ -52,6 +59,9 @@ const formatDate = (iso) => {
 }
 
 const MutasiDana = () => {
+    const { theme } = useTheme()
+    const isDark = theme === 'dark'
+
     const [loading, setLoading] = useState(true)
     const [bsDocs, setBsDocs] = useState([])
     const [rbsDocs, setRbsDocs] = useState([])
@@ -63,9 +73,11 @@ const MutasiDana = () => {
     const [filter, setFilter] = useState('semua')
 
     const today = new Date()
-    // null = tab "Semua" (kumulatif). Selain itu selalu {bulan, tahun} --
-    // satu unit gabungan, tidak pernah salah satu "semua" sendirian.
-    const [selectedPeriod, setSelectedPeriod] = useState({ bulan: today.getMonth(), tahun: today.getFullYear() })
+    const [selectedBulan, setSelectedBulan] = useState(BULAN_OPTIONS[today.getMonth()])
+    const [selectedTahun, setSelectedTahun] = useState({ value: today.getFullYear(), label: String(today.getFullYear()) })
+    // Toggle terpisah untuk tampilan kumulatif -- BUKAN nilai di dalam
+    // dropdown Bulan/Tahun (lihat catatan Bagian BY di atas komponen ini).
+    const [showAllTime, setShowAllTime] = useState(false)
 
     const uid = typeof window !== 'undefined' ? localStorage.getItem('userUid') : null
 
@@ -91,21 +103,22 @@ const MutasiDana = () => {
 
     useEffect(() => { fetchData() }, [fetchData])
 
-    const isAllTime = selectedPeriod === null
+    const isAllTime = showAllTime
     const matchesPeriod = useCallback((isoDate) => {
         if (isAllTime) return true
         const d = new Date(isoDate || 0)
-        return d.getMonth() === selectedPeriod.bulan && d.getFullYear() === selectedPeriod.tahun
-    }, [isAllTime, selectedPeriod])
+        return d.getMonth() === selectedBulan.value && d.getFullYear() === selectedTahun.value
+    }, [isAllTime, selectedBulan, selectedTahun])
 
     // Bagian BW: Saldo Bank disimpan PER PERIODE (bukan satu angka tunggal
     // lagi) -- docId mutasiDanaSaldoBank diberi akhiran periode supaya tiap
     // kombinasi bulan/tahun (atau "ALL" untuk tampilan kumulatif) punya
     // angka sendiri-sendiri. Lihat firestore.rules -- pola uid-prefix sama
-    // dengan /drafts/{draftId}. Format periodKey tidak berubah dari Bagian
-    // BW (MM-YYYY / ALL-ALL) walau sumber pilihannya sekarang tab, bukan
-    // dropdown -- jadi dokumen saldo bank yang sudah tersimpan tetap valid.
-    const periodKey = isAllTime ? 'ALL-ALL' : `${String(selectedPeriod.bulan + 1).padStart(2, '0')}-${selectedPeriod.tahun}`
+    // dengan /drafts/{draftId}. Format periodKey tidak berubah sejak Bagian
+    // BW (MM-YYYY / ALL-ALL) walau sumber pilihannya sudah berganti dua kali
+    // (dropdown -> tab -> dropdown lagi) -- dokumen saldo bank yang sudah
+    // tersimpan tetap valid.
+    const periodKey = isAllTime ? 'ALL-ALL' : `${String(selectedBulan.value + 1).padStart(2, '0')}-${selectedTahun.value}`
     const saldoBankDocId = uid ? `${uid}_${periodKey}` : null
 
     useEffect(() => {
@@ -280,30 +293,21 @@ const MutasiDana = () => {
         return { allRows: rows, allPending: pending }
     }, [bsDocs, rbsDocs, lpjDocs])
 
-    // Bagian BX: tab periode dibangun dari tanggal transaksi yang BENAR-BENAR
-    // ada di allRows/allPending (bukan dari tanggalPengajuan mentah seperti
-    // tahunOptions versi Bagian BW) -- supaya setiap baris yang bisa muncul
-    // di layar selalu punya tab yang cocok, termasuk baris BS/RBS yang
-    // "pindah bulan" karena tanggal dipakai adalah transferredAt (saat uang
-    // benar-benar masuk), bukan tanggal pengajuan/approval.
-    const periodTabs = useMemo(() => {
-        const map = new Map()
+    // Opsi Tahun dibangun dari tanggal transaksi yang BENAR-BENAR ada di
+    // allRows/allPending (bukan tanggalPengajuan mentah) -- supaya baris
+    // BS/RBS yang "pindah tahun" karena tanggal dipakai adalah transferredAt
+    // (saat uang benar-benar masuk, bisa beda tahun dari tanggal pengajuan)
+    // tetap kebagian opsi tahun yang pas. TIDAK ada opsi "Semua Tahun" di
+    // sini (lihat catatan Bagian BY di atas komponen ini).
+    const tahunOptions = useMemo(() => {
+        const years = new Set([today.getFullYear()])
         const addDate = (iso) => {
-            const d = new Date(iso || 0)
-            if (Number.isNaN(d.getTime()) || d.getFullYear() <= 1970) return
-            const bulan = d.getMonth()
-            const tahun = d.getFullYear()
-            const key = `${tahun}-${bulan}`
-            if (!map.has(key)) map.set(key, { bulan, tahun })
+            const y = new Date(iso || 0).getFullYear()
+            if (!Number.isNaN(y) && y > 1970) years.add(y)
         }
-        addDate(today.toISOString())
         allRows.forEach((r) => addDate(r.date))
         allPending.forEach((p) => addDate(p.date))
-        const periods = Array.from(map.values()).sort((a, b) => (b.tahun - a.tahun) || (b.bulan - a.bulan))
-        return [
-            ...periods.map((p) => ({ key: `${p.tahun}-${p.bulan}`, value: p, label: `${MONTH_SHORT[p.bulan]} ${p.tahun}` })),
-            { key: 'ALL', value: null, label: 'Semua' }
-        ]
+        return Array.from(years).sort((a, b) => b - a).map((y) => ({ value: y, label: String(y) }))
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [allRows, allPending])
 
@@ -327,13 +331,22 @@ const MutasiDana = () => {
     const saldoSistem = totalMasuk - totalKeluar
 
     const [confirmingId, setConfirmingId] = useState(null)
+    // Bagian BY: koreksi dari user -- Saldo Sistem di suatu periode muncul
+    // jauh lebih besar dari yang seharusnya. Penyebabnya field `*At` di sini
+    // sebelumnya diisi "hari ini" (saat tombol diklik), BUKAN tanggal
+    // transaksi aslinya -- kalau user konfirmasi item LAMA (termasuk field
+    // baru `sisaKurangDibayar` yang otomatis "pending" untuk SEMUA LPJ lama
+    // begitu Bagian BX dipasang), jumlahnya ikut tercatat masuk ke bulan
+    // SAAT DIKLIK, bukan bulan transaksi aslinya -- jadi menumpuk di bulan
+    // berjalan dan membuat Saldo Sistem periode itu meledak. Disamakan
+    // dengan `handleBulkConfirmOld` yang sudah benar pakai tanggal asli.
     const handleConfirmTransferred = async (pendingItem) => {
         setConfirmingId(pendingItem.id)
         try {
             const field = pendingItem.confirmField || 'transferred'
             await updateDoc(doc(db, pendingItem.confirmCollection, pendingItem.confirmId), {
                 [field]: true,
-                [`${field}At`]: new Date().toISOString()
+                [`${field}At`]: pendingItem.date || new Date().toISOString()
             })
             toast.success('Ditandai sebagai sudah masuk')
             await fetchData()
@@ -429,6 +442,30 @@ const MutasiDana = () => {
     }
     const srcLabel = { bs: 'BS', rbs: 'RBS', lpj: 'LPJ' }
 
+    const selectStyles = {
+        control: (base) => ({
+            ...base,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
+            fontSize: '13px',
+            minHeight: '36px',
+            borderRadius: '8px'
+        }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
+        menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+        option: (base, state) => ({
+            ...base,
+            fontSize: '13px',
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color
+        })
+    }
+
     if (loading) {
         return (
             <div className="container mx-auto py-10 md:py-8">
@@ -445,33 +482,50 @@ const MutasiDana = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-1">
                 <h2 className="text-xl font-bold dark:text-gray-100">Mutasi Dana Bon Sementara</h2>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 mb-3 -mx-1 px-1">
-                {periodTabs.map((tab) => {
-                    const isSelected = tab.value === null
-                        ? selectedPeriod === null
-                        : selectedPeriod !== null && selectedPeriod.bulan === tab.value.bulan && selectedPeriod.tahun === tab.value.tahun
-                    return (
-                        <button
-                            key={tab.key}
-                            onClick={() => setSelectedPeriod(tab.value)}
-                            className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md border whitespace-nowrap ${
-                                isSelected
-                                    ? 'bg-blue-600 border-blue-600 text-white'
-                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60'
-                            }`}
-                        >
-                            {tab.label}
-                        </button>
-                    )
-                })}
+                <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={showAllTime}
+                            onChange={(e) => setShowAllTime(e.target.checked)}
+                            className="rounded border-gray-300 dark:border-gray-600"
+                        />
+                        Semua Periode
+                    </label>
+                    <div className="flex gap-2">
+                        <div className="w-36">
+                            <Select
+                                options={BULAN_OPTIONS}
+                                value={selectedBulan}
+                                onChange={setSelectedBulan}
+                                isDisabled={showAllTime}
+                                styles={selectStyles}
+                                menuPortalTarget={document.body}
+                                menuPosition="absolute"
+                                isSearchable={false}
+                            />
+                        </div>
+                        <div className="w-28">
+                            <Select
+                                options={tahunOptions}
+                                value={selectedTahun}
+                                onChange={setSelectedTahun}
+                                isDisabled={showAllTime}
+                                styles={selectStyles}
+                                menuPortalTarget={document.body}
+                                menuPosition="absolute"
+                                isSearchable={false}
+                            />
+                        </div>
+                    </div>
+                </div>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-2xl">
                 {isAllTime
                     ? 'Menampilkan SEMUA periode (kumulatif sejak awal).'
-                    : `Menampilkan periode ${MONTH_SHORT[selectedPeriod.bulan]} ${selectedPeriod.tahun} -- Saldo Sistem & Selisih dihitung khusus untuk periode ini. Pilih tab "Semua" untuk lihat kumulatif.`}
+                    : `Menampilkan periode ${selectedBulan.label} ${selectedTahun.value} -- Saldo Sistem & Selisih dihitung khusus untuk periode ini. Centang "Semua Periode" untuk lihat kumulatif.`}
             </p>
 
             {pendingItems.length > 0 && (
@@ -551,7 +605,7 @@ const MutasiDana = () => {
                         />
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {loadingBalance ? 'Memuat...' : savingBalance ? 'Menyimpan...' : `Untuk periode ${isAllTime ? 'semua' : MONTH_SHORT[selectedPeriod.bulan] + ' ' + selectedPeriod.tahun} -- cek dari mutasi rekening, lalu ketik di sini.`}
+                        {loadingBalance ? 'Memuat...' : savingBalance ? 'Menyimpan...' : `Untuk periode ${isAllTime ? 'semua' : selectedBulan.label + ' ' + selectedTahun.value} -- cek dari mutasi rekening, lalu ketik di sini.`}
                     </div>
                 </div>
 

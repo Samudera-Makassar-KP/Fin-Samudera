@@ -3138,6 +3138,36 @@ Sambil menelusuri, ditemukan juga satu inkonsistensi nyata di luar isu dropdown:
 - [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules)
-- [ ] Tes manual: klik tab bulan yang berbeda-beda, konfirmasi Saldo Sistem & daftar transaksi benar-benar ganti sesuai tab (tidak ada lagi campuran lintas tahun)
+- [x] Deploy ke produksi (hosting + firestore rules) — digabung dengan Bagian BY di bawah (Bagian BX sendiri tidak pernah ter-deploy terpisah karena diblokir classifier keamanan, langsung menyusul perbaikan BY sebelum percobaan deploy berikutnya)
+- [x] Tes manual: user coba tab per bulan di produksi, lapor Saldo Sistem masih salah & tampilan tab "sangat buruk" -- jadi pemicu Bagian BY di bawah
 - [ ] Tes manual: LPJ dengan `sisaKurang > 0` muncul di "Menunggu Konfirmasi" dulu, baru pindah ke tabel utama setelah tombol "Tandai Sudah Masuk" diklik
+
+---
+
+# BAGIAN BY — Mutasi Dana: Balik ke 2 Dropdown + Perbaikan Tanggal Konfirmasi (2026-10-28)
+
+## 87.1 Bug Report dari User
+
+Setelah Bagian BX (tab per periode) dicoba di produksi, user lapor: (1) kartu "Saldo Menurut Sistem" menunjukkan Rp163 juta padahal BS Oktober cuma ~Rp40 jutaan -- angkanya masih jauh lebih besar dari yang diharapkan; (2) tampilan tab bulan dinilai "sangat buruk", minta balik ke 2 dropdown (Bulan, Tahun) saja agar rapi.
+
+## 87.2 Investigasi
+
+Poin (2) dikerjakan langsung sesuai permintaan. Untuk poin (1), ditelusuri ulang kemungkinan sumber selisih Rp123 juta antara BS Oktober (~40jt) dan Saldo Sistem (163jt) -- "Saldo Sistem" memang BUKAN cuma BS (ikut menjumlahkan RBS & LPJ periode yang sama), tapi gap sebesar itu mengarah ke kesalahan tanggal, bukan sekadar beda cakupan data. Ditemukan: `handleConfirmTransferred` (tombol centang individual "Tandai Sudah Masuk" di "Menunggu Konfirmasi") menyimpan field `transferredAt`/`sisaKurangDibayarAt` dengan **tanggal HARI INI** (`new Date().toISOString()`), BUKAN tanggal transaksi aslinya -- beda dengan `handleBulkConfirmOld` yang sudah benar pakai tanggal approval asli (`p.date`). Karena field `sisaKurangDibayar` (Bagian BX) baru saja ditambahkan, SEMUA LPJ lama yang punya `sisaKurang > 0` otomatis jadi "pending" dulu -- begitu user klik tombol centang individual (bukan tombol borongan) untuk salah satu dari item-item lama ini, jumlahnya langsung tercatat sebagai uang masuk di bulan SAAT DIKLIK (Oktober), bukan bulan transaksi aslinya -- cocok sebagai penjelasan konkret untuk gap 123jt yang dilaporkan.
+
+## 87.3 Perbaikan
+
+`src/components/MutasiDana.jsx`:
+- Tab per periode (Bagian BX) **dihapus total**, balik ke 2 dropdown react-select (Bulan, Tahun) seperti Bagian BW -- TAPI opsi "Semua Bulan"/"Semua Tahun" tidak lagi ditaruh di masing-masing dropdown (itu akar bug independent-mismatch Bagian BW). Kedua dropdown SELALU berisi nilai konkret; tampilan kumulatif sekarang checkbox terpisah **"Semua Periode"** (`showAllTime`) yang menonaktifkan (disable) kedua dropdown saat dicentang.
+- `handleConfirmTransferred` diperbaiki: `[field]At` sekarang diisi `pendingItem.date` (tanggal transaksi/approval asli) -- SAMA seperti `handleBulkConfirmOld` -- bukan `new Date().toISOString()` lagi. Supaya kronologi buku besar & pengelompokan periode konsisten terlepas dari kapan user kebetulan klik tombolnya.
+- `periodKey` (format `MM-YYYY`/`ALL-ALL`, dipakai untuk docId `mutasiDanaSaldoBank`) tidak berubah lagi -- dokumen Saldo Bank yang sempat tersimpan di Bagian BW/BX tetap valid.
+
+## 87.4 Task Development — Bagian BY
+
+- [x] `src/components/MutasiDana.jsx`: TAB -> 2 dropdown (Bulan/Tahun selalu konkret) + checkbox "Semua Periode", `handleConfirmTransferred` pakai tanggal transaksi asli bukan hari ini
+- [x] `CI=true npx eslint src/components/MutasiDana.jsx` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
+- [ ] Tes manual: pilih Bulan=Oktober & Tahun=2026, konfirmasi Saldo Sistem sekarang masuk akal (mendekati BS+RBS+LPJ Oktober saja, tidak lagi 163jt)
+- [ ] Tes manual: centang "Semua Periode", konfirmasi kedua dropdown jadi disabled & tampilan balik kumulatif
+- [ ] Tes manual: klik tombol centang individual pada item LAMA (bukan bulan berjalan) di "Menunggu Konfirmasi", lalu cek tanggalnya di tabel -- harus tercatat di bulan transaksi ASLINYA, bukan bulan saat tombol diklik
