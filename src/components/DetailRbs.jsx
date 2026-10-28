@@ -6,6 +6,7 @@ import { generateReimbursementPDF } from '../utils/ReimbursementPdf'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import ModalPDF from './ModalPDF'
+import { DetailBackButton, DetailApprovalActions } from './DetailApprovalActions'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -482,6 +483,7 @@ const DetailRbs = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
+            <DetailBackButton />
             <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Detail <span className="font-bold">Reimbursement</span>
             </h2>
@@ -684,6 +686,8 @@ const DetailRbs = () => {
                 </div>
 
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">
+                    <DetailApprovalActions docType="rbs" item={reimbursementDetail ? { ...reimbursementDetail, id } : null} />
+
                     <button
                         className={`w-full md:w-auto px-12 py-3 rounded ${
                             userData?.uid === reimbursementDetail?.user.uid || 

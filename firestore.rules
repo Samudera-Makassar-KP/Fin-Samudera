@@ -439,6 +439,18 @@ service cloud.firestore {
     // Roster headcount per unit dipakai untuk hitung persentase sharing biaya
     // BBM ke unit lain (menu Rekapan, "All Employee" pool) -- lihat
     // src/constants/rekapanSharing.js. Dokumen ID = kode unit (mis. "MJS").
+    // Bagian BR: pengaturan Rekapan khusus Super Admin -- saat ini cuma
+    // dokumen `costTarget` (target % penurunan biaya tahun depan, kartu ke-3
+    // "Ringkasan Biaya & Target" di RekapanCostInsights.jsx).
+    match /rekapanSettings/{docId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin()
+        && request.resource.data.keys().hasOnly(['targetReductionPct', 'updatedAt', 'updatedBy'])
+        && request.resource.data.targetReductionPct is number
+        && request.resource.data.targetReductionPct >= 0
+        && request.resource.data.targetReductionPct <= 100;
+    }
+
     match /rekapanHeadcount/{unitCode} {
       allow read: if isRekapanRole();
       allow write: if isAdminRole()

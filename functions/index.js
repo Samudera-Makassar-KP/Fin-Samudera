@@ -11,6 +11,7 @@ const { getStorage } = require("firebase-admin/storage");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const vision = require("@google-cloud/vision");
+const { PDFDocument } = require("pdf-lib");
 const { formatCurrency, formatDateIndonesia } = require("./lib/format");
 const { buildUserDirectoryEntry } = require("./lib/userDirectory");
 const { textContainsAmount } = require("./lib/pengembalianMatcher");
@@ -20,7 +21,17 @@ const emailPasswordSecret = defineSecret("EMAIL_PASSWORD");
 
 setGlobalOptions({
     region: "asia-southeast2",
-    secrets: [emailUserSecret, emailPasswordSecret]
+    secrets: [emailUserSecret, emailPasswordSecret],
+    // Bagian BO: kuota Cloud Run "Total CPU allocation" project ini di
+    // asia-southeast2 hanya 20 vCPU AKTIF bersamaan (semua instance yang
+    // sedang hidup, termasuk yang masih hangat setelah melayani request).
+    // Default Firebase memberi tiap fungsi 1 vCPU penuh, jadi ~20 instance
+    // hangat dari 23 fungsi sudah menghabiskan kuota dan revisi baru gagal
+    // start ("Quota exceeded for total allowable CPU"). "gcf_gen1" memberi CPU
+    // pecahan sesuai memori (256MiB = 1/6 vCPU, 512MiB = 1/3 vCPU) -- cukup
+    // untuk fungsi yang kerjanya kirim email/panggil API.
+    cpu: "gcf_gen1",
+    maxInstances: 20
 });
 
 // Inisialisasi Firebase Admin
@@ -209,6 +220,9 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
         case 'pengembalianReminder':
             headerText = 'Reminder Bukti Pengembalian BS';
             break;
+        case 'approvedForFinance':
+            headerText = 'Pengajuan Disetujui - Siap Diproses';
+            break;
         default:
             headerText = 'Permintaan Approval';
     }
@@ -223,7 +237,11 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
     // Tambahkan rows untuk LPJ terlebih dahulu jika tipe dokumen adalah LPJ
     if (documentType === 'LPJ') {
         const lpjData = newData.lpjDetail || newData;
-        tableRows += `
+        // Bagian BO: LPJ yang nomor BS-nya diketik manual (BS tidak pernah
+        // dibuat lewat sistem ini) tidak menampilkan baris BS sama sekali --
+        // sebelumnya Finance mengira ada BS di sistem yang ikut terpicu.
+        if (newData.bsFromSystem !== false) {
+            tableRows += `
         <tr>
             <td style="padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;"><strong>Nomor BS</strong></td>
             <td style="padding: 10px; border: 1px solid #ddd;">${lpjData.nomorBS || 0}</td>
@@ -231,7 +249,9 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
         <tr>
             <td style="padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;"><strong>Jumlah BS</strong></td>
             <td style="padding: 10px; border: 1px solid #ddd;">${formatCurrency(lpjData.jumlahBS || 0)}</td>
-        </tr>
+        </tr>`;
+        }
+        tableRows += `
         <tr>
             <td style="padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;"><strong>Total Pengeluaran</strong></td>
             <td style="padding: 10px; border: 1px solid #ddd;">${formatCurrency(lpjData.totalBiaya || 0)}</td>
@@ -296,6 +316,25 @@ const createEmailTemplate = (content, submitterData, newData, showSubmitterInfo 
     </div>
     `;
 };
+
+// Bagian BO: LPJ boleh diajukan dengan nomor BS yang diketik manual (BS-nya
+// dibuat di luar sistem, lihat CreatableSelect di FormLpjUmum/Marketing.jsx).
+// Untuk LPJ seperti itu, email TIDAK boleh menyebut BS -- dihitung sekali
+// saat LPJ dibuat lalu disimpan sebagai `bsFromSystem`; LPJ lama yang belum
+// punya field ini dicek ulang ke koleksi bonSementara.
+const resolveLpjBsFromSystem = async (lpjData) => {
+    if (typeof lpjData?.bsFromSystem === "boolean") return lpjData.bsFromSystem;
+    const nomorBS = typeof lpjData?.nomorBS === "string" ? lpjData.nomorBS.trim() : "";
+    if (!nomorBS) return false;
+    const candidates = [...new Set([nomorBS, nomorBS.toUpperCase()])];
+    const snapshot = await db.collection("bonSementara")
+        .where("displayId", "in", candidates)
+        .limit(1)
+        .get();
+    return !snapshot.empty;
+};
+
+const getLpjLabel = (lpjData) => (lpjData?.bsFromSystem === false ? "LPJ" : "LPJ BS");
 
 // Helper Function: Mengirim email
 const sendEmail = async (to, subject, htmlContent = null, attachments = []) => {
@@ -750,187 +789,136 @@ exports.notifyReviewersAndUserCreateBS = onDocumentUpdated("bonSementara/{docId}
     }
 });
 
-// Dipanggil dari tombol "Kirim Reminder ke Finance" di BsTable.jsx (kolom Aksi,
-// khusus BS berstatus Disetujui). Finance = user role Validator. Mengirim satu
-// email berisi narasi permintaan bantuan pencairan + detail BS (format sama
-// seperti email notifikasi lain, lihat createEmailTemplate) + lampiran PDF BS
-// (format sama seperti PDF hasil "Print", digenerate & di-upload client lewat
-// generateBsPDF sebelum memanggil ini, lalu diambil ulang di sini lewat
-// pdfUrl -- downloadURL Firebase Storage sudah membawa token akses sendiri,
-// jadi bisa di-fetch tanpa Admin SDK Storage).
-exports.sendBsFinanceReminder = onCall(async (request) => {
-    if (!request.auth?.uid) {
-        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
-    }
-
-    const bsId = normalizeText(request.data?.bsId, "ID BS", 200);
-    const validatorUid = normalizeText(request.data?.validatorUid, "UID Validator", 128);
-    const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
-
-    const bsDoc = await db.collection("bonSementara").doc(bsId).get();
-    if (!bsDoc.exists) {
-        throw new HttpsError("not-found", "Data Bon Sementara tidak ditemukan.");
-    }
-    const bsData = bsDoc.data();
-
-    if (bsData.user?.uid !== request.auth.uid) {
-        throw new HttpsError("permission-denied", "Anda hanya bisa mengirim reminder untuk BS milik sendiri.");
-    }
-    if (bsData.status !== "Disetujui") {
-        throw new HttpsError("failed-precondition", "BS belum berstatus Disetujui.");
-    }
-
-    const [validatorData, submitterData] = await Promise.all([
-        getUserData(validatorUid),
-        getUserData(request.auth.uid)
-    ]);
-
-    if (!validatorData || validatorData.role !== "Validator") {
-        throw new HttpsError("invalid-argument", "Finance (Validator) yang dipilih tidak ditemukan atau bukan role Validator.");
-    }
-    if (!validatorData.email) {
-        throw new HttpsError("failed-precondition", "Finance yang dipilih tidak memiliki alamat email terdaftar.");
-    }
-
-    // Defense-in-depth: jangan percaya begitu saja validatorUid dari client --
-    // pastikan Validator ini memang ditugaskan di salah satu Unit Bisnis yang
-    // sama dengan submitter (mencegah kirim reminder ke Validator unit lain).
-    const submitterUnits = Array.isArray(submitterData?.unit) ? submitterData.unit : [];
-    const validatorUnits = Array.isArray(validatorData?.unit) ? validatorData.unit : [];
-    const sharesUnit = submitterUnits.some((unit) => validatorUnits.includes(unit));
-    if (!sharesUnit) {
-        throw new HttpsError("permission-denied", "Finance yang dipilih tidak terdaftar di Unit Bisnis Anda.");
-    }
-
-    let attachments = [];
-    if (pdfUrl) {
-        try {
-            const response = await fetch(pdfUrl);
-            if (response.ok) {
-                const arrayBuffer = await response.arrayBuffer();
-                attachments = [{
-                    filename: `${bsData.displayId}.pdf`,
-                    content: Buffer.from(arrayBuffer),
-                    contentType: "application/pdf"
-                }];
-            } else {
-                console.error("Gagal mengambil PDF BS untuk lampiran reminder, status:", response.status);
-            }
-        } catch (error) {
-            console.error("Gagal mengambil PDF BS untuk lampiran reminder:", error);
+// Bagian BP: satu pembuat handler untuk semua tombol "Kirim Reminder ke
+// Finance" (BS -- Bagian L, RBS -- Bagian BK, LPJ -- baru). Validasinya
+// identik dengan versi lama per-modul: login wajib, dokumen milik pemanggil,
+// status "Disetujui", Validator tujuan benar-benar role Validator dan berbagi
+// Unit Bisnis dengan pengaju (defense-in-depth, jangan percaya validatorUid
+// dari client). Bedanya: email sekarang melampirkan form + lampiran dokumen
+// yang SUDAH DIGABUNG jadi satu PDF (buildFormWithLampiranAttachments).
+const createFinanceReminderHandler = ({ collectionName, idField, notFoundLabel, ownLabel, rejectIfTransferred = false, rejectReason, describe }) =>
+    async (request) => {
+        if (!request.auth?.uid) {
+            throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
         }
-    }
 
-    const subject = `Reminder Pencairan BS - ${bsData.displayId}`;
-    const emailContent = `
-        Dear <strong>${validatorData.nama}</strong>,
-        <br><br>Mohon dibantu maker atas BS berikut:
-    `;
+        const docId = normalizeText(request.data?.[idField], `ID ${notFoundLabel}`, 200);
+        const validatorUid = normalizeText(request.data?.validatorUid, "UID Validator", 128);
+        const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
 
-    const sent = await sendEmail(
-        validatorData.email,
-        subject,
-        createEmailTemplate(emailContent, submitterData, bsData, true, "financeReminder"),
-        attachments
-    );
-
-    if (!sent) {
-        throw new HttpsError("internal", "Gagal mengirim email reminder ke Finance.");
-    }
-
-    return { sent: true, to: validatorData.email };
-});
-
-// Bagian BK: versi RBS dari sendBsFinanceReminder di atas -- dipanggil dari
-// tombol "Kirim Reminder ke Finance" di ReimbursementTable.jsx (kolom Aksi,
-// khusus Reimbursement berstatus Disetujui), pola & validasi identik persis
-// (copy-sejajar) dengan sendBsFinanceReminder, cuma koleksi & field yang beda.
-// Menggantikan rencana awal (menu "Maker" otomatis, Bagian BI/BJ) yang
-// dibatalkan user -- fitur ini sengaja TETAP manual (reminder, bukan status
-// terlacak) supaya benar-benar jadi "pengingat kalau finance lama
-// memprosesnya", bukan tahap approval baru.
-exports.sendRbsFinanceReminder = onCall(async (request) => {
-    if (!request.auth?.uid) {
-        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
-    }
-
-    const rbsId = normalizeText(request.data?.rbsId, "ID Reimbursement", 200);
-    const validatorUid = normalizeText(request.data?.validatorUid, "UID Validator", 128);
-    const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
-
-    const rbsDoc = await db.collection("reimbursement").doc(rbsId).get();
-    if (!rbsDoc.exists) {
-        throw new HttpsError("not-found", "Data Reimbursement tidak ditemukan.");
-    }
-    const rbsData = rbsDoc.data();
-
-    if (rbsData.user?.uid !== request.auth.uid) {
-        throw new HttpsError("permission-denied", "Anda hanya bisa mengirim reminder untuk Reimbursement milik sendiri.");
-    }
-    if (rbsData.status !== "Disetujui") {
-        throw new HttpsError("failed-precondition", "Reimbursement belum berstatus Disetujui.");
-    }
-
-    const [validatorData, submitterData] = await Promise.all([
-        getUserData(validatorUid),
-        getUserData(request.auth.uid)
-    ]);
-
-    if (!validatorData || validatorData.role !== "Validator") {
-        throw new HttpsError("invalid-argument", "Finance (Validator) yang dipilih tidak ditemukan atau bukan role Validator.");
-    }
-    if (!validatorData.email) {
-        throw new HttpsError("failed-precondition", "Finance yang dipilih tidak memiliki alamat email terdaftar.");
-    }
-
-    // Defense-in-depth: sama seperti sendBsFinanceReminder -- jangan percaya
-    // begitu saja validatorUid dari client, pastikan Validator ini memang
-    // ditugaskan di salah satu Unit Bisnis yang sama dengan submitter.
-    const submitterUnits = Array.isArray(submitterData?.unit) ? submitterData.unit : [];
-    const validatorUnits = Array.isArray(validatorData?.unit) ? validatorData.unit : [];
-    const sharesUnit = submitterUnits.some((unit) => validatorUnits.includes(unit));
-    if (!sharesUnit) {
-        throw new HttpsError("permission-denied", "Finance yang dipilih tidak terdaftar di Unit Bisnis Anda.");
-    }
-
-    let attachments = [];
-    if (pdfUrl) {
-        try {
-            const response = await fetch(pdfUrl);
-            if (response.ok) {
-                const arrayBuffer = await response.arrayBuffer();
-                attachments = [{
-                    filename: `${rbsData.displayId}.pdf`,
-                    content: Buffer.from(arrayBuffer),
-                    contentType: "application/pdf"
-                }];
-            } else {
-                console.error("Gagal mengambil PDF Reimbursement untuk lampiran reminder, status:", response.status);
-            }
-        } catch (error) {
-            console.error("Gagal mengambil PDF Reimbursement untuk lampiran reminder:", error);
+        const docSnap = await db.collection(collectionName).doc(docId).get();
+        if (!docSnap.exists) {
+            throw new HttpsError("not-found", `Data ${notFoundLabel} tidak ditemukan.`);
         }
+        const data = docSnap.data();
+
+        if (data.user?.uid !== request.auth.uid) {
+            throw new HttpsError("permission-denied", `Anda hanya bisa mengirim reminder untuk ${ownLabel} milik sendiri.`);
+        }
+        if (data.status !== "Disetujui") {
+            throw new HttpsError("failed-precondition", `${notFoundLabel} belum berstatus Disetujui.`);
+        }
+        // Bagian BO: RBS yang sudah ditandai Transferred tidak perlu reminder.
+        if (rejectIfTransferred && data.transferred) {
+            throw new HttpsError("failed-precondition", `${notFoundLabel} ini sudah ditandai Transferred.`);
+        }
+        const blockedReason = rejectReason ? await rejectReason(data) : null;
+        if (blockedReason) {
+            throw new HttpsError("failed-precondition", blockedReason);
+        }
+
+        const [validatorData, submitterData] = await Promise.all([
+            getUserData(validatorUid),
+            getUserData(request.auth.uid)
+        ]);
+
+        if (!validatorData || validatorData.role !== "Validator") {
+            throw new HttpsError("invalid-argument", "Finance (Validator) yang dipilih tidak ditemukan atau bukan role Validator.");
+        }
+        if (!validatorData.email) {
+            throw new HttpsError("failed-precondition", "Finance yang dipilih tidak memiliki alamat email terdaftar.");
+        }
+
+        const submitterUnits = Array.isArray(submitterData?.unit) ? submitterData.unit : [];
+        const validatorUnits = Array.isArray(validatorData?.unit) ? validatorData.unit : [];
+        if (!submitterUnits.some((unit) => validatorUnits.includes(unit))) {
+            throw new HttpsError("permission-denied", "Finance yang dipilih tidak terdaftar di Unit Bisnis Anda.");
+        }
+
+        const { subject, request: requestText } = await describe(data);
+        const { attachments, note } = await buildFormWithLampiranAttachments(data.displayId, pdfUrl, data.lampiranUrl);
+
+        const sent = await sendEmail(
+            validatorData.email,
+            subject,
+            createEmailTemplate(`
+                Dear <strong>${validatorData.nama}</strong>,
+                <br><br>${requestText}
+                <br>${note}
+            `, submitterData, data, true, "financeReminder"),
+            attachments
+        );
+
+        if (!sent) {
+            throw new HttpsError("internal", "Gagal mengirim email reminder ke Finance.");
+        }
+
+        return { sent: true, to: validatorData.email };
+    };
+
+// Dipanggil dari tombol "Kirim Reminder ke Finance" di BsTable.jsx (khusus BS
+// Disetujui). Lampiran BS hanya ada untuk BS > Rp3 juta (Bagian BO).
+exports.sendBsFinanceReminder = onCall({ memory: "512MiB", timeoutSeconds: 120 }, createFinanceReminderHandler({
+    collectionName: "bonSementara",
+    idField: "bsId",
+    notFoundLabel: "Bon Sementara",
+    ownLabel: "BS",
+    // Bagian BQ: BS yang sudah Reported (ada LPJ Disetujui untuk nomor BS ini,
+    // aturan sama dengan "Sudah LPJ" di BsTable.jsx) tidak perlu reminder lagi.
+    rejectReason: async (data) => {
+        const lpjSnapshot = await db.collection("lpj")
+            .where("nomorBS", "==", data.displayId)
+            .get();
+        const reported = lpjSnapshot.docs.some((lpjDoc) => lpjDoc.data().status === "Disetujui");
+        return reported ? "BS ini sudah Reported (LPJ Disetujui), reminder ke Finance tidak diperlukan." : null;
+    },
+    describe: async (data) => ({
+        subject: `Reminder Pencairan BS - ${data.displayId}`,
+        request: "Mohon dibantu maker atas BS berikut:"
+    })
+}));
+
+// Bagian BK: versi RBS -- dipanggil dari ReimbursementTable.jsx. Sengaja tetap
+// manual (pengingat kalau Finance lama memproses), bukan tahap approval baru.
+exports.sendRbsFinanceReminder = onCall({ memory: "512MiB", timeoutSeconds: 120 }, createFinanceReminderHandler({
+    collectionName: "reimbursement",
+    idField: "rbsId",
+    notFoundLabel: "Reimbursement",
+    ownLabel: "Reimbursement",
+    rejectIfTransferred: true,
+    describe: async (data) => ({
+        subject: `Reminder Pencairan Reimbursement - ${data.displayId}`,
+        request: "Mohon dibantu maker atas Reimbursement berikut:"
+    })
+}));
+
+// Bagian BP: versi LPJ -- dipanggil dari LpjBsTable.jsx. Label "LPJ"/"LPJ BS"
+// mengikuti apakah BS-nya dibuat lewat sistem (Bagian BO).
+exports.sendLpjFinanceReminder = onCall({ memory: "512MiB", timeoutSeconds: 120 }, createFinanceReminderHandler({
+    collectionName: "lpj",
+    idField: "lpjId",
+    notFoundLabel: "LPJ",
+    ownLabel: "LPJ",
+    describe: async (data) => {
+        data.bsFromSystem = await resolveLpjBsFromSystem(data);
+        const label = getLpjLabel(data);
+        return {
+            subject: `Reminder ${label} - ${data.displayId}`,
+            request: `Mohon dibantu proses atas ${label} berikut:`
+        };
     }
+}));
 
-    const subject = `Reminder Pencairan Reimbursement - ${rbsData.displayId}`;
-    const emailContent = `
-        Dear <strong>${validatorData.nama}</strong>,
-        <br><br>Mohon dibantu maker atas Reimbursement berikut:
-    `;
-
-    const sent = await sendEmail(
-        validatorData.email,
-        subject,
-        createEmailTemplate(emailContent, submitterData, rbsData, true, "financeReminder"),
-        attachments
-    );
-
-    if (!sent) {
-        throw new HttpsError("internal", "Gagal mengirim email reminder ke Finance.");
-    }
-
-    return { sent: true, to: validatorData.email };
-});
 
 // Baca teks dari bukti pengembalian (foto/PDF struk transfer) lewat Google Cloud
 // Vision OCR. Gambar pakai textDetection biasa; PDF butuh endpoint terpisah
@@ -1066,6 +1054,283 @@ exports.backfillPengembalianValidation = onCall(async (request) => {
 
     return { checked: snapshot.size, fixed, fixedDisplayIds };
 });
+
+// -----------------------------------------------------------------------------------
+// Bagian BO: dokumen Disetujui -> Finance, dan bukti pengembalian di lampiran LPJ
+// -----------------------------------------------------------------------------------
+
+// Hanya URL unduhan Firebase Storage milik project ini yang boleh di-fetch
+// server -- supaya callable di bawah tidak bisa dipakai mengambil URL sembarang.
+const isOwnStorageUrl = (url) => {
+    if (typeof url !== "string" || !url) return false;
+    const bucketName = getStorage().bucket().name;
+    return url.startsWith(`https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/`);
+};
+
+const fetchStorageFile = async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Fetch file gagal, status ${response.status}`);
+    }
+    return {
+        buffer: Buffer.from(await response.arrayBuffer()),
+        contentType: response.headers.get("content-type") || ""
+    };
+};
+
+const mergePdfBuffers = async (buffers) => {
+    const merged = await PDFDocument.create();
+    for (const buffer of buffers) {
+        const source = await PDFDocument.load(buffer, { ignoreEncryption: true });
+        const pages = await merged.copyPages(source, source.getPageIndices());
+        pages.forEach((page) => merged.addPage(page));
+    }
+    return Buffer.from(await merged.save());
+};
+
+// Batas lampiran Gmail 25MB -- disisakan ruang untuk overhead encoding email.
+const EMAIL_ATTACHMENT_MAX_BYTES = 18 * 1024 * 1024;
+
+// Bagian BP: lampiran email ke Finance = PDF form resmi + lampiran dokumen,
+// digabung jadi SATU file. Dipakai email "Disetujui - Siap Diproses" dan
+// semua tombol "Reminder ke Finance" (BS/RBS/LPJ). Kalau penggabungan gagal
+// (mis. PDF lampiran rusak), dikirim sebagai dua file terpisah; kalau terlalu
+// besar untuk email, tidak dilampirkan dan `note` meminta Finance membuka
+// website. `note` siap disisipkan ke isi email.
+const buildFormWithLampiranAttachments = async (displayId, formPdfUrl, lampiranUrl) => {
+    const pdfParts = [];
+    for (const url of [formPdfUrl, lampiranUrl]) {
+        if (!isOwnStorageUrl(url)) continue;
+        try {
+            pdfParts.push((await fetchStorageFile(url)).buffer);
+        } catch (error) {
+            console.error(`Gagal mengambil file untuk ${displayId}:`, error);
+        }
+    }
+
+    if (pdfParts.length === 0) {
+        return { attachments: [], note: "Form/lampiran tidak berhasil dilampirkan, silakan buka & cetak melalui website." };
+    }
+
+    let combined;
+    try {
+        combined = await mergePdfBuffers(pdfParts);
+    } catch (error) {
+        console.error(`Gagal menggabungkan PDF ${displayId}, dikirim terpisah:`, error);
+    }
+    const files = combined
+        ? [{ filename: `${displayId}.pdf`, content: combined }]
+        : pdfParts.map((content, index) => ({
+            filename: index === 0 ? `${displayId}.pdf` : `Lampiran_${displayId}.pdf`,
+            content
+        }));
+
+    const totalBytes = files.reduce((sum, file) => sum + file.content.length, 0);
+    if (totalBytes > EMAIL_ATTACHMENT_MAX_BYTES) {
+        return { attachments: [], note: "File form + lampiran terlalu besar untuk dikirim lewat email, silakan buka & cetak melalui website." };
+    }
+
+    return {
+        attachments: files.map((file) => ({ ...file, contentType: "application/pdf" })),
+        note: pdfParts.length > 1
+            ? "Terlampir form beserta lampirannya dalam satu file PDF."
+            : "Terlampir form dalam file PDF."
+    };
+};
+
+// Dipanggil client (utils/approvalWorkflow.js) tepat setelah RBS/LPJ mencapai
+// "Disetujui" penuh -- client lebih dulu men-generate & mengunggah PDF form resmi
+// (react-pdf cuma bisa dirender di client), lalu fungsi ini menggabungkan form +
+// lampiran jadi SATU PDF dan mengirimkannya ke SEMUA Validator (Finance) yang
+// terdaftar di Unit Bisnis dokumen tsb. Idempoten lewat `approvedNotifSentAt`.
+exports.sendApprovedDocToValidators = onCall({ memory: "512MiB", timeoutSeconds: 120 }, async (request) => {
+    if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Anda harus login untuk menjalankan aksi ini.");
+    }
+
+    const collectionName = request.data?.collectionName;
+    if (!["reimbursement", "lpj"].includes(collectionName)) {
+        throw new HttpsError("invalid-argument", "Jenis dokumen tidak dikenali.");
+    }
+    const docId = normalizeText(request.data?.docId, "ID dokumen", 200);
+    const pdfUrl = normalizeText(request.data?.pdfUrl, "URL PDF", 2000, false);
+
+    const docRef = db.collection(collectionName).doc(docId);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+        throw new HttpsError("not-found", "Dokumen tidak ditemukan.");
+    }
+    const data = docSnap.data();
+    if (data.status !== "Disetujui") {
+        throw new HttpsError("failed-precondition", "Dokumen belum berstatus Disetujui.");
+    }
+
+    const requesterData = await getUserData(request.auth.uid);
+    const isSuperAdmin = requesterData?.role === "Super Admin";
+    const isApprover = ["validator", "reviewer1", "reviewer2"].some((field) =>
+        Array.isArray(data.user?.[field]) && data.user[field].includes(request.auth.uid)
+    );
+    if (!isSuperAdmin && !isApprover) {
+        throw new HttpsError("permission-denied", "Hanya approver dokumen ini yang bisa mengirimkannya ke Finance.");
+    }
+
+    // Klaim lewat transaksi supaya dua panggilan bersamaan tidak sama-sama
+    // mengirim email; klaim dilepas lagi kalau pengiriman gagal total.
+    const claimed = await db.runTransaction(async (transaction) => {
+        const fresh = await transaction.get(docRef);
+        const freshData = fresh.data() || {};
+        if (freshData.approvedNotifSentAt || freshData.approvedNotifClaimedAt) return false;
+        transaction.update(docRef, { approvedNotifClaimedAt: new Date().toISOString() });
+        return true;
+    });
+    if (!claimed) {
+        return { skipped: true };
+    }
+
+    try {
+        if (collectionName === "lpj") {
+            data.bsFromSystem = await resolveLpjBsFromSystem(data);
+        }
+        const docLabel = collectionName === "lpj" ? getLpjLabel(data) : "Reimbursement";
+        const docUnit = data.user?.unit;
+
+        const validatorsSnapshot = await db.collection("users").where("role", "==", "Validator").get();
+        const recipients = validatorsSnapshot.docs
+            .map((userDoc) => userDoc.data())
+            .filter((user) => user.email && Array.isArray(user.unit) && user.unit.includes(docUnit));
+
+        if (recipients.length === 0) {
+            console.warn(`Tidak ada Validator untuk unit ${docUnit}, ${data.displayId} tidak dikirim ke Finance.`);
+            await docRef.update({ approvedNotifClaimedAt: null });
+            return { sent: 0, reason: "no-validator" };
+        }
+
+        const { attachments, note: attachmentNote } = await buildFormWithLampiranAttachments(data.displayId, pdfUrl, data.lampiranUrl);
+
+        const submitterData = await getUserData(data.user?.uid);
+        const subject = `${docLabel} Disetujui - ${data.displayId} - Siap Diproses`;
+        const results = await Promise.all(recipients.map((validator) => sendEmail(
+            validator.email,
+            subject,
+            createEmailTemplate(`
+                Dear <strong>${validator.nama}</strong>,
+                <br><br>Pengajuan ${docLabel} berikut telah disetujui penuh dan siap diproses.
+                <br>${attachmentNote}
+            `, submitterData, data, true, "approvedForFinance"),
+            attachments
+        )));
+
+        const sentTo = recipients.filter((_, index) => results[index]).map((validator) => validator.email);
+        if (sentTo.length === 0) {
+            await docRef.update({ approvedNotifClaimedAt: null });
+            throw new HttpsError("internal", "Gagal mengirim email ke Finance.");
+        }
+
+        await docRef.update({
+            approvedNotifSentAt: new Date().toISOString(),
+            approvedNotifRecipients: sentTo
+        });
+        return { sent: sentTo.length, withAttachment: attachments.length > 0 };
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        await docRef.update({ approvedNotifClaimedAt: null }).catch(() => {});
+        console.error(`sendApprovedDocToValidators gagal untuk ${data.displayId}:`, error);
+        throw new HttpsError("internal", "Gagal mengirim dokumen ke Finance.");
+    }
+});
+
+// Kata-kata khas bukti transfer -- dipakai bersama pencocokan nominal supaya
+// nota belanja biasa di lampiran yang kebetulan bernilai sama dengan sisa lebih
+// tidak dianggap bukti pengembalian.
+const TRANSFER_PROOF_PATTERN = /(transfer|trf|berhasil|sukses|successful|rekening|penerima|pengirim|no\.?\s*ref|referensi|mutasi|setor|m-?banking|livin|brimo|bca|mandiri|bni|bri|btn|bsi|cimb|ocbc|danamon|permata|jago|seabank)/i;
+const LAMPIRAN_OCR_MAX_PAGES = 30;
+const VISION_PAGES_PER_REQUEST = 5;
+
+// OCR per halaman lampiran (PDF gabungan atau gambar). Halaman dibaca dari
+// BELAKANG (bukti transfer biasanya dilampirkan paling akhir) dan berhenti di
+// halaman pertama yang cocok, supaya panggilan Vision API seminimal mungkin.
+const findPengembalianInLampiran = async (buffer, contentType, sisaLebih) => {
+    const matches = (text) => textContainsAmount(text, sisaLebih) && TRANSFER_PROOF_PATTERN.test(text);
+
+    if (contentType !== "application/pdf") {
+        const [result] = await visionClient.textDetection({ image: { content: buffer } });
+        const text = result.fullTextAnnotation?.text || "";
+        return matches(text) ? { page: 1, text } : null;
+    }
+
+    let pageCount = VISION_PAGES_PER_REQUEST;
+    try {
+        pageCount = (await PDFDocument.load(buffer, { ignoreEncryption: true })).getPageCount();
+    } catch (error) {
+        console.warn("Gagal membaca jumlah halaman lampiran, OCR 5 halaman pertama saja:", error?.message);
+    }
+
+    const firstPage = Math.max(1, pageCount - LAMPIRAN_OCR_MAX_PAGES + 1);
+    for (let end = pageCount; end >= firstPage; end -= VISION_PAGES_PER_REQUEST) {
+        const start = Math.max(firstPage, end - VISION_PAGES_PER_REQUEST + 1);
+        const pages = [];
+        for (let page = start; page <= end; page++) pages.push(page);
+
+        const [result] = await visionClient.batchAnnotateFiles({
+            requests: [{
+                inputConfig: { content: buffer.toString("base64"), mimeType: "application/pdf" },
+                features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+                pages
+            }]
+        });
+        const pageResponses = result.responses?.[0]?.responses || [];
+        for (let index = pageResponses.length - 1; index >= 0; index--) {
+            const text = pageResponses[index]?.fullTextAnnotation?.text || "";
+            if (matches(text)) return { page: pages[index], text };
+        }
+    }
+    return null;
+};
+
+// Permintaan SMDR-Finance: kalau pengaju menaruh bukti transfer pengembalian di
+// Lampiran LPJ biasa (bukan lewat tombol "Upload Bukti Pengembalian"), sistem
+// membacanya otomatis. Jalan saat LPJ dibuat ATAU lampirannya diganti. Hanya
+// menandai "valid" kalau ketemu -- kalau tidak ketemu, status pengembalian
+// dibiarkan apa adanya (lampiran biasa memang tidak wajib berisi bukti
+// transfer, jadi tidak boleh menandainya "tidak sesuai").
+exports.autoValidatePengembalianFromLampiran = onDocumentWritten(
+    { document: "lpj/{docId}", memory: "512MiB", timeoutSeconds: 120 },
+    async (event) => {
+        const after = event.data?.after?.data();
+        if (!after) return;
+        const before = event.data?.before?.data();
+        if (before && before.lampiranUrl === after.lampiranUrl) return;
+
+        const sisaLebih = Number(after.sisaLebih) || 0;
+        if (sisaLebih <= 0 || !isOwnStorageUrl(after.lampiranUrl)) return;
+        if (["valid", "grandfathered"].includes(after.pengembalianStatus)) return;
+
+        let found;
+        try {
+            const { buffer, contentType } = await fetchStorageFile(after.lampiranUrl);
+            found = await findPengembalianInLampiran(buffer, contentType, sisaLebih);
+        } catch (error) {
+            console.error(`OCR lampiran LPJ ${after.displayId} gagal:`, error?.message || error);
+            return;
+        }
+        if (!found) return;
+
+        const docRef = event.data.after.ref;
+        await db.runTransaction(async (transaction) => {
+            const fresh = (await transaction.get(docRef)).data() || {};
+            if (["valid", "grandfathered"].includes(fresh.pengembalianStatus)) return;
+            if (fresh.lampiranUrl !== after.lampiranUrl) return;
+            transaction.update(docRef, {
+                pengembalianBuktiUrl: after.lampiranUrl,
+                pengembalianStatus: "valid",
+                pengembalianSource: "lampiran_lpj",
+                pengembalianValidationNote: `Terdeteksi otomatis dari Lampiran LPJ (halaman ${found.page}): ${found.text.slice(0, 900)}`,
+                pengembalianUploadedAt: new Date().toISOString()
+            });
+        });
+        console.log(`Bukti pengembalian ${after.displayId} terdeteksi otomatis di lampiran halaman ${found.page}.`);
+    }
+);
 
 // Bagian AW: upload file (lampiran RBS/LPJ, PDF resmi hasil cetak, bukti
 // pengembalian) untuk path Storage yang SEBELUMNYA divalidasi client-side
@@ -1439,10 +1704,14 @@ exports.notifyValidatorOnCreateLPJ = onDocumentCreated("lpj/{docId}", async (eve
     const newData = event.data.data();
     if (!newData?.user?.validator?.length) return;
 
+    newData.bsFromSystem = await resolveLpjBsFromSystem(newData);
+    const lpjLabel = getLpjLabel(newData);
+
     // Perbarui dokumen dengan currentApproverUid dan lastStatusChange
     await db.collection("lpj").doc(event.params.docId).update({
         currentApproverUid: newData.user.validator[0],
-        lastStatusChange: new Date().toISOString()
+        lastStatusChange: new Date().toISOString(),
+        bsFromSystem: newData.bsFromSystem
     });
 
     const submitterData = await getUserData(newData.user.uid);
@@ -1451,10 +1720,10 @@ exports.notifyValidatorOnCreateLPJ = onDocumentCreated("lpj/{docId}", async (eve
     const emailPromises = validatorsData
         .filter(validator => validator?.email)
         .map(validatorData => {
-            const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+            const subject = `Permintaan Approval ${lpjLabel} - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
             const emailContent = `
                 Dear <strong>${validatorData.nama}</strong>,
-                <br><br>Mohon untuk melakukan validasi atas pengajuan LPJ BS berikut:
+                <br><br>Mohon untuk melakukan validasi atas pengajuan ${lpjLabel} berikut:
             `;
             return sendEmail(
                 validatorData.email,
@@ -1482,6 +1751,8 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
         getUserData(newData.user.reviewer2?.[0]),
         getUserData(newData.user.uid)
     ]);
+    newData.bsFromSystem = await resolveLpjBsFromSystem(newData);
+    const lpjLabel = getLpjLabel(newData);
     const latestStatus = newData.statusHistory?.[newData.statusHistory.length - 1];
     const actorData = latestStatus?.actor ? await getUserData(latestStatus.actor) : null;
     // PENTING: sentinel harus `undefined`, BUKAN `null` -- lihat penjelasan di
@@ -1491,12 +1762,12 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
 
     if (newData.status === "Ditolak") {
         await docRef.update({ currentApproverUid: null });
-        const subject = `Pengajuan LPJ BS Ditolak - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+        const subject = `Pengajuan ${lpjLabel} Ditolak - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const rejectorName = actorData?.nama || 'Reviewer';
         const rejectReason = newData.rejectReason;
         const emailContent = `
             Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-            <br><br>Dokumen pengajuan LPJ BS anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
+            <br><br>Dokumen pengajuan ${lpjLabel} anda telah ditolak oleh ${rejectorName} dengan alasan berikut:
             <br><div style="background-color: #f8d7da; padding: 10px; border-radius: 5px; color: #721c24; border: 1px solid #f5c6cb;">
                 "<strong><em>${rejectReason}</em></strong>"
             </div>
@@ -1514,11 +1785,11 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
     const statusHistory = newData.statusHistory || [];
     if (latestStatusType === "Disetujui oleh Super Admin (Pengganti Validator)" && reviewer1Data?.email) {
         nextApproverUid = newData.user.reviewer1[0];
-        const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+        const subject = `Permintaan Approval ${lpjLabel} - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer1Data.nama}</strong>,
             <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Super Admin'}
-            <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
+            <br>Mohon untuk melakukan approval atas pengajuan ${lpjLabel} berikut:
         `;
         await sendEmail(
             reviewer1Data.email,
@@ -1531,20 +1802,20 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
             status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
         );
         const isSameSuperAdmin = validatorStatus && validatorStatus.actor === latestStatus.actor;
-        const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+        const subject = `Permintaan Approval ${lpjLabel} - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         let emailContent;
         if (isSameSuperAdmin) {
             emailContent = `
                 Dear <strong>${reviewer2Data.nama}</strong>,
                 <br><br>Dokumen ini telah divalidasi dan disetujui oleh ${actorData?.nama || 'Super Admin'}
-                <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
+                <br>Mohon untuk melakukan approval atas pengajuan ${lpjLabel} berikut:
             `;
         } else {
             const validatorData = validatorStatus?.actor ? await getUserData(validatorStatus.actor) : null;
             emailContent = `
                 Dear <strong>${reviewer2Data.nama}</strong>,
                 <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${actorData?.nama || 'Super Admin'}
-                <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
+                <br>Mohon untuk melakukan approval atas pengajuan ${lpjLabel} berikut:
             `;
         }
         await sendEmail(
@@ -1554,11 +1825,11 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
         );
     } else if (latestStatusType === "Disetujui oleh Reviewer 1 Sekaligus Validator" && reviewer2Data?.email) {
         nextApproverUid = newData.user.reviewer2[0];
-        const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+        const subject = `Permintaan Approval ${lpjLabel} - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer2Data.nama}</strong>,
             <br><br>Dokumen ini telah divalidasi dan disetujui oleh ${actorData?.nama || 'Validator & Reviewer 1'}
-            <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
+            <br>Mohon untuk melakukan approval atas pengajuan ${lpjLabel} berikut:
         `;
         await sendEmail(
             reviewer2Data.email,
@@ -1567,11 +1838,11 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
         );
     } else if (latestStatusType === "Disetujui oleh Validator" && reviewer1Data?.email) {
         nextApproverUid = newData.user.reviewer1[0];
-        const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+        const subject = `Permintaan Approval ${lpjLabel} - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer1Data.nama}</strong>,
             <br><br>Dokumen ini telah divalidasi oleh ${actorData?.nama || 'Validator'}
-            <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
+            <br>Mohon untuk melakukan approval atas pengajuan ${lpjLabel} berikut:
         `;
         await sendEmail(
             reviewer1Data.email,
@@ -1585,11 +1856,11 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
             status.status === "Disetujui oleh Super Admin (Pengganti Validator)"
         );
         const validatorData = validatorStatus?.actor ? await getUserData(validatorStatus.actor) : null;
-        const subject = `Permintaan Approval LPJ BS - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+        const subject = `Permintaan Approval ${lpjLabel} - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const emailContent = `
             Dear <strong>${reviewer2Data.nama}</strong>,
             <br><br>Dokumen ini telah divalidasi oleh ${validatorData?.nama || 'Validator'} dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'}
-            <br>Mohon untuk melakukan approval atas pengajuan LPJ BS berikut:
+            <br>Mohon untuk melakukan approval atas pengajuan ${lpjLabel} berikut:
         `;
         await sendEmail(
             reviewer2Data.email,
@@ -1599,7 +1870,7 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
     } else if ((latestStatusType === "Disetujui oleh Reviewer 2" || latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)")
         && newData.status === "Disetujui") {
         nextApproverUid = null;
-        const subject = `Pengajuan LPJ BS Disetujui - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
+        const subject = `Pengajuan ${lpjLabel} Disetujui - ${newData.displayId} - ${formatDateIndonesia(newData.tanggalPengajuan)}`;
         const hasValidatorReviewer1Status = statusHistory.some(status =>
             status.status === "Disetujui oleh Reviewer 1 Sekaligus Validator"
         );
@@ -1612,7 +1883,7 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
             const superAdminData = actorData;
             emailContent = `
                 Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-                <br><br>Dokumen pengajuan LPJ BS anda telah sepenuhnya disetujui oleh ${superAdminData?.nama || 'Super Admin'}
+                <br><br>Dokumen pengajuan ${lpjLabel} anda telah sepenuhnya disetujui oleh ${superAdminData?.nama || 'Super Admin'}
             `;
         } else if (hasValidatorReviewer1Status) {
             const lastApprover = latestStatusType === "Disetujui oleh Super Admin (Pengganti Reviewer 2)" ?
@@ -1620,7 +1891,7 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
                 reviewer2Data?.nama || 'Reviewer 2';
             emailContent = `
                 Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-                <br><br>Dokumen pengajuan LPJ BS anda telah divalidasi dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'} serta ${lastApprover}
+                <br><br>Dokumen pengajuan ${lpjLabel} anda telah divalidasi dan disetujui oleh ${reviewer1Data?.nama || 'Reviewer 1'} serta ${lastApprover}
             `;
         } else {
             const validatorStatus = statusHistory.find(status =>
@@ -1643,7 +1914,7 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
                     `${reviewer2Data?.nama || 'Reviewer 2'}`;
                 emailContent = `
                     Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-                    <br><br>Dokumen pengajuan LPJ BS anda telah divalidasi dan disetujui oleh ${superAdminData?.nama || 'Super Admin'} serta ${reviewer2Name}
+                    <br><br>Dokumen pengajuan ${lpjLabel} anda telah divalidasi dan disetujui oleh ${superAdminData?.nama || 'Super Admin'} serta ${reviewer2Name}
                 `;
             } else {
                 const validatorName = validatorStatus?.status.includes("Super Admin") ?
@@ -1657,7 +1928,7 @@ exports.notifyReviewersAndUserLPJ = onDocumentUpdated("lpj/{docId}", async (even
                     `${reviewer2Data?.nama || 'Reviewer 2'}`;
                 emailContent = `
                     Dear <strong>${submitterData?.nama || newData.user.nama}</strong>,
-                    <br><br>Dokumen pengajuan LPJ BS anda telah divalidasi oleh ${validatorName} serta disetujui oleh ${reviewer1Name} dan ${reviewer2Name}
+                    <br><br>Dokumen pengajuan ${lpjLabel} anda telah divalidasi oleh ${validatorName} serta disetujui oleh ${reviewer1Name} dan ${reviewer2Name}
                 `;
             }
         }

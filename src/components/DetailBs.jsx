@@ -4,6 +4,7 @@ import { db } from '../firebaseConfig'
 import { useParams, useNavigate } from 'react-router-dom'
 import { generateBsPDF } from '../utils/BsPdf'
 import ModalPDF from './ModalPDF'
+import { DetailBackButton, DetailApprovalActions } from './DetailApprovalActions'
 import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
@@ -475,6 +476,7 @@ const DetailBs = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
+            <DetailBackButton />
             <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Detail <span className="font-bold">Pengajuan Bon Sementara</span>
             </h2>
@@ -658,6 +660,21 @@ const DetailBs = () => {
 
                 {/* Responsive action buttons */}
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">
+                    <DetailApprovalActions docType="bs" item={bonSementaraDetail ? { ...bonSementaraDetail, id } : null} />
+
+                    {/* Bagian BO: lampiran hanya ada untuk BS > Rp3 juta. */}
+                    {bonSementaraDetail?.lampiranUrl && (
+                        <button
+                            className="w-full md:w-auto px-12 py-3 rounded text-red-600 bg-transparent hover:text-red-800 border border-red-600 hover:border-red-800"
+                            onClick={() => {
+                                setModalPdfUrl(bonSementaraDetail.lampiranUrl)
+                                setModalTitle(`Lampiran ${bonSementaraDetail.displayId}`)
+                            }}
+                        >
+                            Lihat Lampiran
+                        </button>
+                    )}
+
                     {userData?.uid === bonSementaraDetail?.user.uid && (
                         <div className="flex flex-col items-end">
                             <button

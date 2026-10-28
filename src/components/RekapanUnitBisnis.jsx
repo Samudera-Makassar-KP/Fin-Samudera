@@ -25,6 +25,16 @@ import {
     BBM_JENIS_OPTIONS
 } from '../utils/rekapanAggregation'
 import { SHARING_UNITS, PPNP_UNIT_NAME, computeAllEmployeeShares, computeProportionalSplit } from '../constants/rekapanSharing'
+import RekapanCostInsights from './RekapanCostInsights'
+import {
+    BBM_INSIGHT_KEY,
+    DEFAULT_TARGET_REDUCTION_PCT,
+    buildCategoryDetail,
+    buildCostOutlook,
+    filterCategories,
+    monthRange,
+    totalsByCategory
+} from '../utils/rekapanInsights'
 
 // Sama seperti BUSINESS_UNITS di FormBs.jsx -- daftar semua Unit Bisnis untuk opsi
 // dropdown Admin/Super Admin ("Semua Unit Bisnis" melihat seluruhnya sekaligus).
@@ -186,6 +196,44 @@ const RekapanUnitBisnis = () => {
     }, [])
 
     const isAdmin = role === 'Admin' || role === 'Super Admin'
+    const isSuperAdmin = role === 'Super Admin'
+
+    // Bagian BR: target penurunan biaya tahun depan (kartu ke-3 Ringkasan
+    // Biaya). Disimpan di Firestore supaya sama untuk semua Super Admin.
+    const [targetReductionPct, setTargetReductionPct] = useState(DEFAULT_TARGET_REDUCTION_PCT)
+    const [isSavingTarget, setIsSavingTarget] = useState(false)
+
+    useEffect(() => {
+        if (!isSuperAdmin) return
+        const fetchTarget = async () => {
+            try {
+                const snapshot = await getDoc(doc(db, 'rekapanSettings', 'costTarget'))
+                const saved = Number(snapshot.data()?.targetReductionPct)
+                if (snapshot.exists() && Number.isFinite(saved)) setTargetReductionPct(saved)
+            } catch (error) {
+                console.error('Error fetching target penurunan biaya:', error?.code, error?.message, error)
+            }
+        }
+        fetchTarget()
+    }, [isSuperAdmin])
+
+    const handleSaveTarget = async (pct) => {
+        setIsSavingTarget(true)
+        try {
+            await setDoc(doc(db, 'rekapanSettings', 'costTarget'), {
+                targetReductionPct: pct,
+                updatedAt: new Date().toISOString(),
+                updatedBy: localStorage.getItem('userUid')
+            })
+            setTargetReductionPct(pct)
+            toast.success(`Target penurunan biaya disimpan: ${pct}%`)
+        } catch (error) {
+            console.error('Error saving target penurunan biaya:', error?.code, error?.message, error)
+            toast.error('Gagal menyimpan target penurunan biaya')
+        } finally {
+            setIsSavingTarget(false)
+        }
+    }
 
     // 2. Susun opsi checkbox Unit Bisnis sesuai role -- Admin/Super Admin bisa
     // pilih kombinasi bebas (1, beberapa, atau semua) dari 10 Unit Bisnis,
@@ -1100,6 +1148,72 @@ const RekapanUnitBisnis = () => {
         ? 'Semua rekapan ditampilkan'
         : `${tableFilter.length} rekapan dipilih`
 
+    // Bagian BR (revisi): Ringkasan Biaya (Super Admin saja) mengikuti SEMUA
+    // filter -- Unit Bisnis (unitsFilter), Bulan, dan Tampilkan Rekapan.
+    //  - Bulan dipilih : bulan itu vs bulan yang sama tahun lalu; target = bulan itu tahun depan.
+    //  - Semua Bulan   : tahun berjalan s.d. bulan ini vs periode sama tahun lalu
+    //                    (kartu 1 = tahun lalu penuh); target dari proyeksi 12 bulan.
+    //  - Tampilkan Rekapan dipilih: hanya kategori itu (kedua tabel BBM = kategori "BBM").
+    // Tahun lalu dihitung dengan agregasi & opsi yang SAMA dengan tabel.
+    const insightPeriod = useMemo(() => {
+        const year = selectedYear.value
+        if (selectedMonth?.value != null) {
+            const label = MONTH_LABELS[selectedMonth.value]
+            return {
+                monthIndexes: [selectedMonth.value],
+                previousFullMonthIndexes: [selectedMonth.value],
+                monthsElapsed: 12, // tanpa proyeksi -- target per bulan yang sama
+                isProjected: false,
+                currentLabel: `${label} ${year}`,
+                previousLabel: `${label} ${year - 1}`,
+                previousFullLabel: `${label} ${year - 1}`,
+                targetLabel: `${label} ${year + 1}`
+            }
+        }
+        const elapsed = year === CURRENT_YEAR ? new Date().getMonth() + 1 : 12
+        const range = elapsed < 12 ? `Jan-${MONTH_LABELS[elapsed - 1]} ` : 'Tahun '
+        return {
+            monthIndexes: monthRange(elapsed),
+            previousFullMonthIndexes: monthRange(12),
+            monthsElapsed: elapsed,
+            isProjected: elapsed < 12,
+            currentLabel: `${range}${year}`,
+            previousLabel: `${range}${year - 1}`,
+            previousFullLabel: `Tahun ${year - 1}`,
+            targetLabel: `Tahun ${year + 1}`
+        }
+    }, [selectedMonth, selectedYear])
+
+    const insightCategoryFilter = useMemo(() => {
+        if (tableFilter.length === 0) return null
+        return new Set(tableFilter.map((opt) => (
+            opt.value === BBM_TOTAL_KEY || opt.value === BBM_LITER_KEY ? BBM_INSIGHT_KEY : opt.value
+        )))
+    }, [tableFilter])
+
+    const costInsights = useMemo(() => {
+        if (!isSuperAdmin) return null
+        const previousYear = selectedYear.value - 1
+        const aggregateOptions = { units: unitsFilter, sharingClassification, defaultPoolShares }
+        const previousCategoryData = aggregateByCategory(reimbursementDocs, lpjDocs, { ...aggregateOptions, year: previousYear, categoryGroups })
+        const previousBbmData = aggregateBbm(reimbursementDocs, lpjDocs, { ...aggregateOptions, year: previousYear })
+
+        const pick = (data, bbmTotals, months) =>
+            filterCategories(totalsByCategory(data, bbmTotals, months), insightCategoryFilter)
+        const outlook = buildCostOutlook({
+            prevFullByCat: pick(previousCategoryData, previousBbmData.totals, insightPeriod.previousFullMonthIndexes),
+            prevSamePeriodByCat: pick(previousCategoryData, previousBbmData.totals, insightPeriod.monthIndexes),
+            currentByCat: pick(categoryData, bbmData.totals, insightPeriod.monthIndexes),
+            monthsElapsed: insightPeriod.monthsElapsed,
+            targetReductionPct
+        })
+        const details = Object.fromEntries(outlook.categories.map((row) => [
+            row.category,
+            buildCategoryDetail(row.category, { categoryData, bbmData, monthIndexes: insightPeriod.monthIndexes })
+        ]))
+        return { outlook, details }
+    }, [isSuperAdmin, selectedYear, unitsFilter, sharingClassification, defaultPoolShares, categoryGroups, reimbursementDocs, lpjDocs, categoryData, bbmData, insightPeriod, insightCategoryFilter, targetReductionPct])
+
     const getUnitLabel = useCallback((unitValue) => {
         return BUSINESS_UNITS.find((u) => u.value === unitValue)?.label || unitValue
     }, [])
@@ -1570,6 +1684,18 @@ const RekapanUnitBisnis = () => {
                 </div>
             ) : (
                 <>
+                    {costInsights && (
+                        <RekapanCostInsights
+                            period={insightPeriod}
+                            isCategoryFiltered={insightCategoryFilter !== null}
+                            outlook={costInsights.outlook}
+                            details={costInsights.details}
+                            getUnitLabel={getUnitLabel}
+                            targetPct={targetReductionPct}
+                            isSavingTarget={isSavingTarget}
+                            onSaveTarget={handleSaveTarget}
+                        />
+                    )}
                     {isTableVisible(BBM_TOTAL_KEY) && renderCategoryTable(
                         'BBM (Form Resmi) -- Total Biaya per Unit Bisnis',
                         bbmData.totals,

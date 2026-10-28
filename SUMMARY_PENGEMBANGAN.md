@@ -2760,3 +2760,184 @@ Field Liter di 3 form yang punya baris BBM (`FormRbsBbm.jsx`, `FormRbsOperasiona
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting) — sukses 2026-10-03, diverifikasi hash bundle live (`main.84c80ac9.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: ketik "10,5" di field Liter (RBS BBM/Operasional/Umum), konfirmasi diterima & tersimpan benar sebagai 10.5
+
+---
+
+# BAGIAN BO — Catatan SMDR-Finance: Norek PDF BS, Lampiran BS > 3 Juta, Approval dari Detail, PDF Gabungan ke Finance, OCR Lampiran LPJ (2026-10-17)
+
+## 77.1 Permintaan User (Catatan SMDR-Finance)
+
+1. Tambah nomor rekening di form BS (model sama dengan RBS).
+2. Upload lampiran di BS kalau nominal melebihi Rp3 juta.
+3. Email ke Finance untuk LPJ yang dibuat tanpa BS dari sistem ini masih menyebut "BS".
+4. Kalau RBS sudah dicentang Transferred, tombol email reminder Finance tidak bisa ditekan lagi.
+5. Saat LPJ/RBS Disetujui, langsung terkirim ke semua Validator unit masing-masing, dengan form + lampiran digabung jadi satu.
+6. Tombol approval di halaman Detail BS/RBS/LPJ.
+7. Navigasi "kembali" yang rapi untuk approver.
+8. "Lihat bukti pengembalian" bisa di-print.
+9. Kalau bukti pengembalian dilampirkan di lampiran LPJ biasa, sistem membacanya otomatis.
+
+## 77.2 Klarifikasi (lewat AskUserQuestion, sebelum implementasi)
+
+- Poin 1: form INPUT BS ternyata sudah menampilkan Nomor Rekening (sama seperti RBS) -- yang belum ada adalah kotak rekening di **PDF cetak BS** (PDF RBS punya kotak "Nama Account / Bank Penerima / No Rekening"). Itu yang dikerjakan.
+- Poin 3: isi email yang menyebut BS (subjek "LPJ BS" + baris Nomor/Jumlah BS) -- BUKAN email BS terpisah.
+- Poin 5: penerima = SEMUA user role Validator yang Unit Bisnis-nya sama dengan dokumen.
+- Poin 7: setelah approve/tolak di Detail, dan tombol Kembali, membawa ke daftar Cek Pengajuan asal (tab yang sama).
+- Poin 9: bukti transfer yang ditaruh di Lampiran LPJ (bukan di kolom Upload Bukti Pengembalian).
+
+## 77.3 Implementasi
+
+- **Poin 1 -- `src/utils/BsPdf.jsx`**: kotak `bankInfo` (border terpisah, bukan shorthand -- lihat Bagian BG) di footer kiri, di bawah "Diajukan oleh".
+- **Poin 2 -- `src/components/FormBs.jsx` + `src/constants/bonSementara.js` (baru)**: kolom lampiran (multi-file PDF/JPG/PNG, digabung jadi 1 PDF seperti RBS) muncul & WAJIB hanya kalau total BS > `BS_LAMPIRAN_THRESHOLD` (3.000.000). Nomor BS final baru diketahui di dalam transaksi, jadi lampiran diupload DULU dengan kunci unik per-upload (`BSLAMPIRAN-<uid>-<timestamp>`, lolos mode `displayIdOwners` di `uploadOwnedFile` karena belum terdaftar), lalu `lampiranUrl` ditulis di transaksi yang SAMA dengan dokumen BS -- tidak mungkin ada BS > 3 juta tersimpan tanpa lampiran. `DetailBs.jsx`: tombol "Lihat Lampiran" kalau ada.
+- **Poin 3 -- `functions/index.js`**: `resolveLpjBsFromSystem()` mengecek apakah `nomorBS` LPJ ada di koleksi `bonSementara`; hasilnya disimpan sebagai `bsFromSystem` saat LPJ dibuat (`notifyValidatorOnCreateLPJ`). `getLpjLabel()` -> "LPJ" atau "LPJ BS" dipakai di semua subjek/isi email LPJ (18 tempat di `notifyReviewersAndUserLPJ`). `createEmailTemplate` tidak menampilkan baris Nomor BS/Jumlah BS kalau `bsFromSystem === false`.
+- **Poin 4 -- `ReimbursementTable.jsx`**: tombol amplop `disabled` + handler menolak kalau `item.transferred`; `sendRbsFinanceReminder` juga menolak di server.
+- **Poin 5 -- `src/utils/approvalWorkflow.js` (baru) + `sendApprovedDocToValidators` (callable baru)**: tepat setelah RBS/LPJ mencapai "Disetujui", client men-generate & mengunggah PDF form resmi (react-pdf hanya bisa di client), lalu callable mengambil form + `lampiranUrl`, menggabungkan dengan `pdf-lib` (dependency baru di functions), dan mengirim ke semua Validator unit tsb. Idempoten (`approvedNotifClaimedAt`/`approvedNotifSentAt`, klaim via transaksi), hanya mau fetch URL Storage project sendiri, hanya approver dokumen/Super Admin yang boleh memanggil. Lampiran > 18MB tidak dilampirkan (batas Gmail), diganti catatan "buka lewat website". Gagal kirim TIDAK membatalkan approval -- UI memberi peringatan.
+- **Poin 6 -- `src/utils/approvalRules.js` (baru) + `src/components/DetailApprovalActions.jsx` (baru)**: aturan approve/tolak yang tadinya tersalin 3x di `BsCheck`/`ReimbursementCheck`/`LpjBsCheck` dipindah ke satu modul murni (dites di `approvalRules.test.js`), dipakai bersama oleh halaman Cek Pengajuan DAN tombol Setujui/Tolak baru di ketiga halaman Detail. Tombol hanya muncul untuk approver yang sedang ditunggu (atau Super Admin).
+- **Poin 7**: Link dari Cek Pengajuan ke Detail membawa `state: { from, tab }`; halaman Cek Pengajuan memulihkan tab dari state itu. Detail punya tombol "Kembali" (ke daftar asal; kalau tidak ada asal -> mundur di riwayat browser; kalau dibuka langsung dari email -> Dashboard). Setelah approve/tolak dari Detail -> kembali ke daftar Cek Pengajuan.
+- **Poin 8 -- `ModalPDF.jsx`**: tombol Print. Gambar (bukti pengembalian JPG/PNG) dicetak lewat jendela kecil berisi `<img>` yang langsung `print()`; PDF dibuka di tab baru (viewer PDF browser punya tombol print sendiri, `print()` dari iframe lintas-domain diblokir browser).
+- **Poin 9 -- `autoValidatePengembalianFromLampiran` (trigger baru, `onDocumentWritten lpj/{docId}`)**: jalan saat LPJ dibuat atau `lampiranUrl` berubah, kalau `sisaLebih > 0` dan pengembalian belum valid. OCR (Cloud Vision) lampiran dari halaman TERAKHIR mundur (maks 30 halaman, 5 per request), berhenti di halaman pertama yang memuat nominal `sisaLebih` (`textContainsAmount`) DAN kata khas bukti transfer (transfer/berhasil/rekening/nama bank/dst) -- supaya nota belanja yang kebetulan bernilai sama tidak dianggap bukti. Kalau ketemu: `pengembalianStatus: 'valid'`, `pengembalianSource: 'lampiran_lpj'`, `pengembalianBuktiUrl` = lampiran. Kalau TIDAK ketemu: tidak menulis apa pun (tidak menandai "tidak sesuai").
+
+**Catatan lingkungan**: mesin ini belum punya `node_modules` dan npm gagal verifikasi SSL registry (sertifikat proxy/antivirus perusahaan hanya dikenal Windows). Solusi aman tanpa mematikan verifikasi SSL: `NODE_OPTIONS=--use-system-ca` saat `npm ci`/`npm install`.
+
+**Insiden deploy (kuota Cloud Run)**: deploy pertama gagal untuk sebagian fungsi -- "Quota exceeded for total allowable CPU per project per region". Dicek lewat Service Usage API: kuota `run.googleapis.com/cpu_allocation` project ini di asia-southeast2 hanya 20000 mili-vCPU (20 vCPU AKTIF bersamaan), sementara semua fungsi memakai 1 vCPU penuh per instance -- ~20 instance hangat dari 23 fungsi sudah menghabiskan kuota, revisi baru gagal start. Fungsi yang gagal update TETAP melayani dengan revisi lama (tidak ada downtime). Perbaikan di `setGlobalOptions`: `cpu: "gcf_gen1"` (CPU pecahan sesuai memori: 256MiB = 1/6 vCPU, 512MiB = 1/3 vCPU) + `maxInstances: 20`. Setelah itu deploy ulang per batch 4 fungsi -- 23/23 fungsi UP-TO-DATE (dicek via Cloud Run API: latestReadyRevision == latestCreatedRevision untuk semua service). Kalau suatu saat butuh CPU penuh lagi, ajukan kenaikan kuota "Total CPU allocation" di Google Cloud Console (IAM & Admin > Quotas).
+
+## 77.4 Task Development — Bagian BO
+
+- [x] `BsPdf.jsx`: kotak rekening (poin 1)
+- [x] `FormBs.jsx` + `constants/bonSementara.js`: lampiran wajib BS > 3 juta, atomik dengan transaksi nomor BS (poin 2)
+- [x] `DetailBs.jsx`: tombol "Lihat Lampiran"
+- [x] `functions/index.js`: `bsFromSystem` + label LPJ di semua email LPJ (poin 3)
+- [x] `ReimbursementTable.jsx` + `sendRbsFinanceReminder`: kunci reminder setelah Transferred (poin 4)
+- [x] `approvalWorkflow.js` + `sendApprovedDocToValidators` + `pdf-lib`: PDF gabungan form+lampiran ke semua Validator unit (poin 5)
+- [x] `approvalRules.js` + refactor 3 halaman Cek Pengajuan + `DetailApprovalActions.jsx` di 3 halaman Detail (poin 6)
+- [x] Navigasi Kembali + pemulihan tab (poin 7)
+- [x] `ModalPDF.jsx`: tombol Print (poin 8)
+- [x] `autoValidatePengembalianFromLampiran` (poin 9)
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 28 test PASS
+- [x] `CI=true npm test -- --watchAll=false` -- 132 test PASS (19 test baru di `approvalRules.test.js` & `bonSementara.test.js`)
+- [x] `CI=true npm run build` sukses tanpa warning
+- [x] Deploy functions ke produksi -- 23/23 sukses 2026-10-17 (setelah perbaikan kuota CPU di atas)
+- [x] Deploy hosting ke produksi -- percobaan pertama (`main.8c7ac856.js`) **MEMBUAT SITUS BLANK**: build dijalankan di mesin yang TIDAK punya `.env` (file ini di-.gitignore), jadi config Firebase kosong -> `auth/invalid-api-key` saat load. Ditangani: (1) rollback darurat ke versi hosting sebelumnya (`main.84c80ac9.js`) lewat Hosting REST API (`firebase hosting:clone` CLI tidak menerima ID versi); (2) `.env` dibuat ulang dari `firebase apps:sdkconfig WEB` -- keenam nilai dicek cocok persis dengan bundle lama yang berjalan normal; (3) build ulang + cek config tertanam di bundle SEBELUM deploy; (4) deploy ulang -- live `main.140a7d12.js` di smdr-mks.com, apiKey diterima Firebase (HTTP 200). **Pelajaran: sebelum build produksi di mesin baru, pastikan `.env` ada dan nilainya tertanam di bundle.**
+- [ ] Tes manual: ajukan BS > Rp3 juta tanpa lampiran -> ditolak form; dengan lampiran -> "Lihat Lampiran" muncul di Detail BS; cetak PDF BS -> kotak rekening muncul
+- [ ] Tes manual: ajukan LPJ dengan nomor BS diketik manual (bukan dari daftar) -> email ke Validator berjudul "Permintaan Approval LPJ" tanpa baris Nomor/Jumlah BS
+- [ ] Tes manual: RBS Disetujui + klik Transferred -> ikon amplop abu-abu & tidak bisa diklik
+- [ ] Tes manual: sebagai Reviewer 2, buka Detail RBS/LPJ dari Cek Pengajuan -> klik Setujui -> kembali ke daftar; semua Validator unit tsb menerima email "... Disetujui - Siap Diproses" dengan 1 PDF (form + lampiran)
+- [ ] Tes manual: tombol Kembali di Detail kembali ke tab Cek Pengajuan yang sama
+- [ ] Tes manual: Detail LPJ -> "Lihat Bukti" (gambar) -> tombol Print membuka dialog cetak
+- [ ] Tes manual: ajukan LPJ dengan sisa lebih, bukti transfer pengembalian ditaruh di halaman terakhir Lampiran (tanpa upload bukti terpisah) -> beberapa detik kemudian status pengembalian di Detail LPJ jadi valid
+
+---
+
+# BAGIAN BP — Reminder ke Finance: Form + Lampiran Digabung Jadi Satu PDF, Reminder LPJ Baru (2026-10-17)
+
+## 78.1 Permintaan User
+
+Saat "Reminder ke Finance", form RBS dan LPJ langsung menyatu dengan lampirannya.
+
+## 78.2 Temuan
+
+- Reminder RBS (Bagian BK) dan BS (Bagian L) sudah ada, tapi hanya melampirkan PDF form -- lampiran dokumen tidak ikut.
+- Reminder Finance untuk **LPJ belum pernah ada** -- dibuat baru dengan pola identik RBS.
+- BS sekarang juga bisa punya lampiran (BS > Rp3 juta, Bagian BO), jadi reminder BS ikut digabung dengan cara yang sama.
+
+## 78.3 Implementasi
+
+- **`functions/index.js`**:
+  - `buildFormWithLampiranAttachments(displayId, formPdfUrl, lampiranUrl)` (helper baru): ambil form + lampiran (hanya URL Storage project sendiri), gabung dengan `pdf-lib` jadi 1 PDF; kalau gagal digabung -> 2 file terpisah; kalau > 18MB -> tidak dilampirkan, email berisi catatan "buka lewat website". Dipakai juga oleh `sendApprovedDocToValidators` (Bagian BO, blok inline-nya diganti helper ini).
+  - `createFinanceReminderHandler(config)` (baru): SATU implementasi validasi reminder (login, kepemilikan, status Disetujui, Validator tujuan berbagi Unit Bisnis, khusus RBS tolak kalau Transferred) -- menggantikan dua salinan sejajar `sendBsFinanceReminder`/`sendRbsFinanceReminder`. Nama callable & parameter TIDAK berubah (`bsId`/`rbsId`), jadi BsTable/ReimbursementTable tidak perlu diubah.
+  - `sendLpjFinanceReminder` (callable baru, param `lpjId`): subjek "Reminder LPJ"/"Reminder LPJ BS" mengikuti `bsFromSystem` (Bagian BO).
+  - Ketiga reminder: `memory: "512MiB", timeoutSeconds: 120` (sekarang ikut mengunduh & menggabung PDF).
+- **`src/hooks/useFinanceReminder.jsx`** (baru): alur pilih Finance (fetch unit pengaju + daftar Validator, langsung kirim kalau pengaju 1 unit, modal pilih kalau > 1 unit) dibungkus jadi hook -- dipakai `LpjBsTable.jsx` (BS/RBS masih memakai salinan lamanya, perilaku sama; bisa dimigrasi ke hook ini nanti).
+- **`src/components/LpjBsTable.jsx`**: LPJ "Disetujui" menampilkan ikon amplop "Send Reminder to Finance" di kolom Aksi (menggantikan tombol "Batalkan" yang memang selalu nonaktif di status itu), generate PDF form LPJ lalu panggil `sendLpjFinanceReminder`.
+
+## 78.4 Task Development — Bagian BP
+
+- [x] `buildFormWithLampiranAttachments` + dipakai email Disetujui & semua reminder
+- [x] `createFinanceReminderHandler` menggantikan 2 salinan reminder BS/RBS
+- [x] `sendLpjFinanceReminder` (baru)
+- [x] `useFinanceReminder.jsx` + tombol reminder di `LpjBsTable.jsx`
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 28 test PASS
+- [x] `CI=true npm test -- --watchAll=false` -- 132 test PASS
+- [x] `CI=true npm run build` sukses; `.env` dicek ada & config Firebase tertanam di bundle (pelajaran Bagian BO)
+- [x] Deploy ke produksi -- sukses 2026-10-17: 4 functions (sendLpjFinanceReminder dibuat baru) + hosting, live `main.ebc2ab25.js` cocok dengan build lokal, config Firebase tertanam
+- [ ] Tes manual: RBS Disetujui (belum Transferred) -> klik amplop -> email Finance berisi 1 PDF = form RBS + lampiran
+- [ ] Tes manual: LPJ Disetujui -> ikon amplop muncul di tabel LPJ -> email Finance berisi 1 PDF = form LPJ + lampiran
+- [ ] Tes manual: BS > Rp3 juta Disetujui -> reminder berisi form BS + lampiran; BS <= Rp3 juta -> form BS saja
+
+---
+
+# BAGIAN BQ — Ikon Reminder Finance Hilang untuk BS Reported & RBS Transferred (2026-10-17)
+
+## 79.1 Permintaan User
+
+Kalau BS sudah Reported, ikon reminder ke Finance hilang; begitu pula di RBS (yang sudah Transferred).
+
+## 79.2 Implementasi
+
+- **`BsTable.jsx`**: BS Disetujui yang `lpjStatus` = "Sudah LPJ" (= ada LPJ Disetujui untuk nomor BS tsb, aturan yang sama dengan ikon "Reported") -> kolom Aksi menampilkan "-" alih-alih ikon amplop.
+- **`ReimbursementTable.jsx`**: ikon amplop TIDAK dirender sama sekali kalau `item.transferred` (Bagian BO cuma menguncinya jadi abu-abu); ikon centang "Transferred" tetap tampil.
+- **`functions/index.js`**: `createFinanceReminderHandler` dapat opsi `rejectReason(data)`; `sendBsFinanceReminder` menolak BS yang sudah punya LPJ Disetujui (`lpj where nomorBS == displayId`) -- penjaga di server, sejajar dengan penolakan RBS Transferred.
+
+## 79.3 Task Development — Bagian BQ
+
+- [x] `BsTable.jsx`: sembunyikan amplop untuk BS Reported
+- [x] `ReimbursementTable.jsx`: sembunyikan amplop untuk RBS Transferred
+- [x] `sendBsFinanceReminder`: tolak BS Reported di server
+- [x] `node --check` + functions jest 28 PASS + frontend 132 PASS + build sukses, config Firebase tertanam di bundle
+- [x] Deploy ke produksi -- sukses 2026-10-17, live `main.81f8957e.js` cocok dengan build lokal, config Firebase tertanam
+- [ ] Tes manual: tabel "Bon Sementara Diajukan" -- BS dengan "Sudah LPJ" tidak lagi menampilkan ikon amplop; BS Disetujui yang "Belum LPJ"/"Sedang LPJ" tetap ada amplopnya
+- [ ] Tes manual: tabel Reimbursement -- RBS yang sudah Transferred hanya menampilkan ikon centang, tanpa amplop
+
+---
+
+# BAGIAN BR — Rekapan (Super Admin): Ringkasan Biaya Tahun Lalu / Tahun Berjalan / Target Tahun Depan + Analisa per Bagian (2026-10-19)
+
+## 80.1 Permintaan User
+
+Di Rekapan, khusus Super Admin, 3 kartu:
+1. Pencapaian/biaya tahun sebelumnya.
+2. Tahun berjalan naik/turun berapa persen dari tahun sebelumnya -- tampilkan nominal & persentase.
+3. Target tahun depan: reduce biaya berapa %, plus analisa data & saran yang harus dilakukan per bagian (mis. BBM menampilkan data terkait BBM, ATK, dst).
+
+## 80.2 Keputusan Desain (diambil sendiri, bisa diubah)
+
+- Semua angka memakai agregasi yang SAMA dengan tabel Rekapan (`aggregateByCategory` + `aggregateBbm`), jadi sharing antar unit, entri manual, item dikecualikan, dan filter Unit Bisnis ikut berlaku -- kartu tidak pernah selisih dengan tabel.
+- "Tahun berjalan" = tahun yang dipilih di filter Tahun; "tahun lalu" = tahun itu - 1. Filter Bulan TIDAK berlaku untuk kartu (ringkasan tahunan).
+- Kartu 2 membandingkan PERIODE YANG SAMA: kalau tahun yang dipilih adalah tahun ini, Jan s.d. bulan berjalan vs Jan s.d. bulan yang sama tahun lalu (membandingkan 10 bulan dengan 12 bulan selalu terlihat "turun" palsu).
+- Kartu 3: target % disimpan di Firestore `rekapanSettings/costTarget` (default 10%, bisa diedit langsung di kartu oleh Super Admin). Target = proyeksi biaya setahun penuh tahun ini (rata-rata bulanan x 12) x (1 - target%).
+- Analisa per bagian = daftar kategori (BBM digabung jadi satu kategori "BBM (semua form)") diurutkan dari biaya terbesar; klik baris untuk melihat periode pembanding, total tahun lalu, unit penyumbang terbesar, khusus BBM: 3 plat terboros (biaya + liter) & porsi jenis BBM, lalu saran. Saran = aturan dari data (naik >= 10% -> prioritas; turun <= -5% -> pertahankan; porsi >= 25% -> paling berdampak; 1 unit >= 50% -> review unit itu; BBM: plat terboros, porsi BBM non-subsidi >= 50%, kuota liter + foto odometer) + saran praktis per jenis biaya (ATK, RTK/RTG, meals/meeting/entertain, parkir/tol, lembur/buruh, utilitas, IT/maintenance; lainnya -> anggaran bulanan per unit) + target nominal per kategori. Tidak memakai AI -- murni dari data, sehingga bisa dijelaskan & konsisten.
+
+## 80.3 Implementasi
+
+- **`src/utils/rekapanInsights.js`** (baru, murni): `totalsByCategory`, `buildCostOutlook`, `buildCategoryDetail`, `buildCategorySuggestions`, `projectFullYear`, `percentChange`. Dites di `rekapanInsights.test.js` (8 test).
+- **`src/components/RekapanCostInsights.jsx`** (baru): 3 kartu + panel "Analisa & Saran Penghematan per Bagian" (accordion). Naik = merah, turun = hijau.
+- **`src/components/RekapanUnitBisnis.jsx`**: `isSuperAdmin`, load/simpan target, `costInsights` (useMemo, hanya dihitung untuk Super Admin), render di atas tabel Rekapan.
+- **`firestore.rules`**: `match /rekapanSettings/{docId}` -- baca & tulis hanya Super Admin, field terbatas, `targetReductionPct` angka 0-100.
+
+## 80.4 Task Development — Bagian BR
+
+- [x] `rekapanInsights.js` + 8 unit test
+- [x] `RekapanCostInsights.jsx`
+- [x] Integrasi di `RekapanUnitBisnis.jsx` (Super Admin only)
+- [x] `firestore.rules`: `rekapanSettings`
+- [x] `CI=true npm test` -- 140 test PASS; `CI=true npm run build` sukses tanpa warning; `.env` ada & config Firebase tertanam di bundle
+- [x] Deploy ke produksi -- sukses 2026-10-19: firestore rules + hosting, live `main.c9faa30c.js` cocok dengan build lokal, config Firebase tertanam
+- [ ] Tes manual (login Super Admin): buka Rekapan -> 3 kartu muncul di atas tabel; angka kartu 2 cocok dengan penjumlahan tabel bulan Jan s.d. bulan ini
+- [ ] Tes manual: ubah target % di kartu 3 -> Simpan -> refresh halaman, nilai tetap tersimpan; nominal target berubah
+- [ ] Tes manual: klik baris BBM di panel analisa -> plat terboros & saran BBM muncul; ganti filter Unit Bisnis -> semua angka ikut berubah
+- [ ] Tes manual: login Validator/Admin -> kartu TIDAK muncul
+
+## 80.5 Revisi (2026-10-19) -- Masukan User: "Bingung Cara Baca" & "Card Harus Ikut Filter"
+
+**Temuan data** (dicek read-only ke Firestore produksi): data 2026 punya **1.974 nama kategori berbeda** -- mayoritas item LPJ Marketing/Operasional yang namanya diketik bebas (LO/LO, STRIPPING, DEMMURAGE, tiket pesawat, dst). Total biaya (~Rp2,78 M Jan-Okt 2026) memang benar, tapi tersebar ke ribuan kategori kecil, sehingga kategori "terbesar" (BBM) cuma 3,4% -- ditambah daftar tanpa judul kolom, membingungkan. Saran untuk Admin: gabungkan label-label sejenis lewat "Kelola Kategori" supaya analisa per bagian lebih bermakna.
+
+**Perbaikan:**
+- Kartu & analisa sekarang mengikuti SEMUA filter: Unit Bisnis, **Bulan** (bulan dipilih -> bulan itu vs bulan yang sama tahun lalu, target = bulan itu tahun depan, tanpa proyeksi), dan **Tampilkan Rekapan** (hanya kategori yang dipilih; kedua tabel BBM = kategori "BBM"). Helper baru `filterCategories` (+1 test).
+- Memo `costInsights` dipindah ke SETELAH deklarasi `tableFilter` (sebelumnya dideklarasi lebih awal).
+- Tampilan ditulis ulang: label periode eksplisit di tiap kartu (mis. "2 · Biaya Jan-Okt 2026", "Pembanding (Jan-Okt 2025)"), baris label-nilai rata kanan; panel analisa jadi **tabel berjudul kolom** (Bagian | periode lalu | periode ini | Naik/Turun | Porsi | Target) dengan baris **Total**, hanya **10 bagian terbesar** + satu baris "Bagian lainnya (N)" yang merangkum sisanya (bisa "tampilkan semua"). Klik baris -> rincian Data + Saran penghematan.
+
+- [x] Revisi diimplementasi; eslint bersih; 141 test PASS; build sukses; config Firebase tertanam
+- [x] Deploy hosting revisi -- sukses 2026-10-19, live `main.e62b027c.js` cocok dengan build lokal, config Firebase tertanam
+- [ ] Tes manual: ganti filter Bulan/Unit/Tampilkan Rekapan -> angka kartu & tabel ikut berubah; label periode di kartu sesuai filter

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
+import { fetchDocsByApproverRole, uniqueById } from '../utils/approverDocs'
+import { approveWorkflowDoc, rejectWorkflowDoc } from '../utils/approvalWorkflow'
 import Modal from './Modal'
 import Select from 'react-select'
 import { useTheme } from '../context/ThemeContext'
@@ -98,7 +100,7 @@ const SuperAdminAllStatusTable = ({
                                         <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                         <td className="px-4 py-2 border dark:border-gray-600">
                                             <Link
-                                                to={`/bon-sementara/${item.id}`}
+                                                to={`/bon-sementara/${item.id}`} state={{ from: '/bon-sementara/cek-pengajuan' }}
                                                 className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                             >
                                                 {item.displayId}
@@ -169,7 +171,10 @@ const SuperAdminAllStatusTable = ({
 
 const BsCheck = () => {
     const { theme } = useTheme()
-    const [activeTab, setActiveTab] = useState('pending')
+    // Bagian BO: tab dipulihkan saat kembali dari halaman Detail (lihat
+    // state `from`/`tab` yang dikirim lewat Link ke Detail di bawah).
+    const location = useLocation()
+    const [activeTab, setActiveTab] = useState(location.state?.tab || 'pending')
     const [data, setData] = useState({ bonSementara: [] })
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
     const [approvedData, setApprovedData] = useState({ bonSementara: [] })
@@ -246,55 +251,15 @@ const BsCheck = () => {
                     }))
                     setAllSuperAdminData(allDocs)
                 } else {
-                    // Get all documents where user is assigned in any role
-                    const [reviewer1Docs, reviewer2Docs] = await Promise.all([
-                        // Get documents where user is assigned as reviewer1
-                        getDocs(
-                            query(
-                                collection(db, 'bonSementara'),
-                                where('user.reviewer1', 'array-contains', uid),
-                                where('status', '==', 'Diajukan')
-                            )
-                        ),
-                        // Get documents where user is assigned as reviewer2
-                        getDocs(
-                            query(
-                                collection(db, 'bonSementara'),
-                                where('user.reviewer2', 'array-contains', uid),
-                                where('status', '==', 'Diproses')
-                            )
-                        )
-                    ])
+                    const { byRole, all } = await fetchDocsByApproverRole('bonSementara', ['reviewer1', 'reviewer2'], uid)
 
-                    pendingBonSementara = [
-                        ...reviewer1Docs.docs.map(doc => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data(),
-                        })),
-                        ...reviewer2Docs.docs.map(doc => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
-                    ]
-
-                    // Remove duplicates if any
-                    pendingBonSementara = Array.from(new Set(pendingBonSementara.map(item => item.id)))
-                        .map(id => pendingBonSementara.find(item => item.id === id))
-
-                    // Get approved documents
-                    const approvedQ = query(
-                        collection(db, 'bonSementara'),
-                        where('status', 'in', ['Diproses', 'Disetujui'])
+                    pendingBonSementara = uniqueById(
+                        byRole.reviewer1.filter((doc) => doc.status === 'Diajukan'),
+                        byRole.reviewer2.filter((doc) => doc.status === 'Diproses')
                     )
-                    const approvedSnapshot = await getDocs(approvedQ)
-                    approvedBonSementara = approvedSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data(),
-                        }))
+
+                    approvedBonSementara = all
+                        .filter((doc) => ['Diproses', 'Disetujui'].includes(doc.status))
                         .filter((doc) => {
                             const isAssignedAsReviewer1 = doc.user.reviewer1?.includes(uid)
                             const isAssignedAsReviewer2 = doc.user.reviewer2?.includes(uid)
@@ -309,22 +274,9 @@ const BsCheck = () => {
                             )
                         })
 
-                    // Get canceled documents
-                    const canceledQ = query(
-                        collection(db, 'bonSementara'),
-                        where('status', '==', 'Dibatalkan'),
-                        where('user.reviewer1', 'array-contains', uid)
-                    );
-                    const canceledSnapshot = await getDocs(canceledQ);
-                    canceledBonSementara = canceledSnapshot.docs
-                        .map((doc) => ({
-                            id: doc.id,
-                            displayId: doc.data().displayId,
-                            ...doc.data()
-                        }))
-                        .filter(doc =>
-                            doc.statusHistory.some(history => history.status === 'Dibatalkan')
-                        );
+                    canceledBonSementara = byRole.reviewer1
+                        .filter((doc) => doc.status === 'Dibatalkan')
+                        .filter((doc) => doc.statusHistory.some((history) => history.status === 'Dibatalkan'))
 
                     setIsValidatorForAny(canceledBonSementara.length > 0);
                 }
@@ -449,109 +401,51 @@ const BsCheck = () => {
         })
     }
 
-    // Handle Approve
+    // Handle Approve -- aturan transisinya di utils/approvalRules.js (Bagian BO),
+    // dipakai bersama tombol Setujui di halaman Detail.
     const handleApprove = (item) => {
         openModal({
             title: 'Konfirmasi Approve',
             message: `Apakah Anda yakin ingin menyetujui bon sementara dengan Nomor BS ${item.displayId}?`,
             onConfirm: async () => {
                 try {
-                    const uid = localStorage.getItem('userUid')
-                    const userRole = localStorage.getItem('userRole')
-                    const bonSementaraRef = doc(db, 'bonSementara', item.id)
+                    const result = await approveWorkflowDoc('bs', item)
+                    if (!result) {
+                        toast.error('Anda tidak berhak menyetujui dokumen ini pada tahap saat ini.')
+                        return
+                    }
+                    const { updatedData, newStatus } = result
 
-                    // Cek apakah UID termasuk dalam super admin, reviewer1, atau reviewer2
-                    const isSuperAdmin = userRole === 'Super Admin'
-                    const isReviewer1 = item.user.reviewer1.includes(uid)
-                    const isReviewer2 = item.user.reviewer2.includes(uid)
+                    const shouldRemoveFromPending = localStorage.getItem('userRole') !== 'Super Admin' || newStatus === 'Disetujui'
 
-                    let updateData = {}
-                    const newStatusHistory = {
-                        timestamp: new Date().toISOString(),
-                        actor: uid
+                    if (shouldRemoveFromPending) {
+                        setData((prevData) => ({
+                            bonSementara: prevData.bonSementara.filter((r) => r.id !== item.id)
+                        }))
+                    } else {
+                        setData((prevData) => ({
+                            bonSementara: prevData.bonSementara.map((r) => (r.id === item.id ? updatedData : r))
+                        }))
                     }
 
-                    if (isSuperAdmin) {
-                        // Super Admin approval logic
-                        if (item.status === 'Diajukan') {
-                            newStatusHistory.status = 'Disetujui oleh Super Admin (Pengganti Reviewer 1)'
-                            updateData = {
-                                status: 'Diproses',
-                                approvedByReviewer1Status: 'superadmin',
-                                approvedBySuperAdmin: true,
-                            }
-                        } else if (item.status === 'Diproses') {
-                            newStatusHistory.status = 'Disetujui oleh Super Admin (Pengganti Reviewer 2)'
-                            updateData = {
-                                status: 'Disetujui',
-                                approvedByReviewer2Status: 'superadmin',
-                                approvedBySuperAdmin: true,
-                            }
-                        }
-                    } else if (item.status === 'Diajukan' && isReviewer1) {
-                        newStatusHistory.status = 'Disetujui oleh Reviewer 1'
-                        updateData = {
-                            status: 'Diproses',
-                            approvedByReviewer1: true,
-                            approvedByReviewer1Status: 'reviewer',
-                        }
-                    } else if (item.status === 'Diproses' && isReviewer2) {
-                        if (
-                            item.approvedByReviewer1Status === 'reviewer' ||
-                            item.approvedByReviewer1Status === 'superadmin'
-                        ) {
-                            newStatusHistory.status = 'Disetujui oleh Reviewer 2'
-                            updateData = {
-                                status: 'Disetujui',
-                                approvedByReviewer2: true,
-                                approvedByReviewer2Status: 'reviewer',
-                            }
-                        }
-                    }
+                    // Update approved list dengan data terbaru dari Firestore
+                    setApprovedData((prevData) => {
+                        const existingIndex = prevData.bonSementara.findIndex((r) => r.id === item.id)
+                        const newList = [...prevData.bonSementara]
 
-                    // Update the document if there are changes
-                    if (Object.keys(updateData).length > 0) {
-                        // Add statusHistory to updateData
-                        updateData.statusHistory = arrayUnion(newStatusHistory)
-
-                        // Update Firestore
-                        await updateDoc(bonSementaraRef, updateData)
-
-                        // Get updated document after update
-                        const updatedDoc = await getDoc(bonSementaraRef)
-                        const updatedData = { id: updatedDoc.id, ...updatedDoc.data() }
-
-                        const shouldRemoveFromPending = !isSuperAdmin || updateData.status === 'Disetujui'
-
-                        if (shouldRemoveFromPending) {
-                            setData((prevData) => ({
-                                bonSementara: prevData.bonSementara.filter((r) => r.id !== item.id)
-                            }))
+                        if (existingIndex !== -1) {
+                            newList[existingIndex] = updatedData
                         } else {
-                            setData((prevData) => ({
-                                bonSementara: prevData.bonSementara.map((r) => (r.id === item.id ? updatedData : r))
-                            }))
+                            newList.unshift(updatedData)
                         }
 
-                        // Update approved list dengan data terbaru dari Firestore
-                        setApprovedData((prevData) => {
-                            const existingIndex = prevData.bonSementara.findIndex((r) => r.id === item.id)
-                            const newBonSementara = [...prevData.bonSementara]
+                        return {
+                            bonSementara: newList
+                        }
+                    })
 
-                            if (existingIndex !== -1) {
-                                newBonSementara[existingIndex] = updatedData
-                            } else {
-                                newBonSementara.unshift(updatedData)
-                            }
-
-                            return {
-                                bonSementara: newBonSementara
-                            }
-                        })
-
-                        toast.success('Bon Sementara berhasil disetujui')
-                        closeModal()
-                    }
+                    toast.success('Bon Sementara berhasil disetujui')
+                    closeModal()
                 } catch (error) {
                     console.error('Error approving Bon Sementara:', error?.code, error?.message, error)
                     toast.error('Gagal menyetujui Bon Sementara')
@@ -579,85 +473,7 @@ const BsCheck = () => {
         }
 
         try {
-            const uid = localStorage.getItem('userUid')
-            const userRole = localStorage.getItem('userRole')
-            const bonSementaraRef = doc(db, 'bonSementara', selectedReport.id)
-
-            // Cek apakah UID termasuk dalam super admin, reviewer1, atau reviewer2
-            const isSuperAdmin = userRole === 'Super Admin'
-            const isReviewer1 = selectedReport.user.reviewer1.includes(uid)
-            const isReviewer2 = selectedReport.user.reviewer2.includes(uid)
-
-            let updateData = {}
-
-            if (isSuperAdmin) {
-                // Super Admin rejection logic
-                if (!selectedReport.approvedByReviewer1Status) {
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByReviewer1Status: 'superadmin',
-                        rejectedBySuperAdmin: true,
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Super Admin (Pengganti Reviewer 1)',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else if (
-                    selectedReport.approvedByReviewer1Status === 'superadmin' ||
-                    selectedReport.approvedByReviewer1Status === 'reviewer'
-                ) {
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByReviewer2Status: 'superadmin',
-                        rejectedBySuperAdmin: true,
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Super Admin (Pengganti Reviewer 2)',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                }
-            } else {
-                // Existing reviewer rejection logic
-                if (isReviewer1) {
-                    updateData = {
-                        status: 'Ditolak',
-                        approvedByReviewer1Status: 'reviewer',
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Reviewer 1',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else if (
-                    isReviewer2 &&
-                    (selectedReport.approvedByReviewer1Status === 'reviewer' ||
-                        selectedReport.approvedByReviewer1Status === 'superadmin')
-                ) {
-                    updateData = {
-                        status: 'Ditolak',
-                        rejectReason: rejectReason || 'Alasan tidak diberikan',
-                        statusHistory: arrayUnion({
-                            status: 'Ditolak oleh Reviewer 2',
-                            timestamp: new Date().toISOString(),
-                            actor: uid,
-                            reason: rejectReason || 'Alasan tidak diberikan'
-                        })
-                    }
-                } else {
-                    throw new Error('Anda tidak memiliki akses untuk menolak bon sementara ini.')
-                }
-            }
-
-            // Update the document
-            await updateDoc(bonSementaraRef, updateData)
+            await rejectWorkflowDoc('bs', selectedReport, rejectReason)
 
             // Remove the rejected item from the list
             setData(prevData => ({
@@ -668,7 +484,7 @@ const BsCheck = () => {
             handleCloseRejectModal()
         } catch (error) {
             console.error('Error rejecting bon sementara:', error?.code, error?.message, error)
-            toast.error('Gagal menolak Bon Sementara')
+            toast.error(error?.message?.includes('tidak') ? error.message : 'Gagal menolak Bon Sementara')
         }
     }
 
@@ -959,7 +775,7 @@ const BsCheck = () => {
                                                         <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                                         <td className="px-4 py-2 border dark:border-gray-600">
                                                             <Link
-                                                                to={`/bon-sementara/${item.id}`}
+                                                                to={`/bon-sementara/${item.id}`} state={{ from: '/bon-sementara/cek-pengajuan', tab: activeTab }}
                                                                 className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
@@ -1088,7 +904,7 @@ const BsCheck = () => {
                                                         <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                                         <td className="px-4 py-2 border dark:border-gray-600">
                                                             <Link
-                                                                to={`/bon-sementara/${item.id}`}
+                                                                to={`/bon-sementara/${item.id}`} state={{ from: '/bon-sementara/cek-pengajuan', tab: activeTab }}
                                                                 className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}
@@ -1184,7 +1000,7 @@ const BsCheck = () => {
                                                         <td className="p-2 border dark:border-gray-600 text-center w-auto">{index + 1}</td>
                                                         <td className="px-4 py-2 border dark:border-gray-600">
                                                             <Link
-                                                                to={`/bon-sementara/${item.id}`}
+                                                                to={`/bon-sementara/${item.id}`} state={{ from: '/bon-sementara/cek-pengajuan', tab: activeTab }}
                                                                 className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
                                                             >
                                                                 {item.displayId}

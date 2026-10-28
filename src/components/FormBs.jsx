@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { doc, setDoc, getDoc, collection, runTransaction, getDocs, query, where, updateDoc, arrayUnion } from 'firebase/firestore'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { db } from '../firebaseConfig'
+import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
 import { useTheme } from '../context/ThemeContext'
 import { BS_UNIT_CODES } from '../constants/businessUnits'
+import { BS_LAMPIRAN_THRESHOLD, requiresBsLampiran } from '../constants/bonSementara'
+import { uploadPdfFile } from '../utils/uploadPdfFile'
+import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES, isValidAttachmentFile, mergeAttachmentsToPdf } from '../utils/attachmentUpload'
 
 const FormBs = () => {
     const { theme } = useTheme()
@@ -37,6 +40,8 @@ const FormBs = () => {
     // apa yang diperbaiki" tersimpan di statusHistory, bukan cuma teks generik
     // "Super Admin mengedit detail form ...".
     const [editNote, setEditNote] = useState('')
+    // Bagian BO: lampiran wajib untuk BS > Rp3 juta (BS_LAMPIRAN_THRESHOLD).
+    const [attachmentFiles, setAttachmentFiles] = useState([])
 
     const initialBonSementaraState = {
         nomorBS: '',
@@ -300,6 +305,7 @@ const FormBs = () => {
         ])
         
         setSelectedKategori(null)
+        setAttachmentFiles([])
 
         if (isAdmin || userUnitOptions.length > 1) {
             setSelectedUnit(null)
@@ -339,6 +345,54 @@ const FormBs = () => {
             i === index ? { ...item, [field]: formattedValue } : item
         )
         setBonSementara(updatedBonSementara)
+    }
+
+    const needsLampiran = requiresBsLampiran(bonSementara)
+    // Mode edit: BS lama yang sudah punya lampiran tidak wajib upload ulang.
+    const hasExistingLampiran = Boolean(isEditMode && editData?.lampiranUrl)
+
+    const handleFileUpload = async (event) => {
+        const files = Array.from(event.target.files)
+        if (!files.length) return
+
+        const validFiles = []
+        for (const file of files) {
+            if (file.size > ATTACHMENT_MAX_SIZE_BYTES) {
+                toast.error(`Ukuran file ${file.name} maksimal ${Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB`)
+                continue
+            }
+            if (!(await isValidAttachmentFile(file))) {
+                toast.error(`File ${file.name} bukan PDF/JPG/PNG yang valid`)
+                continue
+            }
+            validFiles.push(file)
+        }
+
+        setAttachmentFiles(prev => [...prev, ...validFiles])
+        event.target.value = ''
+    }
+
+    const removeAttachment = (indexToRemove) => {
+        setAttachmentFiles(prev => prev.filter((_, index) => index !== indexToRemove))
+    }
+
+    // Lampiran digabung jadi 1 PDF (sama seperti RBS/LPJ) lalu diupload SEBELUM
+    // transaksi nomor BS -- nomor final baru diketahui di dalam transaksi, jadi
+    // path & kunci kepemilikan pakai token unik per-upload (`BSLAMPIRAN-...`)
+    // yang tidak pernah terdaftar di /displayIdOwners, sehingga lolos mode
+    // 'displayIdOwners' di uploadOwnedFile. URL-nya lalu ikut ditulis di
+    // transaksi yang SAMA dengan dokumen BS, jadi tidak ada BS > 3 juta yang
+    // tersimpan tanpa lampiran walau upload gagal di tengah jalan.
+    const uploadBsLampiran = async (files, kategori) => {
+        const uploadKey = `BSLAMPIRAN-${userData.uid}-${Date.now()}`
+        const mergedFile = await mergeAttachmentsToPdf(files, 'Lampiran_BS.pdf')
+        const sanitizedKategori = (kategori || 'Lainnya').replace(/\//g, '_')
+        return uploadPdfFile(
+            functions,
+            `BonSementara/${sanitizedKategori}/Lampiran/${uploadKey}/${mergedFile.name}`,
+            mergedFile,
+            { mode: 'displayIdOwners', displayId: uploadKey }
+        )
     }
 
     const getCurrentCounter = async (unitCode) => {
@@ -541,6 +595,9 @@ const FormBs = () => {
             })
 
             if (isEditMode && !editNote.trim()) missingFields.push('Catatan Perubahan')
+            if (needsLampiran && attachmentFiles.length === 0 && !hasExistingLampiran) {
+                missingFields.push(`Lampiran (wajib untuk BS di atas ${formatRupiah(BS_LAMPIRAN_THRESHOLD)})`)
+            }
 
             if (missingFields.length > 0) {
                 missingFields.forEach((field) => {
@@ -562,6 +619,21 @@ const FormBs = () => {
                 return Number(value.replace(/[^,\d]/g, '').replace(',', '.')) || 0
             }
 
+            // Upload lampiran hanya kalau memang dibutuhkan (> 3 juta) -- file
+            // yang sempat dipilih lalu nominalnya diturunkan tidak ikut terkirim.
+            let lampiranData = {}
+            if (needsLampiran && attachmentFiles.length > 0) {
+                try {
+                    const lampiranUrl = await uploadBsLampiran(attachmentFiles, selectedKategori?.value)
+                    lampiranData = { lampiran: ['Lampiran_BS.pdf'], lampiranUrl }
+                } catch (uploadError) {
+                    console.error('Error uploading BS lampiran:', uploadError?.code, uploadError?.message, uploadError)
+                    toast.error(uploadError?.message || 'Gagal mengunggah lampiran. BS belum diajukan, silakan coba lagi.')
+                    setIsSubmitting(false)
+                    return
+                }
+            }
+
             const bonSementaraData = {
                 user: {
                     uid: userData.uid,
@@ -581,6 +653,7 @@ const FormBs = () => {
                     kategori: item.kategori
                 })),
                 displayId: displayId,
+                ...lampiranData,
                 tanggalPengajuan: todayDate,
                 status: 'Diajukan',
                 approvedByReviewer1: false,
@@ -617,6 +690,7 @@ const FormBs = () => {
                     // reviewer2 di dalam map user memang boleh berubah.
                     user: bonSementaraData.user,
                     bonSementara: bonSementaraData.bonSementara,
+                    ...lampiranData,
                     statusHistory: arrayUnion({
                         status: `Data Diubah oleh ${editorRole}`,
                         timestamp: new Date().toISOString(),
@@ -932,6 +1006,53 @@ const FormBs = () => {
                         </div>
                     </div>
                 ))}
+
+                {needsLampiran && (
+                    <div className="mt-4">
+                        <label className="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+                            Lampiran {!hasExistingLampiran && <span className="text-red-500">*</span>}
+                        </label>
+                        <p className="text-sm text-amber-700 dark:text-amber-400 mb-2">
+                            BS di atas {formatRupiah(BS_LAMPIRAN_THRESHOLD)} wajib melampirkan dokumen pendukung (penawaran, invoice, dsb).
+                            {hasExistingLampiran && ' Lampiran sebelumnya tetap dipakai kalau tidak mengunggah file baru.'}
+                        </p>
+                        <div className="flex flex-col xl:flex-row items-start xl:items-center w-full">
+                            <input
+                                type="file"
+                                id="bs-file-upload"
+                                className="hidden"
+                                accept={ATTACHMENT_ACCEPT}
+                                multiple
+                                onChange={handleFileUpload}
+                            />
+                            <label
+                                htmlFor="bs-file-upload"
+                                className="w-full xl:w-fit text-center h-full xl:h-10 px-4 py-4 xl:py-2 bg-gray-50 dark:bg-gray-700 xl:bg-gray-200 dark:xl:bg-gray-700 border dark:border-gray-600 rounded-md cursor-pointer hover:bg-gray-300 dark:hover:bg-gray-600 hover:border-gray-400 transition duration-300 ease-in-out dark:text-gray-200"
+                            >
+                                Upload File
+                            </label>
+                            <span className="ml-0 xl:ml-4 text-gray-500 dark:text-gray-400 mt-2 xl:mt-0 text-sm">
+                                Format .pdf/.jpg/.png, bisa lebih dari 1 file (Max Size: {Math.round(ATTACHMENT_MAX_SIZE_BYTES / (1024 * 1024))}MB/file)
+                            </span>
+                        </div>
+                        {attachmentFiles.length > 0 && (
+                            <div className="mt-3 w-full">
+                                {attachmentFiles.map((file, index) => (
+                                    <div key={index} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded mb-2 border border-gray-200 dark:border-gray-600">
+                                        <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[80%]">{file.name}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeAttachment(index)}
+                                            className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 ml-2 font-bold"
+                                        >
+                                            <FontAwesomeIcon icon={faTimes} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {isEditMode && (
                     <div className="mt-4">
