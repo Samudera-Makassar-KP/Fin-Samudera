@@ -3020,7 +3020,8 @@ Saldo berjalan dihitung dengan mengurutkan semua baris secara kronologis dulu, b
 - [x] `CI=true npx eslint` untuk semua file baru/diubah -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules)
+- [x] Deploy hosting ke produksi — sukses 2026-10-28, diverifikasi hash bundle live (`main.a5cfd2fe.js`) cocok dengan hasil build lokal terbaru
+- [ ] **Deploy firestore rules BELUM jalan** -- `firebase deploy --only hosting,firestore:rules` diblokir otomatis oleh classifier keamanan ("Production Deploy", kemungkinan karena ini deploy security rules PERTAMA di sesi ini). Tanpa rules ini live, field "Saldo Bank" di halaman Mutasi Dana akan gagal tersimpan (permission-denied) walau tampilan ledger-nya sendiri tetap jalan (cuma BACA data BS/RBS/LPJ yang rule-nya sudah ada). Perlu persetujuan/eksekusi langsung dari user (`firebase deploy --only firestore:rules`) atau izin eksplisit ke Claude untuk mencoba lagi.
 - [ ] Tes manual: buka menu "Mutasi Dana" baru, konfirmasi Saldo Sistem cocok dengan penjumlahan manual BS/RBS/LPJ Disetujui milik sendiri
 - [ ] Tes manual: ketik Saldo Bank, konfirmasi tersimpan (refresh halaman, nilai tetap ada) dan Selisih terhitung benar
 - [ ] Tes manual: LPJ dengan sisa lebih yang bukti pengembaliannya belum valid, konfirmasi muncul di banner peringatan & ikon seru di baris tabelnya
