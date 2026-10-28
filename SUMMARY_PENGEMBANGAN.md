@@ -3073,5 +3073,5 @@ Ditambahkan tombol borongan di bagian "Menunggu Konfirmasi" `src/components/Muta
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja) — sukses 2026-10-28, diverifikasi hash bundle live (`main.3abaf865.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: klik tombol borongan, konfirmasi semua transaksi sebelum Oktober pindah ke tabel utama sekaligus, transaksi Oktober tetap di "Menunggu Konfirmasi" menunggu klik manual
