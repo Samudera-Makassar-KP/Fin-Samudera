@@ -3051,6 +3051,6 @@ Dicek `canMarkTransferred()` (sudah ada sejak Bagian BK untuk RBS) di `firestore
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan rules/functions)
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan rules/functions) — sukses 2026-10-28, diverifikasi hash bundle live (`main.bd41221e.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: BS Disetujui yang belum ditransfer muncul di "Menunggu Konfirmasi", klik "Tandai Sudah Masuk", konfirmasi pindah ke tabel utama & Saldo Sistem ikut bertambah
 - [ ] Tes manual: RBS yang sudah dicentang "Transferred" di ReimbursementTable.jsx otomatis muncul di tabel utama Mutasi Dana (tidak perlu konfirmasi ulang)
