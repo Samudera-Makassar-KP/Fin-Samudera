@@ -3205,3 +3205,39 @@ Karena tidak ada akses langsung ke data Firestore user dari sesi ini untuk memve
 - [ ] Tes manual: klik ikon pensil di tanggal BS/RBS yang sudah "Disetujui"/masuk, ganti tanggalnya, konfirmasi baris pindah periode sesuai tanggal baru & Saldo Sistem ikut berubah
 - [ ] Tes manual: cek ulang satu per satu baris Oktober yang dianggap "terlalu tinggi" -- pastikan tanggalnya memang bulan Oktober yang sebenarnya, koreksi lewat ikon pensil kalau salah
 - [ ] Tes manual: BS dengan lebih dari 1 item (nomorBS lebih dari satu) -- konfirmasi jumlah yang muncul di Mutasi Dana sekarang total semua item, bukan cuma item pertama
+
+---
+
+# BAGIAN CA — Catat Nota: Input Cepat Nota Jadi Draft RBS/LPJ (2026-10-28)
+
+## 89.1 Konteks
+
+User minta cara mencatat nota begitu diterima (RBS atau LPJ), menumpuk jadi draft, lalu saat masuk ke Detail BS semua nota yang sudah dicatat untuk BS itu otomatis jadi draft LPJ siap-review/submit -- supaya tidak perlu input ulang semua item di akhir. Mockup disetujui user ("ya sudah sesuai"): https://claude.ai/artifact/G5dz7t3284Qd3SZF4PhZGH. Klarifikasi 3 keputusan desain (semua jawaban "Recommended" dari AskUserQuestion): (1) nota draft bisa diedit & dihapus sebelum jadi LPJ/RBS final, (2) kalau nota LPJ melebihi sisa dana BS, tetap bisa disimpan sebagai peringatan (bukan ditolak), (3) draft RBS yang menumpuk tidak diberi batas waktu/jumlah.
+
+## 89.2 Keputusan Desain Implementasi
+
+Supaya TIDAK perlu mengubah Cloud Functions/storage.rules (upload file wajib lewat `uploadOwnedFile` yang membatasi `ALLOWED_STORAGE_PREFIXES` -- menambah prefix baru = deploy functions, risiko diblokir classifier seperti deploy hosting/rules yang sudah berkali-kali terjadi sesi ini), "Catat Nota" SENGAJA dirancang tidak menyentuh upload/lampiran sama sekali di tahap draft:
+- Nota yang dicatat HANYA berupa data (nominal, kategori, keterangan, tanggal) -- foto nota TIDAK diunggah di tahap ini, dilampirkan nanti saat draft "dirangkai" jadi RBS/LPJ sungguhan, lewat form yang SUDAH ADA (`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`/`FormRbsUmum.jsx`) yang jalur upload-lampirannya sudah terbukti jalan (`mergeAttachmentsToPdf` + `uploadPdfFile` -- ditemukan saat riset sudah ada di `src/utils/attachmentUpload.js`, tidak perlu dibuat baru).
+- "Merangkai" = data nota jadi BARIS ITEM pre-filled di form yang sudah ada (lewat `location.state`, pola yang sama seperti `nomorBS`/`jumlahBS` yang sudah dikirim DetailBs.jsx -> FormLpj* sejak lama), bukan submit otomatis dari belakang layar -- user tetap melihat & menyetujui form sebelum klik submit, dan tetap melampirkan foto secara manual di sana seperti biasa.
+
+## 89.3 Implementasi
+
+- **Koleksi baru `notaDraft`** (`firestore.rules`): CRUD penuh oleh pemiliknya sendiri (bukan dokumen workflow yang direview orang lain), field dibatasi whitelist (`user`, `jenis` ('rbs'/'lpj'), `bsId`, `nomorBS`, `nominal`, `kategori`, `keterangan`, `tanggal`, `createdAt`/`updatedAt`).
+- **`src/components/CatatNota.jsx`** (baru) + `src/pages/CatatNotaPage.jsx` + route `/catat-nota` + sidebar "+ Catat Nota": pilih jenis RBS/LPJ -> form (LPJ menampilkan sisa dana BS terpilih, ikut menghitung nota lain yang sudah tercatat ke BS itu supaya tidak dobel-hitung) -> simpan. Nota tersimpan bisa diedit/dihapus. Draft RBS yang menumpuk punya tombol "Rangkai jadi RBS" -> navigasi ke `/reimbursement/umum` dengan `state.prefillRbsItems`.
+- **`src/components/DetailBs.jsx`**: fetch `notaDraft` milik user untuk BS ini, banner baru "N nota sudah tercatat, total Rp X" muncul kalau ada & LPJ belum Disetujui, `handleBuatLaporan()` sekarang ikut mengirim `state.prefillLpjItems`/`prefillNotaDraftIds`.
+- **`src/components/FormRbsUmum.jsx`**, **`FormLpjUmum.jsx`**, **`FormLpjMarketing.jsx`**: baris item (`reimbursements`/`lpj`) sekarang bisa pre-filled dari `location.state.prefillRbsItems`/`prefillLpjItems` (pola `isLainnya`/`jenisLain` yang sudah ada, karena kategori nota bebas teks tidak dijamin cocok dropdown baku) -- lampiran/attachment TETAP wajib diisi manual seperti biasa (tidak berubah). Setelah submit baru berhasil, `notaDraft` yang dirangkai otomatis terhapus (`prefillNotaDraftIds`) supaya tidak nongol dobel di "Catat Nota" -- kegagalan hapus ini sengaja tidak membuat submit terlihat gagal (dokumennya sudah kebentuk), bisa dibersihkan manual user via halaman Catat Nota kalau perlu.
+- **Scope v1 yang disederhanakan (perlu dicatat ke user)**: hanya RBS varian "Umum" yang didukung untuk rangkai-draft (RBS BBM/Operasional butuh field plat/liter kendaraan yang tidak mungkin terisi dari nota saja) -- RBS jenis itu tetap pakai form langsung seperti biasa. BS yang sudah punya LPJ non-Ditolak/Dibatalkan tidak ditawarkan lagi di dropdown pemilihan BS di Catat Nota (dianggap sudah "dipakai"/sedang dilaporkan).
+
+## 89.4 Task Development — Bagian CA
+
+- [x] `firestore.rules`: koleksi `notaDraft` baru, CRUD oleh pemiliknya sendiri
+- [x] `src/components/CatatNota.jsx` + `src/pages/CatatNotaPage.jsx` + route + sidebar
+- [x] `src/components/DetailBs.jsx`: banner nota tercatat + prefill ke handleBuatLaporan
+- [x] `src/components/FormRbsUmum.jsx`/`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`: terima prefill items, hapus notaDraft setelah submit sukses
+- [x] `CI=true npx eslint` (semua file terkait) -- bersih
+- [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules)
+- [ ] **Belum ada pengujian UI manual sama sekali** -- sesi ini tidak punya alat untuk klik-jalan di browser dengan login sungguhan, cuma lint/test/build. Mohon ditest langsung: catat beberapa nota RBS & LPJ, cek sisa dana BS live-update, edit/hapus nota, rangkai draft RBS, dan buka Detail BS untuk BS yang sudah punya nota tercatat -- cek banner muncul & form LPJ ter-prefill dengan benar
+- [ ] Tes manual: submit LPJ/RBS yang item-nya pre-filled dari nota -- konfirmasi notaDraft yang dipakai otomatis terhapus dari halaman Catat Nota setelah submit berhasil

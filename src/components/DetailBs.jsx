@@ -19,6 +19,10 @@ const DetailBs = () => {
     const [, setError] = useState(null)
     const [isLoading, setIsLoading] = useState(false)
     const [isLpjApproved, setIsLpjApproved] = useState(false)
+    // Bagian CA: nota yang sudah dicatat lewat "Catat Nota" (CatatNota.jsx)
+    // untuk BS ini -- ditawarkan sebagai baris item siap-pakai saat
+    // "Buat Laporan" diklik, lihat handleBuatLaporan() di bawah.
+    const [notaDraftForBs, setNotaDraftForBs] = useState([])
     // Bagian AN: riwayat edit (siapa mengedit, kapan, alasannya) -- dipakai
     // Super Admin/reviewer untuk lihat berapa kali & kenapa pengajuan ini
     // pernah diperbaiki setelah dibuat.
@@ -123,6 +127,23 @@ const DetailBs = () => {
 
         checkLpjStatus()
     }, [bonSementaraDetail, userData])
+
+    // Bagian CA: ambil nota yang sudah dicatat untuk BS ini lewat "Catat
+    // Nota" -- ditawarkan sebagai baris item siap-pakai saat "Buat Laporan".
+    useEffect(() => {
+        const fetchNotaDraft = async () => {
+            if (!userData || userData.uid !== bonSementaraDetail?.user?.uid) return
+            try {
+                const snap = await getDocs(
+                    query(collection(db, 'notaDraft'), where('user.uid', '==', userData.uid), where('bsId', '==', id))
+                )
+                setNotaDraftForBs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+            } catch (error) {
+                console.error('Error fetching notaDraft untuk BS ini:', error)
+            }
+        }
+        fetchNotaDraft()
+    }, [userData, bonSementaraDetail, id])
 
     // Bagian AN: resolve nama editor (uid -> nama) untuk tiap entri riwayat
     // edit di statusHistory, supaya tidak cuma tampilkan uid mentah.
@@ -346,6 +367,12 @@ const DetailBs = () => {
     const handleBuatLaporan = () => {
         const bonSementara = bonSementaraDetail?.bonSementara?.[0]
         const userDetail = bonSementaraDetail?.user
+        // Bagian CA: nota yang sudah dicatat di "Catat Nota" untuk BS ini
+        // ikut dibawa sebagai baris item siap-pakai di form LPJ -- lihat
+        // prefillLpjItems/prefillNotaDraftIds di FormLpjUmum.jsx/
+        // FormLpjMarketing.jsx.
+        const prefillLpjItems = notaDraftForBs.map((n) => ({ nominal: n.nominal, kategori: n.kategori, keterangan: n.keterangan }))
+        const prefillNotaDraftIds = notaDraftForBs.map((n) => n.id)
         if (bonSementara?.kategori === 'GA/Umum') {
             navigate('/lpj/umum', {
                 state: {
@@ -353,6 +380,8 @@ const DetailBs = () => {
                     jumlahBS: bonSementara.jumlahBS,
                     aktivitas: bonSementara.aktivitas,
                     unit: userDetail.unit,
+                    prefillLpjItems,
+                    prefillNotaDraftIds
                 }
             })
         } else if (bonSementara?.kategori === 'Marketing/Operasional') {
@@ -362,6 +391,8 @@ const DetailBs = () => {
                     jumlahBS: bonSementara.jumlahBS,
                     aktivitas: bonSementara.aktivitas,
                     unit: userDetail.unit,
+                    prefillLpjItems,
+                    prefillNotaDraftIds
                 }
             })
         } else {
@@ -657,6 +688,16 @@ const DetailBs = () => {
                         </table>
                     </div>
                 </div>
+
+                {/* Bagian CA: nota yang sudah dicatat di "Catat Nota" untuk BS ini --
+                    siap dirangkai jadi baris item LPJ lewat tombol "Buat Laporan". */}
+                {userData?.uid === bonSementaraDetail?.user.uid && notaDraftForBs.length > 0 && !isLpjApproved && (
+                    <div className="mt-6 flex items-center justify-between gap-3 flex-wrap bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg px-4 py-3">
+                        <div className="text-sm text-gray-700 dark:text-gray-200">
+                            <span className="font-semibold">{notaDraftForBs.length} nota sudah tercatat</span> untuk BS ini (total {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(notaDraftForBs.reduce((s, n) => s + (n.nominal || 0), 0))}) -- siap jadi baris item LPJ, klik "Buat Laporan".
+                        </div>
+                    </div>
+                )}
 
                 {/* Responsive action buttons */}
                 <div className="flex flex-col md:flex-row md:justify-end mt-6 space-y-2 md:space-y-0 md:space-x-2">

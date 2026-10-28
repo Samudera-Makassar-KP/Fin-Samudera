@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore'
+import { doc, setDoc, getDoc, deleteDoc, collection, getDocs, query, where, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore'
 import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import CreatableSelect from 'react-select/creatable'
@@ -59,7 +59,25 @@ const FormLpjUmum = () => {
     const navigate = useNavigate() // <-- Tambahkan ini
     const isEditMode = location.state?.isEditMode || false
     const editData = location.state?.editData || null
-    const [lpj, setLpj] = useState([initialLpjState])
+    // Bagian CA: baris item bisa pre-filled dari nota yang sudah dicatat di
+    // "Catat Nota" untuk BS ini -- lihat DetailBs.jsx `handleBuatLaporan()`.
+    // `isLainnya`/`jenisLain` dipakai (bukan dropdown namaItem) karena
+    // kategori nota bebas teks, tidak dijamin cocok salah satu jenisOptions.
+    const prefillLpjItems = location.state?.prefillLpjItems || null
+    const [lpj, setLpj] = useState(() => {
+        if (prefillLpjItems && prefillLpjItems.length > 0) {
+            return prefillLpjItems.map((p) => ({
+                ...initialLpjState,
+                isLainnya: true,
+                jenisLain: p.kategori || 'Lainnya',
+                biaya: String(p.nominal || ''),
+                jumlah: '1',
+                jumlahBiaya: Number(p.nominal) || 0,
+                keterangan: p.keterangan || ''
+            }))
+        }
+        return [initialLpjState]
+    })
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
     // Bagian BB: dulu "Nomor Bon Sementara" adalah kolom teks bebas -- rawan
     // typo/spasi nyangkut yang membuat status LPJ di BsTable.jsx gagal
@@ -851,6 +869,19 @@ const FormLpjUmum = () => {
                 const newDocRef = doc(collection(db, 'lpj'))
                 await setDoc(newDocRef, { ...lpjData, id: newDocRef.id })
                 const docRef = newDocRef
+
+                // Bagian CA: nota draft yang baru dirangkai jadi LPJ ini sudah
+                // "terpakai" -- hapus supaya tidak nongol dobel di Catat Nota.
+                // Kegagalan hapus di sini tidak boleh membuat submit terlihat
+                // gagal (LPJ-nya sudah kebentuk).
+                const prefillNotaDraftIds = location.state?.prefillNotaDraftIds
+                if (Array.isArray(prefillNotaDraftIds) && prefillNotaDraftIds.length > 0) {
+                    try {
+                        await Promise.all(prefillNotaDraftIds.map((id) => deleteDoc(doc(db, 'notaDraft', id))))
+                    } catch (cleanupError) {
+                        console.error('Error cleaning up notaDraft after LPJ submit:', cleanupError)
+                    }
+                }
 
                 await uploadPengembalianIfProvided(docRef.id, displayId)
 

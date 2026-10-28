@@ -487,6 +487,36 @@ service cloud.firestore {
         && request.resource.data.saldoBank <= 999999999999;
     }
 
+    // Bagian CA: "Catat Nota" -- staging area pribadi user untuk mencatat
+    // nota SEBELUM dirangkai jadi RBS/LPJ sungguhan. Murni data pribadi milik
+    // user sendiri (bukan dokumen workflow yang direview orang lain), jadi
+    // rule-nya simpel: CRUD penuh oleh pemiliknya sendiri, field dibatasi
+    // whitelist. docId auto-generate (bukan uid-prefix) karena tidak perlu
+    // dicari lewat ID -- selalu di-query lewat `user.uid`/`jenis`/`bsId`
+    // sama seperti pola `allow list` di koleksi lpj/reimbursement.
+    match /notaDraft/{docId} {
+      allow get: if signedIn() && resource.data.user.uid == request.auth.uid;
+      allow list: if signedIn() && resource.data.user.uid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.user.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['user', 'jenis', 'bsId', 'nomorBS', 'nominal', 'kategori', 'keterangan', 'tanggal', 'createdAt', 'updatedAt'])
+        && request.resource.data.jenis in ['rbs', 'lpj']
+        && request.resource.data.nominal is number
+        && request.resource.data.nominal > 0
+        && request.resource.data.nominal <= 999999999999
+        && request.resource.data.kategori is string
+        && request.resource.data.keterangan is string
+        && request.resource.data.tanggal is string;
+      allow update: if signedIn()
+        && resource.data.user.uid == request.auth.uid
+        && request.resource.data.user.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['user', 'jenis', 'bsId', 'nomorBS', 'nominal', 'kategori', 'keterangan', 'tanggal', 'createdAt', 'updatedAt'])
+        && request.resource.data.nominal is number
+        && request.resource.data.nominal > 0
+        && request.resource.data.nominal <= 999999999999;
+      allow delete: if signedIn() && resource.data.user.uid == request.auth.uid;
+    }
+
     match /rekapanHeadcount/{unitCode} {
       allow read: if isRekapanRole();
       allow write: if isAdminRole()

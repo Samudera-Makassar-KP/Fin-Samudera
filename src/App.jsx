@@ -21,6 +21,7 @@ import DetailBsPage from './pages/DetailBsPage';
 import ReportExportPage from './pages/ReportExportPage';
 import Dashboard from './pages/Dashboard';
 import MutasiDanaPage from './pages/MutasiDanaPage';
+import CatatNotaPage from './pages/CatatNotaPage';
 import RekapanPage from './pages/RekapanPage';
 import AnnouncementManagerPage from './pages/AnnouncementManagerPage';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
@@ -62,6 +63,12 @@ const AppContent = () => {
                     <Route path="/mutasi-dana" element={
                         <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee', 'Super Admin']}>
                             <MutasiDanaPage />
+                        </ProtectedRoute>
+                    } />
+
+                    <Route path="/catat-nota" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee', 'Super Admin']}>
+                            <CatatNotaPage />
                         </ProtectedRoute>
                     } />
 

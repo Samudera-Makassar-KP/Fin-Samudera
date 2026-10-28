@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { doc, setDoc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore'
+import { doc, setDoc, getDoc, deleteDoc, collection, getDocs, query, where, updateDoc, arrayUnion, runTransaction } from 'firebase/firestore'
 import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import CreatableSelect from 'react-select/creatable'
@@ -63,7 +63,23 @@ const FormLpjMarketing = () => {
     const navigate = useNavigate() 
     const isEditMode = location.state?.isEditMode || false
     const editData = location.state?.editData || null
-    const [lpj, setLpj] = useState([initialLpjState])
+    // Bagian CA: lihat catatan sama di FormLpjUmum.jsx -- baris item bisa
+    // pre-filled dari nota yang sudah dicatat di "Catat Nota" untuk BS ini.
+    const prefillLpjItems = location.state?.prefillLpjItems || null
+    const [lpj, setLpj] = useState(() => {
+        if (prefillLpjItems && prefillLpjItems.length > 0) {
+            return prefillLpjItems.map((p) => ({
+                ...initialLpjState,
+                isLainnya: true,
+                jenisLain: p.kategori || 'Lainnya',
+                biaya: String(p.nominal || ''),
+                jumlah: '1',
+                jumlahBiaya: Number(p.nominal) || 0,
+                keterangan: p.keterangan || ''
+            }))
+        }
+        return [initialLpjState]
+    })
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
     // Bagian BB: lihat catatan sama di FormLpjUmum.jsx -- dropdown BS asli
     // milik user, bukan kolom teks bebas yang rawan typo.
@@ -849,6 +865,17 @@ const FormLpjMarketing = () => {
                 // Generate ID dulu, setDoc SEKALI SAJA supaya operasi ini murni CREATE.
                 const newDocRef = doc(collection(db, 'lpj'))
                 await setDoc(newDocRef, { ...lpjData, id: newDocRef.id })
+
+                // Bagian CA: lihat catatan sama di FormLpjUmum.jsx -- hapus
+                // notaDraft yang baru dirangkai jadi LPJ ini.
+                const prefillNotaDraftIds = location.state?.prefillNotaDraftIds
+                if (Array.isArray(prefillNotaDraftIds) && prefillNotaDraftIds.length > 0) {
+                    try {
+                        await Promise.all(prefillNotaDraftIds.map((id) => deleteDoc(doc(db, 'notaDraft', id))))
+                    } catch (cleanupError) {
+                        console.error('Error cleaning up notaDraft after LPJ submit:', cleanupError)
+                    }
+                }
 
                 await uploadPengembalianIfProvided(newDocRef.id, displayId)
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { collection, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs, runTransaction } from 'firebase/firestore'
+import { collection, setDoc, doc, deleteDoc, updateDoc, arrayUnion, query, where, getDoc, getDocs, runTransaction } from 'firebase/firestore'
 import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import CreatableSelect from 'react-select/creatable'
@@ -53,7 +53,26 @@ const RbsUmumForm = () => {
         tanggalPengajuan: todayDate
     }
 
-    const [reimbursements, setReimbursements] = useState([initialReimbursementState])
+    // Bagian CA: baris item bisa pre-filled dari "Catat Nota" (nota yang
+    // sudah dicatat sebelumnya, dirangkai jadi 1 pengajuan RBS) -- lihat
+    // CatatNota.jsx `rangkaiRbs()`. `jenis` di-set via isLainnya/jenisLain
+    // (bukan dropdown jenisOptions) karena kategori nota bebas teks, tidak
+    // dijamin cocok salah satu opsi baku.
+    const prefillRbsItems = location.state?.prefillRbsItems || null
+    const [reimbursements, setReimbursements] = useState(() => {
+        if (prefillRbsItems && prefillRbsItems.length > 0) {
+            return prefillRbsItems.map((p) => ({
+                ...initialReimbursementState,
+                isLainnya: true,
+                jenisLain: p.kategori || 'Lainnya',
+                biaya: String(p.nominal || ''),
+                item: p.kategori || '',
+                keterangan: p.keterangan || '',
+                tanggal: p.tanggal || ''
+            }))
+        }
+        return [initialReimbursementState]
+    })
 
     useEffect(() => {
         if (todayDate) {
@@ -751,6 +770,20 @@ const RbsUmumForm = () => {
                 // dokumennya sudah kadung tersimpan dari addDoc pertama.
                 const newDocRef = doc(collection(db, 'reimbursement'))
                 await setDoc(newDocRef, { ...reimbursementData, id: newDocRef.id })
+
+                // Bagian CA: nota draft yang baru dirangkai jadi RBS ini sudah
+                // "terpakai" -- hapus supaya tidak nongol dobel di Catat Nota.
+                // Kegagalan hapus di sini tidak boleh membuat submit terlihat
+                // gagal (RBS-nya sudah kebentuk) -- dicoba lagi manual oleh
+                // user lewat halaman Catat Nota kalau perlu.
+                const prefillNotaDraftIds = location.state?.prefillNotaDraftIds
+                if (Array.isArray(prefillNotaDraftIds) && prefillNotaDraftIds.length > 0) {
+                    try {
+                        await Promise.all(prefillNotaDraftIds.map((id) => deleteDoc(doc(db, 'notaDraft', id))))
+                    } catch (cleanupError) {
+                        console.error('Error cleaning up notaDraft after RBS submit:', cleanupError)
+                    }
+                }
 
                 toast.success('Reimbursement GA/Umum berhasil diajukan!')
 
