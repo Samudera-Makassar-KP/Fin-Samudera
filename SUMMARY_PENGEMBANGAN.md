@@ -3025,3 +3025,32 @@ Saldo berjalan dihitung dengan mengurutkan semua baris secara kronologis dulu, b
 - [ ] Tes manual: buka menu "Mutasi Dana" baru, konfirmasi Saldo Sistem cocok dengan penjumlahan manual BS/RBS/LPJ Disetujui milik sendiri
 - [ ] Tes manual: ketik Saldo Bank, konfirmasi tersimpan (refresh halaman, nilai tetap ada) dan Selisih terhitung benar
 - [ ] Tes manual: LPJ dengan sisa lebih yang bukti pengembaliannya belum valid, konfirmasi muncul di banner peringatan & ikon seru di baris tabelnya
+
+---
+
+# BAGIAN BU — Mutasi Dana: Hanya Hitung Uang yang Benar-Benar Berpindah (2026-10-28)
+
+## 83.1 Koreksi dari User
+
+Setelah mencoba Bagian BT, user koreksi logikanya: BS/RBS yang sudah Disetujui TAPI belum dicentang "Transferred" seharusnya BELUM dihitung sebagai uang masuk (supaya tidak selisih dengan mutasi bank sungguhan). Sebaliknya, pengembalian sisa lebih LPJ yang belum dikembalikan/terverifikasi seharusnya BELUM dihitung sebagai uang keluar. Khusus BS (yang belum punya field "Transferred" sama sekali), diminta ditambahkan tombol centang di halaman Mutasi Dana.
+
+## 83.2 Temuan Penting: Tidak Perlu Ubah `firestore.rules`
+
+Dicek `canMarkTransferred()` (sudah ada sejak Bagian BK untuk RBS) di `firestore.rules:229-234` -- fungsi ini TERNYATA sudah generik, dipakai lewat `canUpdateWorkflow()` yang sama untuk SEMUA koleksi workflow (`bonSementara`/`reimbursement`/`lpj`), bukan RBS-spesifik. Jadi field `transferred`/`transferredAt` untuk BS otomatis sudah diizinkan ditulis oleh pemilik dokumennya sendiri TANPA perlu rule baru -- cukup replikasi pola `updateDoc(doc(db,'bonSementara',id), {transferred:true, transferredAt})` yang sama persis dengan `handleMarkTransferred` di `ReimbursementTable.jsx`.
+
+## 83.3 Perbaikan
+
+`src/components/MutasiDana.jsx` dirombak: transaksi dipecah jadi 2 kelompok --
+- **`transactions`** (dihitung di Saldo Sistem & tabel buku besar): HANYA BS/RBS Disetujui YANG SUDAH `transferred === true`, dan HANYA pengembalian LPJ yang `pengembalianStatus` sudah `valid`/`grandfathered`. Uang yang sudah dibelanjakan dari LPJ (`totalBiaya`) tetap dihitung langsung (sudah terjadi secara fisik, tidak perlu konfirmasi tambahan).
+- **`pendingItems`** (bagian baru "Menunggu Konfirmasi", TIDAK dihitung di saldo): BS/RBS Disetujui yang belum `transferred`, dengan tombol **"Tandai Sudah Masuk"** (memanggil `updateDoc` langsung dari halaman Mutasi Dana -- tidak perlu pindah ke BsTable.jsx/ReimbursementTable.jsx); pengembalian LPJ yang belum terverifikasi (tanpa tombol -- konfirmasinya tetap lewat alur upload bukti yang sudah ada).
+
+## 83.4 Task Development — Bagian BU
+
+- [x] `src/components/MutasiDana.jsx`: pisahkan `transactions` (confirmed) vs `pendingItems` (belum), tombol "Tandai Sudah Masuk" untuk BS/RBS
+- [x] Konfirmasi `firestore.rules` tidak perlu diubah (`canMarkTransferred()` sudah generik lintas koleksi)
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan rules/functions)
+- [ ] Tes manual: BS Disetujui yang belum ditransfer muncul di "Menunggu Konfirmasi", klik "Tandai Sudah Masuk", konfirmasi pindah ke tabel utama & Saldo Sistem ikut bertambah
+- [ ] Tes manual: RBS yang sudah dicentang "Transferred" di ReimbursementTable.jsx otomatis muncul di tabel utama Mutasi Dana (tidak perlu konfirmasi ulang)

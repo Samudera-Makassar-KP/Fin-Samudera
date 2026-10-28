@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCircleExclamation, faCircleCheck, faArrowUp, faArrowDown, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
+import { faCircleExclamation, faCircleCheck, faArrowUp, faArrowDown, faTriangleExclamation, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
 
 // Bagian BT: "Mutasi Dana" -- buku kas pribadi milik user yang login, dihitung
 // dari BS/RBS/LPJ miliknya sendiri (tidak ada koleksi transaksi baru di
@@ -81,40 +81,81 @@ const MutasiDana = () => {
 
     // Turunkan daftar transaksi dari BS/RBS/LPJ milik user -- lihat catatan
     // skop di atas komponen ini untuk penjelasan tiap jenis baris.
-    const transactions = useMemo(() => {
+    // Bagian BU: koreksi dari user -- hanya uang yang BENAR-BENAR sudah
+    // berpindah yang masuk hitungan saldo/ledger, supaya tidak ada selisih
+    // palsu dibanding mutasi bank sungguhan:
+    // - BS/RBS Disetujui TAPI belum dicentang "Transferred" -> BELUM dihitung
+    //   sebagai uang masuk (dipindah ke "Menunggu Konfirmasi", ada tombol
+    //   centang di sana, ikut field `transferred` yang sama dengan yang
+    //   dipakai ReimbursementTable.jsx -- lihat canMarkTransferred() di
+    //   firestore.rules, sudah generik untuk semua koleksi workflow sehingga
+    //   tidak perlu rule baru).
+    // - Pengembalian sisa lebih LPJ yang BELUM valid/terverifikasi -> BELUM
+    //   dihitung sebagai uang keluar (dipindah ke "Menunggu Konfirmasi" juga,
+    //   tanpa tombol -- konfirmasinya lewat alur upload bukti yang sudah ada).
+    const { transactions, pendingItems } = useMemo(() => {
         const rows = []
+        const pending = []
 
         bsDocs.forEach((item) => {
             if (item.status !== 'Disetujui') return
-            rows.push({
-                id: `bs-${item.id}`,
-                date: getApprovalTimestamp(item),
-                ket: 'BS Disetujui',
-                doc: item.displayId,
-                src: 'bs',
-                in: item.bonSementara?.[0]?.jumlahBS || 0,
-                out: 0,
-                link: `/bon-sementara/${item.id}`
-            })
+            const amount = item.bonSementara?.[0]?.jumlahBS || 0
+            if (item.transferred) {
+                rows.push({
+                    id: `bs-${item.id}`,
+                    date: item.transferredAt || getApprovalTimestamp(item),
+                    ket: 'BS Disetujui',
+                    doc: item.displayId,
+                    src: 'bs',
+                    in: amount,
+                    out: 0,
+                    link: `/bon-sementara/${item.id}`
+                })
+            } else {
+                pending.push({
+                    id: `pending-bs-${item.id}`,
+                    ket: 'BS Disetujui, uang belum dikonfirmasi masuk',
+                    doc: item.displayId,
+                    src: 'bs',
+                    amount, direction: 'in',
+                    link: `/bon-sementara/${item.id}`,
+                    confirmCollection: 'bonSementara', confirmId: item.id
+                })
+            }
         })
 
         rbsDocs.forEach((item) => {
             if (item.status !== 'Disetujui') return
-            rows.push({
-                id: `rbs-${item.id}`,
-                date: getApprovalTimestamp(item),
-                ket: 'Reimbursement Disetujui',
-                doc: item.displayId,
-                src: 'rbs',
-                in: item.totalBiaya || 0,
-                out: 0,
-                link: `/reimbursement/${item.id}`
-            })
+            const amount = item.totalBiaya || 0
+            if (item.transferred) {
+                rows.push({
+                    id: `rbs-${item.id}`,
+                    date: item.transferredAt || getApprovalTimestamp(item),
+                    ket: 'Reimbursement Disetujui',
+                    doc: item.displayId,
+                    src: 'rbs',
+                    in: amount,
+                    out: 0,
+                    link: `/reimbursement/${item.id}`
+                })
+            } else {
+                pending.push({
+                    id: `pending-rbs-${item.id}`,
+                    ket: 'Reimbursement Disetujui, uang belum dikonfirmasi masuk',
+                    doc: item.displayId,
+                    src: 'rbs',
+                    amount, direction: 'in',
+                    link: `/reimbursement/${item.id}`,
+                    confirmCollection: 'reimbursement', confirmId: item.id
+                })
+            }
         })
 
         lpjDocs.forEach((item) => {
             if (HIDDEN_LPJ_STATUSES.includes(item.status)) return
 
+            // Uang yang sudah dibelanjakan pakai dana BS -- sudah terjadi
+            // secara fisik begitu LPJ dibuat, tidak perlu konfirmasi tambahan.
             rows.push({
                 id: `lpj-${item.id}`,
                 date: item.tanggalPengajuan,
@@ -129,17 +170,28 @@ const MutasiDana = () => {
             const sisaLebih = Number(item.sisaLebih) || 0
             if (sisaLebih > 0) {
                 const done = item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered'
-                rows.push({
-                    id: `lpj-${item.id}-pengembalian`,
-                    date: item.tanggalPengajuan,
-                    ket: 'Sisa LPJ dikembalikan ke kas',
-                    doc: item.displayId,
-                    src: 'lpj',
-                    in: 0,
-                    out: sisaLebih,
-                    link: `/lpj/${item.id}`,
-                    flag: done ? 'good' : 'warn'
-                })
+                if (done) {
+                    rows.push({
+                        id: `lpj-${item.id}-pengembalian`,
+                        date: item.pengembalianUploadedAt || item.tanggalPengajuan,
+                        ket: 'Sisa LPJ dikembalikan ke kas',
+                        doc: item.displayId,
+                        src: 'lpj',
+                        in: 0,
+                        out: sisaLebih,
+                        link: `/lpj/${item.id}`,
+                        flag: 'good'
+                    })
+                } else {
+                    pending.push({
+                        id: `pending-lpj-${item.id}-pengembalian`,
+                        ket: 'Sisa LPJ belum dikembalikan/terverifikasi',
+                        doc: item.displayId,
+                        src: 'lpj',
+                        amount: sisaLebih, direction: 'out',
+                        link: `/lpj/${item.id}`
+                    })
+                }
             }
 
             const sisaKurang = Number(item.sisaKurang) || 0
@@ -160,17 +212,30 @@ const MutasiDana = () => {
         rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
         let running = 0
         rows.forEach((r) => { running += r.in - r.out; r.saldo = running })
-        return rows
+        return { transactions: rows, pendingItems: pending }
     }, [bsDocs, rbsDocs, lpjDocs])
 
     const totalMasuk = useMemo(() => transactions.reduce((sum, r) => sum + r.in, 0), [transactions])
     const totalKeluar = useMemo(() => transactions.reduce((sum, r) => sum + r.out, 0), [transactions])
     const saldoSistem = totalMasuk - totalKeluar
 
-    const pendingPengembalian = useMemo(
-        () => transactions.filter((r) => r.flag === 'warn'),
-        [transactions]
-    )
+    const [confirmingId, setConfirmingId] = useState(null)
+    const handleConfirmTransferred = async (pendingItem) => {
+        setConfirmingId(pendingItem.id)
+        try {
+            await updateDoc(doc(db, pendingItem.confirmCollection, pendingItem.confirmId), {
+                transferred: true,
+                transferredAt: new Date().toISOString()
+            })
+            toast.success('Ditandai sebagai sudah masuk')
+            await fetchData()
+        } catch (error) {
+            console.error('Error confirming transferred:', error)
+            toast.error('Gagal menandai sudah masuk')
+        } finally {
+            setConfirmingId(null)
+        }
+    }
 
     const saldoBankNumber = saldoBankInput === '' ? null : Number(saldoBankInput.replace(/[^\d-]/g, ''))
     const selisih = saldoBankNumber === null ? null : saldoBankNumber - saldoSistem
@@ -231,12 +296,38 @@ const MutasiDana = () => {
                 Uang masuk (BS &amp; Reimbursement cair) dan uang keluar (dipakai lewat LPJ) dari dana Bon Sementara Anda sendiri, dengan saldo berjalan -- supaya gampang dicocokkan dengan mutasi rekening bank.
             </p>
 
-            {pendingPengembalian.length > 0 && (
-                <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3 mb-5 text-sm text-gray-800 dark:text-gray-100">
-                    <FontAwesomeIcon icon={faTriangleExclamation} className="text-amber-500 mt-0.5 w-4 h-4 flex-shrink-0" />
-                    <div>
-                        <strong>{pendingPengembalian.length} pengembalian LPJ</strong> senilai {formatRupiah(pendingPengembalian.reduce((s, r) => s + r.out, 0))} masih menunggu verifikasi bukti transfer -- lihat tanda seru di tabel di bawah.
+            {pendingItems.length > 0 && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3 mb-5 text-sm text-gray-800 dark:text-gray-100">
+                    <div className="flex items-start gap-3 mb-2">
+                        <FontAwesomeIcon icon={faTriangleExclamation} className="text-amber-500 mt-0.5 w-4 h-4 flex-shrink-0" />
+                        <div>
+                            <strong>{pendingItems.length} transaksi menunggu konfirmasi</strong> -- belum dihitung di Saldo Sistem supaya tidak selisih dengan mutasi bank sungguhan.
+                        </div>
                     </div>
+                    <ul className="divide-y divide-amber-200 dark:divide-amber-800">
+                        {pendingItems.map((p) => (
+                            <li key={p.id} className="flex items-center justify-between gap-3 py-2 pl-7">
+                                <div>
+                                    <Link to={p.link} className="font-medium hover:underline">{p.ket}</Link>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        {p.doc} &middot; {p.direction === 'in' ? 'Masuk' : 'Keluar'} {formatRupiah(p.amount)}
+                                    </div>
+                                </div>
+                                {p.confirmCollection ? (
+                                    <button
+                                        onClick={() => handleConfirmTransferred(p)}
+                                        disabled={confirmingId === p.id}
+                                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-white dark:bg-gray-800 border border-amber-400 dark:border-amber-600 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 flex-shrink-0"
+                                    >
+                                        <FontAwesomeIcon icon={faMoneyBillWave} className="w-3 h-3" />
+                                        {confirmingId === p.id ? 'Menyimpan...' : 'Tandai Sudah Masuk'}
+                                    </button>
+                                ) : (
+                                    <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">Upload bukti transfer di LPJ</span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             )}
 
@@ -344,8 +435,7 @@ const MutasiDana = () => {
                                         <td className="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-300 tabular-nums">{formatDate(r.date)}</td>
                                         <td className="px-4 py-2.5">
                                             <div className="flex items-center gap-1.5 font-medium dark:text-gray-100">
-                                                {r.flag === 'warn' && <FontAwesomeIcon icon={faCircleExclamation} className="text-amber-500 w-3.5 h-3.5 flex-shrink-0" title="Bukti pengembalian belum diproses" />}
-                                                {r.flag === 'good' && <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 w-3.5 h-3.5 flex-shrink-0" title="Bukti pengembalian sudah diproses" />}
+                                                {r.flag === 'good' && <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 w-3.5 h-3.5 flex-shrink-0" title="Bukti pengembalian sudah terverifikasi" />}
                                                 <Link to={r.link} className="hover:underline">{r.ket}</Link>
                                             </div>
                                             <div className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">{r.doc}</div>
@@ -378,7 +468,7 @@ const MutasiDana = () => {
                         </table>
                     </div>
                     <div className="px-4 py-2.5 text-xs text-gray-400 dark:text-gray-500 border-t dark:border-gray-700">
-                        Urut dari transaksi terbaru. Tanda <FontAwesomeIcon icon={faCircleExclamation} className="text-amber-500 w-3 h-3 mx-0.5" /> = bukti pengembalian belum diproses, <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 w-3 h-3 mx-0.5" /> = sudah valid.
+                        Urut dari transaksi terbaru. Hanya uang yang sudah benar-benar berpindah (BS/RBS tercentang "Transferred", pengembalian LPJ sudah terverifikasi) yang dihitung di sini -- lihat bagian "Menunggu Konfirmasi" di atas untuk yang belum. Tanda <FontAwesomeIcon icon={faCircleCheck} className="text-green-500 w-3 h-3 mx-0.5" /> = pengembalian LPJ sudah terverifikasi.
                     </div>
                 </div>
             )}
