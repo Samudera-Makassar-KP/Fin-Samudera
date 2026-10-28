@@ -3054,3 +3054,24 @@ Dicek `canMarkTransferred()` (sudah ada sejak Bagian BK untuk RBS) di `firestore
 - [x] Deploy ke produksi (hosting saja -- tidak ada perubahan rules/functions) — sukses 2026-10-28, diverifikasi hash bundle live (`main.bd41221e.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: BS Disetujui yang belum ditransfer muncul di "Menunggu Konfirmasi", klik "Tandai Sudah Masuk", konfirmasi pindah ke tabel utama & Saldo Sistem ikut bertambah
 - [ ] Tes manual: RBS yang sudah dicentang "Transferred" di ReimbursementTable.jsx otomatis muncul di tabel utama Mutasi Dana (tidak perlu konfirmasi ulang)
+
+---
+
+# BAGIAN BV — Tombol Borongan: Tandai Transaksi Lama Sudah Settle (2026-10-28)
+
+## 84.1 Koreksi dari User
+
+Setelah Bagian BU, user komplain terlalu banyak transaksi yang harus ditandai satu per satu di "Menunggu Konfirmasi" -- padahal mayoritas memang sudah lama settle, cuma belum pernah ditandai karena field "Transferred" baru saja ada. Diminta data disesuaikan, cukup ambil Oktober (bulan berjalan) yang perlu dicek manual, sisanya dianggap sudah settle.
+
+## 84.2 Perbaikan
+
+Ditambahkan tombol borongan di bagian "Menunggu Konfirmasi" `src/components/MutasiDana.jsx`: **"Tandai N Transaksi Lama Sudah Masuk"** -- muncul HANYA kalau ada item BS/RBS pending dengan tanggal approval SEBELUM bulan berjalan (dihitung dinamis dari tanggal hari ini, bukan di-hardcode "Oktober" supaya tetap relevan di bulan-bulan berikutnya tanpa perlu ubah kode lagi). Klik sekali -> semua transaksi lama itu ditandai `transferred: true` sekaligus (`Promise.all`), dengan `transferredAt` diisi tanggal APPROVAL aslinya (bukan hari ini) supaya urutan kronologis di buku besar tetap benar. Transaksi dari bulan berjalan (Oktober) TETAP perlu dikonfirmasi satu per satu lewat tombol individual yang sudah ada -- sengaja tidak ikut diborongkan karena uangnya baru/masih mungkin benar-benar belum masuk.
+
+## 84.3 Task Development — Bagian BV
+
+- [x] `src/components/MutasiDana.jsx`: tombol borongan "Tandai N Transaksi Lama Sudah Masuk" untuk item sebelum bulan berjalan
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja)
+- [ ] Tes manual: klik tombol borongan, konfirmasi semua transaksi sebelum Oktober pindah ke tabel utama sekaligus, transaksi Oktober tetap di "Menunggu Konfirmasi" menunggu klik manual

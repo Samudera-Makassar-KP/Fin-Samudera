@@ -114,6 +114,7 @@ const MutasiDana = () => {
             } else {
                 pending.push({
                     id: `pending-bs-${item.id}`,
+                    date: getApprovalTimestamp(item),
                     ket: 'BS Disetujui, uang belum dikonfirmasi masuk',
                     doc: item.displayId,
                     src: 'bs',
@@ -141,6 +142,7 @@ const MutasiDana = () => {
             } else {
                 pending.push({
                     id: `pending-rbs-${item.id}`,
+                    date: getApprovalTimestamp(item),
                     ket: 'Reimbursement Disetujui, uang belum dikonfirmasi masuk',
                     doc: item.displayId,
                     src: 'rbs',
@@ -237,6 +239,45 @@ const MutasiDana = () => {
         }
     }
 
+    // Bagian BV: field "Transferred" baru ada mulai sekarang -- BS/RBS lama
+    // yang sebenarnya sudah lama settle ikut nongol di "Menunggu Konfirmasi"
+    // cuma karena belum pernah ditandai, bukan karena benar-benar belum
+    // masuk. Daripada user klik satu-satu, sediakan tombol borongan khusus
+    // untuk transaksi SEBELUM bulan berjalan -- transaksi bulan ini tetap
+    // perlu dicek manual satu-satu (uangnya baru/masih mungkin benar-benar
+    // belum masuk). transferredAt diisi tanggal APPROVAL aslinya (bukan hari
+    // ini) supaya urutan di buku besar tetap sesuai kronologi sungguhan.
+    const currentMonthStart = useMemo(() => {
+        const now = new Date()
+        return new Date(now.getFullYear(), now.getMonth(), 1)
+    }, [])
+
+    const oldPendingBsRbs = useMemo(
+        () => pendingItems.filter((p) => p.confirmCollection && p.date && new Date(p.date) < currentMonthStart),
+        [pendingItems, currentMonthStart]
+    )
+
+    const [bulkConfirming, setBulkConfirming] = useState(false)
+    const handleBulkConfirmOld = async () => {
+        if (oldPendingBsRbs.length === 0) return
+        setBulkConfirming(true)
+        try {
+            await Promise.all(oldPendingBsRbs.map((p) =>
+                updateDoc(doc(db, p.confirmCollection, p.confirmId), {
+                    transferred: true,
+                    transferredAt: p.date
+                })
+            ))
+            toast.success(`${oldPendingBsRbs.length} transaksi sebelum bulan ini ditandai sudah masuk`)
+            await fetchData()
+        } catch (error) {
+            console.error('Error bulk confirming transferred:', error)
+            toast.error('Gagal menandai transaksi lama')
+        } finally {
+            setBulkConfirming(false)
+        }
+    }
+
     const saldoBankNumber = saldoBankInput === '' ? null : Number(saldoBankInput.replace(/[^\d-]/g, ''))
     const selisih = saldoBankNumber === null ? null : saldoBankNumber - saldoSistem
 
@@ -300,10 +341,25 @@ const MutasiDana = () => {
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3 mb-5 text-sm text-gray-800 dark:text-gray-100">
                     <div className="flex items-start gap-3 mb-2">
                         <FontAwesomeIcon icon={faTriangleExclamation} className="text-amber-500 mt-0.5 w-4 h-4 flex-shrink-0" />
-                        <div>
+                        <div className="flex-1">
                             <strong>{pendingItems.length} transaksi menunggu konfirmasi</strong> -- belum dihitung di Saldo Sistem supaya tidak selisih dengan mutasi bank sungguhan.
                         </div>
                     </div>
+                    {oldPendingBsRbs.length > 0 && (
+                        <div className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-md px-3 py-2 mb-2 ml-7">
+                            <span className="text-xs text-gray-600 dark:text-gray-300">
+                                {oldPendingBsRbs.length} di antaranya dari sebelum bulan ini -- kemungkinan besar sudah settle, cuma belum pernah ditandai.
+                            </span>
+                            <button
+                                onClick={handleBulkConfirmOld}
+                                disabled={bulkConfirming}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 flex-shrink-0"
+                            >
+                                <FontAwesomeIcon icon={faCircleCheck} className="w-3 h-3" />
+                                {bulkConfirming ? 'Memproses...' : `Tandai ${oldPendingBsRbs.length} Transaksi Lama Sudah Masuk`}
+                            </button>
+                        </div>
+                    )}
                     <ul className="divide-y divide-amber-200 dark:divide-amber-800">
                         {pendingItems.map((p) => (
                             <li key={p.id} className="flex items-center justify-between gap-3 py-2 pl-7">
