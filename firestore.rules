@@ -451,6 +451,21 @@ service cloud.firestore {
         && request.resource.data.targetReductionPct <= 100;
     }
 
+    // Bagian BT: saldo bank yang diketik MANUAL oleh user sendiri di halaman
+    // "Mutasi Dana" (src/components/MutasiDana.jsx) -- dibandingkan dengan
+    // saldo yang dihitung sistem dari BS/RBS/LPJ milik user itu sendiri, untuk
+    // membantu mencocokkan selisih dana. Satu dokumen per user (docId == uid),
+    // cuma bisa dibaca/ditulis oleh pemiliknya sendiri -- bukan data finansial
+    // perusahaan, murni catatan pribadi user untuk rekonsiliasi.
+    match /mutasiDanaSaldoBank/{uid} {
+      allow get: if isSelf(uid);
+      allow create, update: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['saldoBank', 'updatedAt'])
+        && request.resource.data.saldoBank is number
+        && request.resource.data.saldoBank >= 0
+        && request.resource.data.saldoBank <= 999999999999;
+    }
+
     match /rekapanHeadcount/{unitCode} {
       allow read: if isRekapanRole();
       allow write: if isAdminRole()

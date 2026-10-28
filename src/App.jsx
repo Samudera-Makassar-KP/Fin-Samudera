@@ -20,6 +20,7 @@ import BsCheckPage from './pages/BsCheckPage';
 import DetailBsPage from './pages/DetailBsPage';
 import ReportExportPage from './pages/ReportExportPage';
 import Dashboard from './pages/Dashboard';
+import MutasiDanaPage from './pages/MutasiDanaPage';
 import RekapanPage from './pages/RekapanPage';
 import AnnouncementManagerPage from './pages/AnnouncementManagerPage';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
@@ -52,6 +53,15 @@ const AppContent = () => {
                     <Route path="/dashboard" element={
                         <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee', 'Super Admin']}>
                             <Dashboard />
+                        </ProtectedRoute>
+                    } />
+
+                    {/* Bagian BT: Mutasi Dana -- buku kas pribadi, personal ke SEMUA
+                        role (siapa pun yang bisa mengajukan BS/RBS/LPJ punya dana
+                        untuk dilacak), sama seperti allowedRoles Dashboard. */}
+                    <Route path="/mutasi-dana" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Reviewer', 'Validator', 'Employee', 'Super Admin']}>
+                            <MutasiDanaPage />
                         </ProtectedRoute>
                     } />
 

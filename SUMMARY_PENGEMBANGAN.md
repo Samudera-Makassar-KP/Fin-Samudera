@@ -2972,3 +2972,55 @@ Dependency baru dari sesi lain (`pdf-lib` di `functions/package.json`, untuk gab
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting -- tidak ada perubahan Cloud Functions di Bagian ini) — sukses 2026-10-28, diverifikasi hash bundle live (`main.33238888.js`) cocok dengan hasil build lokal terbaru, dan `dev`/`main` dikonfirmasi identik (`git diff dev main` kosong)
 - [ ] Tes manual: buka daftar LPJ sendiri, konfirmasi ikon seru/centang muncul cuma untuk LPJ bersisa lebih, dan berubah jadi centang setelah bukti pengembalian valid
+
+---
+
+# BAGIAN BT — Halaman Baru "Mutasi Dana": Buku Kas Pribadi Uang Masuk/Keluar BS (2026-10-28)
+
+## 82.1 Permintaan User
+
+User minta menu baru di sidebar untuk melacak uang masuk & uang keluar dari dana Bon Sementara, supaya mudah mencocokkan selisih antara catatan sistem dengan saldo riil di rekening bank. Diminta mockup dulu sebelum implementasi.
+
+## 82.2 Mockup
+
+Dibuat Artifact mockup interaktif (https://claude.ai/artifact/LAD96H44SL5cZrsY85BU5G) -- sidebar replika dengan menu baru "Mutasi Dana" ditempatkan dekat Dashboard, 3 kartu ringkasan (Saldo Sistem/Saldo Bank yang bisa diketik manual/Selisih yang otomatis terhitung), grafik tren saldo, filter, dan tabel buku besar dengan ikon seru/centang (konsisten dengan ikon pengembalian LPJ Bagian BS). User menyetujui ("lanjutkan dulu implementasinya agar bisa cek koreksinya").
+
+## 82.3 Implementasi Nyata -- Skop v1
+
+**Keputusan desain utama**: TIDAK ADA koleksi transaksi baru di Firestore -- seluruh buku kas dihitung TURUNAN dari data `bonSementara`/`reimbursement`/`lpj` milik user sendiri yang sudah ada, supaya tidak ada risiko data dobel-catat/tidak sinkron. Satu-satunya data baru yang disimpan adalah saldo bank yang diketik user sendiri (`mutasiDanaSaldoBank/{uid}`, satu angka per user).
+
+**Aturan turunan transaksi** (di `src/components/MutasiDana.jsx`):
+- BS berstatus Disetujui -> **Masuk** = `bonSementara[0].jumlahBS`
+- Reimbursement berstatus Disetujui -> **Masuk** = `totalBiaya`
+- LPJ (semua status KECUALI Ditolak/Dibatalkan) -> **Keluar** = `totalBiaya` (uang yang sudah dibelanjakan, tanggal = `tanggalPengajuan` -- uangnya sudah keluar dari kantong user SAAT itu, bukan saat LPJ disetujui)
+- LPJ `sisaLebih > 0` -> baris **Keluar** tambahan "Sisa LPJ dikembalikan ke kas", ditandai ikon seru (belum valid) / centang (`pengembalianStatus` sudah `valid`/`grandfathered`) -- PERSIS pola & field yang sama dengan ikon Bagian BS di `LpjBsTable.jsx`
+- LPJ `sisaKurang > 0` -> baris **Masuk** "Kekurangan LPJ dibayar ke Anda"
+
+Saldo berjalan dihitung dengan mengurutkan semua baris secara kronologis dulu, baru ditampilkan terbalik (terbaru di atas) -- sama seperti pola di mockup.
+
+**Catatan jujur/skop yang disederhanakan**: 
+1. Tidak ada helper terpusat untuk "tanggal dokumen disetujui penuh" di codebase ini (dicek lewat investigasi sebelum menulis kode) -- pola pencarian `statusHistory.find(...)` terpaksa diduplikasi lagi (konsisten dengan `BsTable.jsx`/`BsPdf.jsx`/`LpjPdf.jsx`/`ReimbursementPdf.jsx` yang semuanya sudah menduplikasi pola yang sama).
+2. Grafik tren saldo di mockup BELUM dibuat di versi nyata ini -- fokus awal ke rekonsiliasi (3 kartu + tabel) karena itu inti permintaan user. Bisa ditambah kalau diminta.
+3. "Kekurangan LPJ dibayar ke Anda" ditampilkan begitu saja sebagai Masuk tanpa status terverifikasi terpisah (tidak ada field pelacakan "sudah dibayar belum" untuk sisaKurang di data yang ada) -- beda dengan sisaLebih yang sudah punya `pengembalianStatus`.
+
+**File baru/diubah**:
+- `src/components/MutasiDana.jsx` (baru) -- komponen utama
+- `src/pages/MutasiDanaPage.jsx` (baru) -- wrapper `Layout`, pola sama dengan `RekapanPage.jsx`
+- `src/App.jsx`: route `/mutasi-dana`, `allowedRoles` sama dengan Dashboard (semua role operasional)
+- `src/components/Sidebar.jsx`: link "Mutasi Dana" tepat di bawah Dashboard -- HANYA di cabang role biasa, TIDAK di cabang Super Admin (menu Super Admin memang tidak punya Dashboard/item personal lain sama sekali, jadi tidak cocok ditambahkan di sana)
+- `firestore.rules`: koleksi baru `mutasiDanaSaldoBank/{uid}`, satu dokumen per user, cuma bisa dibaca/ditulis oleh pemiliknya sendiri (`isSelf(uid)`), field dibatasi `saldoBank` (angka, 0 s.d. 999999999999) + `updatedAt` -- pola disalin dari `rekapanSettings` (Bagian BR) & `isSelf()` dari rule `/users/{uid}` yang sudah ada
+
+## 82.4 Task Development — Bagian BT
+
+- [x] `firestore.rules`: koleksi `mutasiDanaSaldoBank/{uid}`
+- [x] `src/components/MutasiDana.jsx` (baru): turunan transaksi dari BS/RBS/LPJ, 3 kartu ringkasan, filter, tabel buku besar
+- [x] `src/pages/MutasiDanaPage.jsx` (baru)
+- [x] `src/App.jsx`: route `/mutasi-dana`
+- [x] `src/components/Sidebar.jsx`: link "Mutasi Dana" (cabang role biasa saja)
+- [x] `CI=true npx eslint` untuk semua file baru/diubah -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules)
+- [ ] Tes manual: buka menu "Mutasi Dana" baru, konfirmasi Saldo Sistem cocok dengan penjumlahan manual BS/RBS/LPJ Disetujui milik sendiri
+- [ ] Tes manual: ketik Saldo Bank, konfirmasi tersimpan (refresh halaman, nilai tetap ada) dan Selisih terhitung benar
+- [ ] Tes manual: LPJ dengan sisa lebih yang bukti pengembaliannya belum valid, konfirmasi muncul di banner peringatan & ikon seru di baris tabelnya
