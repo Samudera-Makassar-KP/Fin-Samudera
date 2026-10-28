@@ -3329,3 +3329,33 @@ Di `LpjBsTable.jsx` (Bagian CB), tombol "Tandai Kekurangan Sudah Dibayar" sudah 
 - [x] `CI=true npm run build` sukses
 - [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
 - [ ] Tes manual: klik "Tandai Kekurangan Sudah Dibayar" pada LPJ bersisaKurang, konfirmasi tombol reminder di sebelahnya langsung hilang & berubah jadi centang abu-abu
+
+---
+
+# BAGIAN CE — Bug Multi-Item BS: Item ke-2 dst Tidak Terdeteksi LPJ-nya (2026-10-28)
+
+## 93.1 Bug Report dari User
+
+User lapor di Catat Nota ("Pakai Dana BS") daftar BS yang tersisa belum LPJ tidak sesuai -- ada 1 nomor LPJ (ujung "...508") yang tidak terdeteksi & BS-nya tidak muncul di list. Juga: di BsTable.jsx, BS yang "sedang LPJ" ikon send reminder-nya hilang. User menduga terjadi setelah edit nominal BS ujung "...507". Dikonfirmasi lewat tanya balik: BS 507 & 508 adalah SATU pengajuan BS yang isinya 2 item (bukan 2 dokumen terpisah).
+
+## 93.2 Investigasi
+
+Akar masalah ditemukan: satu dokumen BS BISA punya lebih dari satu item, masing-masing dengan `nomorBS`/`jumlahBS`/`kategori` SENDIRI-SENDIRI (`FormBs.jsx` -- `multipleItems`, sudah dikenal sejak perbaikan penjumlahan Mutasi Dana Bagian BZ). TAPI semua logika pencocokan BS<->LPJ di tempat lain di codebase ini -- `BsTable.jsx` (`fetchLpjStatus`), `CatatNota.jsx` (pengecekan BS yang sudah "dipakai") -- cuma pernah memeriksa `bonSementara[0]`/`displayId` (item PERTAMA saja). Item ke-2 dst (dalam kasus user: nomorBS "...508" yang nebeng di dokumen yang displayId-nya "...507") tidak pernah ikut diperiksa sama sekali -- LPJ yang mengacu ke nomorBS itu jadi "tidak terdeteksi" di semua tempat yang pernah mengecek status LPJ per-BS.
+
+**Catatan jujur ke user**: `DashboardSummary.jsx` ("Jumlah BS bulan ini"/"Sudah di-LPJ-kan"/"Selisih belum LPJ") dan `DetailBs.jsx` (tombol "Buat Laporan", cuma bisa buat LPJ untuk item pertama) kemungkinan besar punya akar bug YANG SAMA, TAPI belum ikut diperbaiki di Bagian ini -- scope sengaja dibatasi ke 2 tempat yang dilaporkan user supaya tidak buru-buru mengubah banyak file sekaligus berisiko. Perlu dicek terpisah kalau user menemukan simtom serupa di Dashboard/Detail BS.
+
+## 93.3 Perbaikan
+
+- **`src/components/BsTable.jsx`** (`fetchLpjStatus`): sekarang memeriksa SEMUA item di `bs.bonSementara`, bukan cuma `displayId`. Status gabungan per dokumen BS: "Sedang LPJ" kalau ADA item yang LPJ-nya aktif diproses, "Belum LPJ" kalau ada/semua item belum LPJ, "Sudah LPJ" kalau SEMUA item sudah Disetujui LPJ-nya.
+- **`src/components/CatatNota.jsx`**: "Pilih BS" sekarang di-flatten PER ITEM (bukan per dokumen) -- setiap item (termasuk item ke-2 dst) jadi pilihan BS tersendiri dengan sisa dana sendiri, dan dicek ketersediaannya (sudah ada LPJ atau belum) secara independen per item, dengan normalisasi (trim+uppercase, pola `normalizeNomorBS` yang sudah ada di `BsTable.jsx`/`DashboardSummary.jsx`) supaya konsisten.
+
+## 93.4 Task Development — Bagian CE
+
+- [x] `src/components/BsTable.jsx`: `fetchLpjStatus` memeriksa semua item BS, bukan cuma item pertama
+- [x] `src/components/CatatNota.jsx`: "Pilih BS" di-flatten per item + normalisasi nomorBS
+- [x] `CI=true npx eslint` (kedua file) -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
+- [ ] Tes manual: BS dengan 2+ item, konfirmasi kedua nomorBS muncul terpisah di "Pilih BS" Catat Nota (yang belum ada LPJ-nya), dan status Sedang/Sudah/Belum LPJ di BsTable.jsx mencerminkan SEMUA item, bukan cuma item pertama
+- [ ] Follow-up terpisah (belum dikerjakan): cek apakah `DashboardSummary.jsx` & `DetailBs.jsx` kena bug multi-item yang sama

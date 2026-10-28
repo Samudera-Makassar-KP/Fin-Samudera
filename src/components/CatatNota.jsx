@@ -79,6 +79,10 @@ const LPJ_JENIS_BY_KATEGORI = {
 }
 
 const HIDDEN_LPJ_STATUSES_FOR_BS = ['Ditolak', 'Dibatalkan']
+// Bagian BB (lihat BsTable.jsx/DashboardSummary.jsx): nomorBS di LPJ dulu
+// kolom teks bebas -- normalisasi (trim+uppercase) sebelum dicocokkan
+// supaya beda spasi/kapitalisasi tetap ketemu.
+const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase()
 const formatRupiah = (n) => 'Rp' + Math.round(Math.abs(n || 0)).toLocaleString('id-ID')
 const todayIso = () => new Date().toISOString().split('T')[0]
 const formatDate = (iso) => {
@@ -133,11 +137,30 @@ const CatatNota = () => {
                 lpjSnap.docs
                     .map((d) => d.data())
                     .filter((d) => !HIDDEN_LPJ_STATUSES_FOR_BS.includes(d.status))
-                    .map((d) => d.nomorBS)
+                    .map((d) => normalizeNomorBS(d.nomorBS))
             )
-            const bs = bsSnap.docs
-                .map((d) => ({ id: d.id, ...d.data() }))
-                .filter((item) => !nomorBsTerpakai.has(item.bonSementara?.[0]?.nomorBS))
+            // Bagian CE: koreksi dari user -- satu dokumen BS bisa punya LEBIH
+            // DARI SATU item (nomorBS/jumlahBS berbeda-beda, lihat FormBs.jsx
+            // `multipleItems`). Sebelumnya cuma item pertama (`bonSementara[0]`)
+            // yang ditawarkan di sini -- item ke-2 dst (mis. nomorBS "...508"
+            // dalam dokumen yang displayId-nya "...507") tidak pernah muncul
+            // sebagai pilihan BS sama sekali. Sekarang setiap item di-flatten
+            // jadi entri BS tersendiri (id = `${docId}__${index}`), masing-
+            // masing dicek & dikecualikan terpisah kalau sudah ada LPJ-nya.
+            const bs = []
+            bsSnap.docs.forEach((d) => {
+                const data = d.data()
+                const items = data.bonSementara?.length ? data.bonSementara : []
+                items.forEach((item, index) => {
+                    if (nomorBsTerpakai.has(normalizeNomorBS(item.nomorBS))) return
+                    bs.push({
+                        id: `${d.id}__${index}`,
+                        nomorBS: item.nomorBS,
+                        jumlahBS: Number(item.jumlahBS) || 0,
+                        kategori: item.kategori || ''
+                    })
+                })
+            })
             setBsList(bs)
             setNotas(notaSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
         } catch (error) {
@@ -152,11 +175,11 @@ const CatatNota = () => {
 
     const bsOptions = useMemo(() => bsList.map((b) => ({
         value: b.id,
-        label: `${b.bonSementara?.[0]?.nomorBS || b.displayId} -- ${b.bonSementara?.[0]?.kategori || ''}`
+        label: `${b.nomorBS} -- ${b.kategori}`
     })), [bsList])
 
     const selectedBs = bsList.find((b) => b.id === selectedBsId)
-    const lpjKategori = selectedBs?.bonSementara?.[0]?.kategori || null
+    const lpjKategori = selectedBs?.kategori || null
     const jenisOptions = jenis === 'rbs'
         ? (rbsVariant ? RBS_VARIANTS[rbsVariant].jenisOptions : [])
         : (lpjKategori ? (LPJ_JENIS_BY_KATEGORI[lpjKategori] || RBS_VARIANTS.umum.jenisOptions) : [])
@@ -164,7 +187,7 @@ const CatatNota = () => {
     const sisaDana = useCallback((bsId, excludeNotaId) => {
         const bs = bsList.find((b) => b.id === bsId)
         if (!bs) return 0
-        const jumlahBS = Number(bs.bonSementara?.[0]?.jumlahBS) || 0
+        const jumlahBS = bs.jumlahBS
         const terpakaiDraft = notas
             .filter((n) => n.jenis === 'lpj' && n.bsId === bsId && n.id !== excludeNotaId)
             .reduce((sum, n) => sum + (Number(n.jumlahBiaya) || 0), 0)
@@ -288,7 +311,7 @@ const CatatNota = () => {
             jenis,
             rbsVariant: jenis === 'rbs' ? rbsVariant : null,
             bsId: jenis === 'lpj' ? selectedBsId : null,
-            nomorBS: jenis === 'lpj' ? (selectedBs?.bonSementara?.[0]?.nomorBS || null) : null,
+            nomorBS: jenis === 'lpj' ? (selectedBs?.nomorBS || null) : null,
             lpjKategori: jenis === 'lpj' ? lpjKategori : null,
             namaItem: row.isLainnya ? null : (row.namaItemOption?.value || null),
             isLainnya: row.isLainnya,
@@ -662,7 +685,7 @@ const CatatNota = () => {
                             return (
                                 <div key={bsId} className="border dark:border-gray-700 rounded-md p-3">
                                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                                        <div className="text-sm font-semibold dark:text-gray-100">{bs?.bonSementara?.[0]?.nomorBS || bsId}</div>
+                                        <div className="text-sm font-semibold dark:text-gray-100">{bs?.nomorBS || bsId}</div>
                                         <span className="text-xs text-gray-500 dark:text-gray-400">{list.length} nota &middot; total {formatRupiah(total)} &middot; sisa <span className={sisaDana(bsId) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{formatRupiah(sisaDana(bsId))}</span></span>
                                     </div>
                                     <div className="flex flex-col gap-1.5">

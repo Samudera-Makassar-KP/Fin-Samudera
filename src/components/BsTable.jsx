@@ -223,29 +223,45 @@ const BsTable = () => {
 
             const newLpjStatus = {};
 
+            // Bagian CE: koreksi dari user -- satu dokumen BS bisa punya LEBIH
+            // DARI SATU item (nomorBS/jumlahBS berbeda-beda, lihat FormBs.jsx
+            // `multipleItems`), tapi sebelumnya cuma `bs.displayId` (=
+            // bonSementara[0].nomorBS) yang dicocokkan ke LPJ -- item ke-2 dst
+            // (mis. nomorBS "...508" dalam dokumen yang displayId-nya "...507")
+            // tidak pernah terdeteksi LPJ-nya sama sekali. Sekarang SEMUA item
+            // dicek, status gabungan: "Sudah LPJ" kalau SEMUA item sudah,
+            // "Sedang LPJ" kalau ADA yang aktif diproses, selain itu "Belum LPJ".
             for (const bs of bonSementaraList) {
-                const lpjData = lpjByNomorBS[normalizeNomorBS(bs.displayId)]
+                const items = bs.bonSementara?.length ? bs.bonSementara : [{ nomorBS: bs.displayId }]
+                let hasBelum = false
+                let hasSedang = false
+                let hasSudah = false
+                let representativeLpjData = null
 
-                if (!lpjData) {
-                    // No LPJ found
-                    newLpjStatus[bs.id] = { status: 'Belum LPJ' };
-                } else {
-                    if (lpjData.status === 'Dibatalkan' || lpjData.status === 'Ditolak') {
-                        newLpjStatus[bs.id] = {
-                            status: 'Belum LPJ',
-                            statusHistory: lpjData.statusHistory || []
-                        };
+                items.forEach((it) => {
+                    const lpjData = lpjByNomorBS[normalizeNomorBS(it.nomorBS)]
+                    if (!lpjData || lpjData.status === 'Dibatalkan' || lpjData.status === 'Ditolak') {
+                        hasBelum = true
                     } else if (lpjData.status === 'Disetujui') {
-                        newLpjStatus[bs.id] = {
-                            status: 'Sudah LPJ',
-                            statusHistory: lpjData.statusHistory || []
-                        };
+                        hasSudah = true
+                        if (!representativeLpjData) representativeLpjData = lpjData
                     } else {
-                        newLpjStatus[bs.id] = {
-                            status: 'Sedang LPJ',
-                            statusHistory: lpjData.statusHistory || []
-                        };
+                        hasSedang = true
+                        representativeLpjData = lpjData
                     }
+                })
+
+                if (hasSedang) {
+                    newLpjStatus[bs.id] = { status: 'Sedang LPJ', statusHistory: representativeLpjData?.statusHistory || [] }
+                } else if (hasBelum) {
+                    // Sebagian/semua item belum LPJ -- tetap "Belum LPJ" supaya
+                    // tombol reminder & timer tetap muncul untuk item yang
+                    // belum dilaporkan, meski item lain sudah.
+                    newLpjStatus[bs.id] = { status: 'Belum LPJ', statusHistory: representativeLpjData?.statusHistory || [] }
+                } else if (hasSudah) {
+                    newLpjStatus[bs.id] = { status: 'Sudah LPJ', statusHistory: representativeLpjData?.statusHistory || [] }
+                } else {
+                    newLpjStatus[bs.id] = { status: 'Belum LPJ' }
                 }
             }
 
