@@ -9,6 +9,8 @@ import { toast } from 'react-toastify'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
 import { useTheme } from '../context/ThemeContext'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faCircleExclamation, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
 
 // Bagian AQ: status yang disembunyikan dari list milik user sendiri (lihat
 // catatan di filterOptions.status di bawah). TIDAK berlaku untuk 'Draft'
@@ -412,12 +414,30 @@ const LpjBsTable = () => {
                                                             {item.displayId}
                                                         </Link>
                                                     ) : (
-                                                        <Link
-                                                            to={`/lpj/${item.id}`}
-                                                            className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
-                                                        >
-                                                            {item.displayId}
-                                                        </Link>
+                                                        <div className="flex items-center gap-2">
+                                                            {/* Bagian BO: penanda bukti pengembalian di depan Nomor
+                                                                Dokumen -- cuma muncul kalau LPJ ini memang punya
+                                                                sisa lebih yang perlu dikembalikan (sisaLebih > 0).
+                                                                Tanda seru = belum diproses/belum valid, centang =
+                                                                sudah valid/ditandai selesai. */}
+                                                            {item.sisaLebih > 0 && (
+                                                                item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered' ? (
+                                                                    <span className="text-green-600 dark:text-green-400" title="Bukti pengembalian sudah diproses">
+                                                                        <FontAwesomeIcon icon={faCircleCheck} className="w-3 h-3" />
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-red-600 dark:text-red-400" title="Bukti pengembalian belum diproses">
+                                                                        <FontAwesomeIcon icon={faCircleExclamation} className="w-3 h-3" />
+                                                                    </span>
+                                                                )
+                                                            )}
+                                                            <Link
+                                                                to={`/lpj/${item.id}`}
+                                                                className="text-black dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 hover:underline cursor-pointer"
+                                                            >
+                                                                {item.displayId}
+                                                            </Link>
+                                                        </div>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 border dark:border-gray-600">{item.kategori}</td>
