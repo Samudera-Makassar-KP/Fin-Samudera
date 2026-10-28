@@ -466,11 +466,13 @@ service cloud.firestore {
         && request.resource.data.targetReductionPct <= 100;
     }
 
-    // Bagian BT/BW: saldo bank yang diketik MANUAL oleh user sendiri di
-    // halaman "Mutasi Dana" (src/components/MutasiDana.jsx) -- dibandingkan
-    // dengan saldo yang dihitung sistem dari BS/RBS/LPJ milik user itu
-    // sendiri, untuk membantu mencocokkan selisih dana. Bukan data finansial
-    // perusahaan, murni catatan pribadi user untuk rekonsiliasi.
+    // Bagian BT/BW: saldo bank yang diketik MANUAL oleh user sendiri --
+    // dibandingkan dengan saldo yang dihitung sistem dari BS/RBS/LPJ milik
+    // user itu sendiri, untuk membantu mencocokkan selisih dana. Bukan data
+    // finansial perusahaan, murni catatan pribadi user untuk rekonsiliasi.
+    // Bagian CB: menu "Mutasi Dana" dihapus -- kartu Saldo Bank/Selisih
+    // pindah ke Dashboard (src/components/DashboardSummary.jsx), docId &
+    // skema koleksi ini TIDAK berubah sama sekali.
     //
     // Bagian BW: docId berubah dari `{uid}` saja jadi `{uid}_{periode}` (mis.
     // `abc123_10-2026` untuk Oktober 2026, atau `abc123_ALL-ALL` untuk
@@ -494,26 +496,35 @@ service cloud.firestore {
     // whitelist. docId auto-generate (bukan uid-prefix) karena tidak perlu
     // dicari lewat ID -- selalu di-query lewat `user.uid`/`jenis`/`bsId`
     // sama seperti pola `allow list` di koleksi lpj/reimbursement.
+    // Bagian CC: skema diperluas supaya item nota meniru field form RBS/LPJ
+    // ASLI (namaItem/isLainnya/jenisLain/biaya/jumlah/plat/lokasi), bukan
+    // cuma nominal+kategori bebas teks -- lihat CatatNota.jsx. `jumlahBiaya`
+    // (biaya x jumlah) dipakai sebagai "nominal" untuk sisa dana/batas,
+    // menggantikan field `nominal` versi sebelumnya.
+    function validNotaDraftFields() {
+      return request.resource.data.keys().hasOnly([
+        'user', 'jenis', 'rbsVariant', 'bsId', 'nomorBS', 'lpjKategori',
+        'namaItem', 'isLainnya', 'jenisLain', 'biaya', 'jumlah', 'jumlahBiaya',
+        'item', 'keterangan', 'plat', 'lokasi', 'tanggal', 'createdAt', 'updatedAt'
+      ])
+        && request.resource.data.jenis in ['rbs', 'lpj']
+        && request.resource.data.jumlahBiaya is number
+        && request.resource.data.jumlahBiaya > 0
+        && request.resource.data.jumlahBiaya <= 999999999999
+        && request.resource.data.isLainnya is bool
+        && request.resource.data.tanggal is string;
+    }
+
     match /notaDraft/{docId} {
       allow get: if signedIn() && resource.data.user.uid == request.auth.uid;
       allow list: if signedIn() && resource.data.user.uid == request.auth.uid;
       allow create: if signedIn()
         && request.resource.data.user.uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['user', 'jenis', 'bsId', 'nomorBS', 'nominal', 'kategori', 'keterangan', 'tanggal', 'createdAt', 'updatedAt'])
-        && request.resource.data.jenis in ['rbs', 'lpj']
-        && request.resource.data.nominal is number
-        && request.resource.data.nominal > 0
-        && request.resource.data.nominal <= 999999999999
-        && request.resource.data.kategori is string
-        && request.resource.data.keterangan is string
-        && request.resource.data.tanggal is string;
+        && validNotaDraftFields();
       allow update: if signedIn()
         && resource.data.user.uid == request.auth.uid
         && request.resource.data.user.uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['user', 'jenis', 'bsId', 'nomorBS', 'nominal', 'kategori', 'keterangan', 'tanggal', 'createdAt', 'updatedAt'])
-        && request.resource.data.nominal is number
-        && request.resource.data.nominal > 0
-        && request.resource.data.nominal <= 999999999999;
+        && validNotaDraftFields();
       allow delete: if signedIn() && resource.data.user.uid == request.auth.uid;
     }
 

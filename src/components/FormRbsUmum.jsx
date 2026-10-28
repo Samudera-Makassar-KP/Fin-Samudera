@@ -58,16 +58,26 @@ const RbsUmumForm = () => {
     // CatatNota.jsx `rangkaiRbs()`. `jenis` di-set via isLainnya/jenisLain
     // (bukan dropdown jenisOptions) karena kategori nota bebas teks, tidak
     // dijamin cocok salah satu opsi baku.
+    // Bagian CC: field pre-fill disamakan dengan skema nota di
+    // CatatNota.jsx (isLainnya/namaItem/jenisLain/biaya/liter/item/
+    // keterangan/plat/tanggal), bukan kategori bebas teks lagi -- supaya
+    // dropdown "Jenis" di sini otomatis terisi benar (bukan selalu jatuh ke
+    // "Lainnya"). `jenis` dikonstruksi ulang sebagai {value,label} -- react-
+    // select mencocokkan lewat `value`, tidak perlu referensi objek yang
+    // sama persis dengan array `jenisOptions`.
     const prefillRbsItems = location.state?.prefillRbsItems || null
     const [reimbursements, setReimbursements] = useState(() => {
         if (prefillRbsItems && prefillRbsItems.length > 0) {
             return prefillRbsItems.map((p) => ({
                 ...initialReimbursementState,
-                isLainnya: true,
-                jenisLain: p.kategori || 'Lainnya',
-                biaya: String(p.nominal || ''),
-                item: p.kategori || '',
+                isLainnya: p.isLainnya,
+                jenis: p.isLainnya ? '' : { value: p.namaItem, label: p.namaItem },
+                jenisLain: p.isLainnya ? (p.jenisLain || 'Lainnya') : '',
+                biaya: String(p.biaya || ''),
+                liter: p.liter ? String(p.liter) : '',
+                item: p.item || '',
                 keterangan: p.keterangan || '',
+                plat: p.plat || '',
                 tanggal: p.tanggal || ''
             }))
         }

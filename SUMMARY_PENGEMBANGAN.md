@@ -3275,3 +3275,36 @@ User minta menu "Mutasi Dana" dihapus total ("agak kacau prosesnya" -- dropdown/
 - [x] `CI=true npm run build` sukses (bundle JS malah mengecil -2.98kB karena MutasiDana.jsx terhapus)
 - [ ] Deploy ke produksi (hosting saja -- TIDAK ada perubahan `firestore.rules` di Bagian ini)
 - [ ] **Belum ada pengujian UI manual** -- cek: tombol Transferred muncul di BsTable untuk BS Disetujui, tombol Kekurangan Dibayar muncul di LpjBsTable untuk LPJ bersisaKurang, 5 kartu baru muncul di Dashboard dengan angka yang masuk akal, Saldo Bank bisa diisi & tersimpan, link "Mutasi Dana" sudah tidak ada di sidebar
+
+---
+
+# BAGIAN CC — Catat Nota: Format Item Disamakan dengan Form RBS/LPJ Asli (2026-10-28)
+
+## 91.1 Koreksi dari User
+
+Sebelum deploy, user minta "Catat Nota" RBS disamakan formatnya dengan form pengajuan RBS yang sudah ada (GA/Umum, Operasional, BBM) -- termasuk bisa tambah item & dropdown jenis item yang sama -- supaya lebih familiar ("yg sudah biasa digunakan user"), bukan kolom kategori bebas teks yang disederhanakan (versi Bagian CA). Berlaku juga untuk LPJ.
+
+## 91.2 Implementasi
+
+`src/components/CatatNota.jsx` ditulis ulang total:
+- **Dropdown jenis per varian**, disalin APA ADANYA dari form aslinya: `RBS_VARIANTS.umum/operasional/bbm` (masing-masing jenisOptions-nya sendiri, meniru `FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`) dan `LPJ_JENIS_BY_KATEGORI` (mengikuti kategori BS yang dipilih -- GA/Umum pakai daftar `FormLpjUmum.jsx`, Marketing/Operasional pakai daftar `FormLpjMarketing.jsx`). Pilih "Lainnya" tetap bisa ketik bebas (`isLainnya`/`jenisLain`), sama seperti form aslinya.
+- **Auto-harga & auto-liter BBM**: pola arahnya BEDA antara RBS dan LPJ (ditemukan saat riset, sempat jadi sumber bug kalau disamakan) -- RBS: user isi `biaya` (TOTAL rupiah), `liter` otomatis dihitung dari biaya/harga-per-liter (tetap bisa diedit manual). LPJ: user isi `jumlah` (kuantitas/liter), `biaya` otomatis terisi harga satuan, `jumlahBiaya = biaya x jumlah` dihitung otomatis.
+- **Bisa tambah beberapa item sekaligus** ("+ Tambah Item") sebelum disimpan -- tiap item disimpan sebagai dokumen `notaDraft` terpisah (supaya edit/hapus/sisa-dana per item tetap jalan seperti sebelumnya), tapi bisa diinput dalam satu sesi tanpa bolak-balik.
+- **Draft RBS dipecah per varian** (GA/Umum/Operasional/BBM, masing-masing field `rbsVariant` baru) -- tiap varian punya tombol "Rangkai jadi RBS [Varian]" sendiri, navigasi ke rute form yang sesuai (`/reimbursement/umum`/`operasional`/`bbm`).
+- **`firestore.rules`**: skema `notaDraft` diperluas total (field baru: `rbsVariant`, `lpjKategori`, `namaItem`, `jenisLain` dipertahankan, `biaya`, `jumlah`, `jumlahBiaya`, `item`, `plat`, `lokasi` -- field `nominal`/`kategori` versi Bagian CA dihapus). Validasi utama pindah ke `jumlahBiaya > 0` (pengganti `nominal`).
+- **`FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`/`FormLpjUmum.jsx`/`FormLpjMarketing.jsx`**: mapping pre-fill (`prefillRbsItems`/`prefillLpjItems`) diperbarui mengikuti skema baru -- dropdown jenis di form tujuan sekarang otomatis terisi benar (bukan selalu jatuh ke "Lainnya" seperti Bagian CA). Prefill BARU ditambahkan ke `FormRbsOperasional.jsx` & `FormRbsBbm.jsx` (Bagian CA cuma mendukung Umum).
+- **`src/components/DetailBs.jsx`**: mapping `prefillLpjItems` ke handleBuatLaporan() diperbarui ke skema baru.
+- Bug ditemukan & diperbaiki SEBELUM deploy: field `item` yang dipakai di payload nota ketinggalan tidak masuk whitelist `hasOnly()` di `firestore.rules` -- kalau tidak diperbaiki, SEMUA simpan nota akan ditolak permission-denied begitu live.
+
+## 91.3 Task Development — Bagian CC
+
+- [x] `src/components/CatatNota.jsx` ditulis ulang: dropdown jenis per varian, auto-harga/liter BBM, multi-item, draft RBS per varian
+- [x] `firestore.rules`: skema `notaDraft` diperluas (ditemukan & diperbaiki bug field `item` yang ketinggalan dari whitelist)
+- [x] `FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`: prefill items (2 yang terakhir baru, sebelumnya cuma Umum)
+- [x] `FormLpjUmum.jsx`/`FormLpjMarketing.jsx`/`DetailBs.jsx`: mapping prefill diperbarui ke skema baru
+- [x] `CI=true npx eslint` (semua file terkait) -- bersih
+- [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules)
+- [ ] **Belum ada pengujian UI manual sama sekali** -- mohon ditest: catat nota RBS untuk ketiga varian (Umum/Operasional/BBM) termasuk item BBM (cek auto-liter), catat nota LPJ (cek auto-biaya BBM), tambah beberapa item sekaligus lalu simpan, rangkai draft RBS per varian ke form yang benar, rangkai nota LPJ dari Detail BS -- pastikan dropdown jenis di form tujuan terisi benar (bukan jatuh ke "Lainnya")

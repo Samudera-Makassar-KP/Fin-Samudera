@@ -65,16 +65,20 @@ const FormLpjMarketing = () => {
     const editData = location.state?.editData || null
     // Bagian CA: lihat catatan sama di FormLpjUmum.jsx -- baris item bisa
     // pre-filled dari nota yang sudah dicatat di "Catat Nota" untuk BS ini.
+    // Bagian CC: lihat catatan sama di FormLpjUmum.jsx -- field pre-fill
+    // disamakan dengan skema nota di CatatNota.jsx.
     const prefillLpjItems = location.state?.prefillLpjItems || null
     const [lpj, setLpj] = useState(() => {
         if (prefillLpjItems && prefillLpjItems.length > 0) {
             return prefillLpjItems.map((p) => ({
                 ...initialLpjState,
-                isLainnya: true,
-                jenisLain: p.kategori || 'Lainnya',
-                biaya: String(p.nominal || ''),
-                jumlah: '1',
-                jumlahBiaya: Number(p.nominal) || 0,
+                isLainnya: p.isLainnya,
+                namaItem: p.isLainnya ? null : { value: p.namaItem, label: p.namaItem },
+                jenisLain: p.isLainnya ? (p.jenisLain || 'Lainnya') : '',
+                biaya: String(p.biaya || ''),
+                jumlah: String(p.jumlah || '1'),
+                jumlahBiaya: Number(p.jumlahBiaya) || 0,
+                plat: p.plat || '',
                 keterangan: p.keterangan || ''
             }))
         }

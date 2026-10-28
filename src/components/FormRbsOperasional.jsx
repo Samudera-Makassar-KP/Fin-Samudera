@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { collection, setDoc, doc, updateDoc, arrayUnion, query, where, getDoc, getDocs, runTransaction } from 'firebase/firestore'
+import { collection, setDoc, doc, deleteDoc, updateDoc, arrayUnion, query, where, getDoc, getDocs, runTransaction } from 'firebase/firestore'
 import { db, functions } from '../firebaseConfig'
 import Select from 'react-select'
 import CreatableSelect from 'react-select/creatable'
@@ -53,7 +53,28 @@ const RbsOperasionalForm = () => {
         tanggalPengajuan: todayDate
     }
 
-    const [reimbursements, setReimbursements] = useState([initialReimbursementState])
+    // Bagian CC: baris item bisa pre-filled dari "Catat Nota" -- lihat
+    // catatan sama di FormRbsUmum.jsx. Field "Item" di CatatNota dipetakan
+    // ke "kebutuhan" di sini (bukan "item" seperti Umum/Bbm -- nama field
+    // beda, isinya sama).
+    const prefillRbsItems = location.state?.prefillRbsItems || null
+    const [reimbursements, setReimbursements] = useState(() => {
+        if (prefillRbsItems && prefillRbsItems.length > 0) {
+            return prefillRbsItems.map((p) => ({
+                ...initialReimbursementState,
+                isLainnya: p.isLainnya,
+                jenis: p.isLainnya ? '' : { value: p.namaItem, label: p.namaItem },
+                jenisLain: p.isLainnya ? (p.jenisLain || 'Lainnya') : '',
+                biaya: String(p.biaya || ''),
+                liter: p.liter ? String(p.liter) : '',
+                kebutuhan: p.item || '',
+                keterangan: p.keterangan || '',
+                plat: p.plat || '',
+                tanggal: p.tanggal || ''
+            }))
+        }
+        return [initialReimbursementState]
+    })
 
     useEffect(() => {
         if (todayDate) {
@@ -741,6 +762,17 @@ const RbsOperasionalForm = () => {
                 // menyebabkan toast error walau dokumennya sudah tersimpan.
                 const newDocRef = doc(collection(db, 'reimbursement'))
                 await setDoc(newDocRef, { ...reimbursementData, id: newDocRef.id })
+
+                // Bagian CC: lihat catatan sama di FormRbsUmum.jsx -- hapus
+                // notaDraft yang baru dirangkai jadi RBS ini.
+                const prefillNotaDraftIds = location.state?.prefillNotaDraftIds
+                if (Array.isArray(prefillNotaDraftIds) && prefillNotaDraftIds.length > 0) {
+                    try {
+                        await Promise.all(prefillNotaDraftIds.map((id) => deleteDoc(doc(db, 'notaDraft', id))))
+                    } catch (cleanupError) {
+                        console.error('Error cleaning up notaDraft after RBS submit:', cleanupError)
+                    }
+                }
 
                 console.log('Reimbursement berhasil dibuat:', {
                     firestoreId: newDocRef.id,

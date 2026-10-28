@@ -371,7 +371,13 @@ const DetailBs = () => {
         // ikut dibawa sebagai baris item siap-pakai di form LPJ -- lihat
         // prefillLpjItems/prefillNotaDraftIds di FormLpjUmum.jsx/
         // FormLpjMarketing.jsx.
-        const prefillLpjItems = notaDraftForBs.map((n) => ({ nominal: n.nominal, kategori: n.kategori, keterangan: n.keterangan }))
+        // Bagian CC: field disamakan dengan skema nota di CatatNota.jsx
+        // (isLainnya/namaItem/jenisLain/biaya/jumlah/jumlahBiaya/plat), bukan
+        // nominal/kategori bebas teks lagi.
+        const prefillLpjItems = notaDraftForBs.map((n) => ({
+            isLainnya: n.isLainnya, namaItem: n.namaItem, jenisLain: n.jenisLain,
+            biaya: n.biaya, jumlah: n.jumlah, jumlahBiaya: n.jumlahBiaya, plat: n.plat, keterangan: n.keterangan
+        }))
         const prefillNotaDraftIds = notaDraftForBs.map((n) => n.id)
         if (bonSementara?.kategori === 'GA/Umum') {
             navigate('/lpj/umum', {
@@ -694,7 +700,7 @@ const DetailBs = () => {
                 {userData?.uid === bonSementaraDetail?.user.uid && notaDraftForBs.length > 0 && !isLpjApproved && (
                     <div className="mt-6 flex items-center justify-between gap-3 flex-wrap bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg px-4 py-3">
                         <div className="text-sm text-gray-700 dark:text-gray-200">
-                            <span className="font-semibold">{notaDraftForBs.length} nota sudah tercatat</span> untuk BS ini (total {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(notaDraftForBs.reduce((s, n) => s + (n.nominal || 0), 0))}) -- siap jadi baris item LPJ, klik "Buat Laporan".
+                            <span className="font-semibold">{notaDraftForBs.length} nota sudah tercatat</span> untuk BS ini (total {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(notaDraftForBs.reduce((s, n) => s + (n.jumlahBiaya || 0), 0))}) -- siap jadi baris item LPJ, klik "Buat Laporan".
                         </div>
                     </div>
                 )}
