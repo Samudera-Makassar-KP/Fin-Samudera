@@ -2970,5 +2970,5 @@ Dependency baru dari sesi lain (`pdf-lib` di `functions/package.json`, untuk gab
 - [x] `CI=true npx eslint src/components/LpjBsTable.jsx` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test PASS (naik dari 113 karena test baru dari sesi lain)
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting -- tidak ada perubahan Cloud Functions di Bagian ini)
+- [x] Deploy ke produksi (hosting -- tidak ada perubahan Cloud Functions di Bagian ini) — sukses 2026-10-28, diverifikasi hash bundle live (`main.33238888.js`) cocok dengan hasil build lokal terbaru, dan `dev`/`main` dikonfirmasi identik (`git diff dev main` kosong)
 - [ ] Tes manual: buka daftar LPJ sendiri, konfirmasi ikon seru/centang muncul cuma untuk LPJ bersisa lebih, dan berubah jadi centang setelah bukti pengembalian valid
