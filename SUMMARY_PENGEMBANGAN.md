@@ -3103,3 +3103,41 @@ User minta Saldo Menurut Sistem dan Selisih dihitung PER BULAN (bukan kumulatif 
 - [ ] Tes manual: ganti Bulan/Tahun, konfirmasi Saldo Sistem & tabel ikut berubah ke periode itu saja
 - [ ] Tes manual: isi Saldo Bank di bulan Oktober, ganti ke bulan lain, konfirmasi Saldo Bank-nya BEDA/kosong (bukan ikut angka Oktober), lalu balik ke Oktober -- nilainya harus tetap tersimpan
 - [ ] Tes manual: pilih "Semua Bulan" + "Semua Tahun", konfirmasi tampilan kembali kumulatif seperti sebelum Bagian ini
+
+---
+
+# BAGIAN BX — Mutasi Dana: Tab Per Periode & Kekurangan LPJ Butuh Konfirmasi (2026-10-28)
+
+## 86.1 Bug Report dari User
+
+Setelah Bagian BW dipakai di produksi, user lapor "Saldo Menurut Sistem" masih menampilkan total/semua (bukan per bulan), dan transaksi BS/RBS/LPJ yang muncul juga terlihat tidak sesuai. Diminta dropdown Bulan/Tahun diganti jadi TAB per bulan.
+
+## 86.2 Investigasi
+
+Ditelusuri ulang `src/components/MutasiDana.jsx` baris demi baris -- rantai `matchesPeriod` -> `transactions`/`pendingItems` -> `totalMasuk`/`totalKeluar`/`saldoSistem` secara logika SUDAH benar mengikuti periode yang dipilih (dicek ulang, tidak ada variabel basi yang kelewat dipakai). Akar masalahnya di DESAIN dropdown Bagian BW: Bulan & Tahun adalah **dua sumbu independen** -- kombinasi seperti "Oktober" + "Semua Tahun" diam-diam mencampur Oktober dari BANYAK tahun jadi satu (persis seperti "RBS/BS/LPJ tidak sesuai" yang dilaporkan user), dan "Semua Bulan" + "Semua Tahun" (dua pilihan terpisah, mudah terpencet tanpa sengaja) menghasilkan tampilan kumulatif yang terlihat seperti "masih nunjukin total semua". Kombinasi "aneh" seperti ini tidak mungkin terjadi lagi kalau bulan+tahun digabung jadi SATU unit pilihan.
+
+Sambil menelusuri, ditemukan juga satu inkonsistensi nyata di luar isu dropdown: baris "Kekurangan LPJ dibayar ke Anda" (`sisaKurang`, perusahaan bayar SISA ke user) di-hitung LANGSUNG sebagai uang masuk begitu LPJ diajukan -- TANPA ada konfirmasi apa pun kalau uangnya benar-benar sudah dibayar. Ini melanggar prinsip inti Bagian BU (hanya uang yang BENAR-BENAR berpindah yang dihitung) dan jadi kandidat kuat sumber selisih "LPJ tidak sesuai" lainnya, karena `sisaKurang` tidak punya field status verifikasi apa pun di seluruh codebase (beda dengan `sisaLebih` yang sudah punya `pengembalianStatus`).
+
+## 86.3 Perbaikan
+
+`src/components/MutasiDana.jsx`:
+- Dropdown Bulan & Tahun (2 `<Select>` react-select) **dihapus total**, diganti TAB horizontal (`periodTabs`) -- satu tab = satu kombinasi bulan+tahun yang BENAR-BENAR ada di transaksi user (dibangun dari `allRows`/`allPending`, bukan tanggal pengajuan mentah, supaya baris yang "pindah bulan" karena `transferredAt` tetap kebagian tab yang pas), + 1 tab "Semua" di akhir untuk tampilan kumulatif (permintaan eksplisit user di Bagian BW, tetap dipertahankan). Default: tab bulan+tahun berjalan.
+- State `selectedBulan`+`selectedTahun` (independen) digabung jadi `selectedPeriod` tunggal (`{bulan, tahun}` atau `null` untuk "Semua") -- tidak mungkin lagi kombinasi setengah-"semua" yang membingungkan.
+- `periodKey` (dipakai untuk `mutasiDanaSaldoBank` docId) formatnya TIDAK berubah dari Bagian BW (`MM-YYYY` / `ALL-ALL`) supaya dokumen Saldo Bank yang sudah tersimpan tetap valid -- tidak perlu migrasi data.
+- Baris "Kekurangan LPJ dibayar ke Anda" sekarang gated di belakang field baru `sisaKurangDibayar` (pola identik `transferred`/`pengembalianStatus`) -- belum dikonfirmasi -> masuk "Menunggu Konfirmasi" dengan tombol centang, sama seperti BS/RBS.
+- `handleConfirmTransferred` & `handleBulkConfirmOld` digeneralisasi (field ditentukan oleh `confirmField` per item, default `'transferred'`) supaya satu kode yang sama menangani `transferred` (BS/RBS) maupun `sisaKurangDibayar` (LPJ) -- termasuk tombol borongan "Tandai Transaksi Lama" yang otomatis ikut meng-cover `sisaKurangDibayar` lama juga (field ini baru ada mulai sekarang, jadi kena masalah historis yang sama seperti `transferred` di Bagian BV).
+
+`firestore.rules`:
+- Fungsi baru `canMarkSisaKurangDibayar()` (simetris dengan `canMarkTransferred()` yang sudah ada) -- LPJ owner bisa menulis `sisaKurangDibayar`+`sisaKurangDibayarAt` sendiri kalau `status == 'Disetujui'` dan diff field dibatasi cuma 2 itu. Ditambahkan ke OR di `canUpdateWorkflow()`.
+
+## 86.4 Task Development — Bagian BX
+
+- [x] `src/components/MutasiDana.jsx`: dropdown Bulan/Tahun -> TAB per periode gabungan, `sisaKurang` LPJ butuh konfirmasi
+- [x] `firestore.rules`: `canMarkSisaKurangDibayar()` ditambahkan ke `canUpdateWorkflow()` untuk koleksi `lpj`
+- [x] `CI=true npx eslint src/components/MutasiDana.jsx` -- bersih
+- [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules)
+- [ ] Tes manual: klik tab bulan yang berbeda-beda, konfirmasi Saldo Sistem & daftar transaksi benar-benar ganti sesuai tab (tidak ada lagi campuran lintas tahun)
+- [ ] Tes manual: LPJ dengan `sisaKurang > 0` muncul di "Menunggu Konfirmasi" dulu, baru pindah ke tabel utama setelah tombol "Tandai Sudah Masuk" diklik

@@ -233,6 +233,20 @@ service cloud.firestore {
         && request.resource.data.transferred == true;
     }
 
+    // Bagian BX: simetris dengan canMarkTransferred() tapi untuk sisi
+    // sebaliknya -- kekurangan LPJ (totalBiaya > jumlahBS) yang DIBAYAR
+    // PERUSAHAAN ke user. Sebelumnya di MutasiDana.jsx ini langsung
+    // dihitung sebagai "uang masuk" begitu LPJ diajukan, padahal belum ada
+    // konfirmasi apa pun kalau uangnya sudah benar-benar dibayar -- field
+    // ini baru dipakai mulai sekarang, jadi belum ada LPJ lama yang
+    // punya nilai true.
+    function canMarkSisaKurangDibayar() {
+      return isWorkflowOwner(resource.data)
+        && resource.data.status == 'Disetujui'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sisaKurangDibayar', 'sisaKurangDibayarAt'])
+        && request.resource.data.sisaKurangDibayar == true;
+    }
+
     function canUpdateWorkflow() {
       return signedIn()
         && keepsWorkflowIdentity()
@@ -241,6 +255,7 @@ service cloud.firestore {
           || canCancelOwnWorkflow()
           || canApproverUpdateWorkflow()
           || canMarkTransferred()
+          || canMarkSisaKurangDibayar()
         );
     }
 

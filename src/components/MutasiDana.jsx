@@ -6,22 +6,18 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
-import Select from 'react-select'
-import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleExclamation, faCircleCheck, faArrowUp, faArrowDown, faTriangleExclamation, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
 
-// Bagian BW: Saldo Sistem & Selisih sekarang per periode (bulan+tahun) --
-// koreksi dari user karena siklus BS/LPJ memang bulanan, menjumlahkan
-// SEMUA histori langsung jadi tidak representatif. "Semua Bulan" + "Semua
-// Tahun" sekaligus = tampilan kumulatif seperti sebelumnya (Bagian BT/BU).
-const BULAN_OPTIONS = [
-    { value: null, label: 'Semua Bulan' },
-    { value: 0, label: 'Januari' }, { value: 1, label: 'Februari' }, { value: 2, label: 'Maret' },
-    { value: 3, label: 'April' }, { value: 4, label: 'Mei' }, { value: 5, label: 'Juni' },
-    { value: 6, label: 'Juli' }, { value: 7, label: 'Agustus' }, { value: 8, label: 'September' },
-    { value: 9, label: 'Oktober' }, { value: 10, label: 'November' }, { value: 11, label: 'Desember' }
-]
+// Bagian BX: koreksi dari user -- dropdown Bulan & Tahun yang independen
+// (Bagian BW) bisa membentuk kombinasi yang membingungkan (mis. "Oktober" +
+// "Semua Tahun" mencampur Oktober dari banyak tahun sekaligus, atau "Semua
+// Bulan" + "Semua Tahun" kepencet tanpa sadar lalu terlihat seperti "masih
+// nunjukin total semua"). Diganti jadi TAB per periode -- bulan & tahun
+// digabung jadi SATU unit yang tidak bisa mismatch, dibangun dari tanggal
+// transaksi yang benar-benar ada (lihat periodTabs di bawah), + 1 tab
+// "Semua" di akhir untuk tampilan kumulatif (permintaan user sebelumnya).
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
 
 // Bagian BT: "Mutasi Dana" -- buku kas pribadi milik user yang login, dihitung
 // dari BS/RBS/LPJ miliknya sendiri (tidak ada koleksi transaksi baru di
@@ -56,9 +52,6 @@ const formatDate = (iso) => {
 }
 
 const MutasiDana = () => {
-    const { theme } = useTheme()
-    const isDark = theme === 'dark'
-
     const [loading, setLoading] = useState(true)
     const [bsDocs, setBsDocs] = useState([])
     const [rbsDocs, setRbsDocs] = useState([])
@@ -70,8 +63,9 @@ const MutasiDana = () => {
     const [filter, setFilter] = useState('semua')
 
     const today = new Date()
-    const [selectedBulan, setSelectedBulan] = useState(BULAN_OPTIONS[today.getMonth() + 1])
-    const [selectedTahun, setSelectedTahun] = useState({ value: today.getFullYear(), label: String(today.getFullYear()) })
+    // null = tab "Semua" (kumulatif). Selain itu selalu {bulan, tahun} --
+    // satu unit gabungan, tidak pernah salah satu "semua" sendirian.
+    const [selectedPeriod, setSelectedPeriod] = useState({ bulan: today.getMonth(), tahun: today.getFullYear() })
 
     const uid = typeof window !== 'undefined' ? localStorage.getItem('userUid') : null
 
@@ -97,34 +91,21 @@ const MutasiDana = () => {
 
     useEffect(() => { fetchData() }, [fetchData])
 
-    // Opsi Tahun dibangun dinamis dari tahun yang benar-benar ada di data
-    // (pola sama dengan BsTable.jsx/dll), ditambah "Semua Tahun" di awal.
-    const tahunOptions = useMemo(() => {
-        const years = new Set([today.getFullYear()])
-        ;[...bsDocs, ...rbsDocs, ...lpjDocs].forEach((item) => {
-            const y = new Date(item.tanggalPengajuan || 0).getFullYear()
-            if (!Number.isNaN(y) && y > 1970) years.add(y)
-        })
-        const sorted = Array.from(years).sort((a, b) => b - a)
-        return [{ value: null, label: 'Semua Tahun' }, ...sorted.map((y) => ({ value: y, label: String(y) }))]
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [bsDocs, rbsDocs, lpjDocs])
-
-    const isAllTime = selectedBulan?.value == null && selectedTahun?.value == null
+    const isAllTime = selectedPeriod === null
     const matchesPeriod = useCallback((isoDate) => {
         if (isAllTime) return true
         const d = new Date(isoDate || 0)
-        if (selectedBulan?.value != null && d.getMonth() !== selectedBulan.value) return false
-        if (selectedTahun?.value != null && d.getFullYear() !== selectedTahun.value) return false
-        return true
-    }, [isAllTime, selectedBulan, selectedTahun])
+        return d.getMonth() === selectedPeriod.bulan && d.getFullYear() === selectedPeriod.tahun
+    }, [isAllTime, selectedPeriod])
 
     // Bagian BW: Saldo Bank disimpan PER PERIODE (bukan satu angka tunggal
     // lagi) -- docId mutasiDanaSaldoBank diberi akhiran periode supaya tiap
     // kombinasi bulan/tahun (atau "ALL" untuk tampilan kumulatif) punya
     // angka sendiri-sendiri. Lihat firestore.rules -- pola uid-prefix sama
-    // dengan /drafts/{draftId}.
-    const periodKey = `${selectedBulan?.value == null ? 'ALL' : String(selectedBulan.value + 1).padStart(2, '0')}-${selectedTahun?.value == null ? 'ALL' : selectedTahun.value}`
+    // dengan /drafts/{draftId}. Format periodKey tidak berubah dari Bagian
+    // BW (MM-YYYY / ALL-ALL) walau sumber pilihannya sekarang tab, bukan
+    // dropdown -- jadi dokumen saldo bank yang sudah tersimpan tetap valid.
+    const periodKey = isAllTime ? 'ALL-ALL' : `${String(selectedPeriod.bulan + 1).padStart(2, '0')}-${selectedPeriod.tahun}`
     const saldoBankDocId = uid ? `${uid}_${periodKey}` : null
 
     useEffect(() => {
@@ -183,7 +164,7 @@ const MutasiDana = () => {
                     src: 'bs',
                     amount, direction: 'in',
                     link: `/bon-sementara/${item.id}`,
-                    confirmCollection: 'bonSementara', confirmId: item.id
+                    confirmCollection: 'bonSementara', confirmId: item.id, confirmField: 'transferred'
                 })
             }
         })
@@ -211,7 +192,7 @@ const MutasiDana = () => {
                     src: 'rbs',
                     amount, direction: 'in',
                     link: `/reimbursement/${item.id}`,
-                    confirmCollection: 'reimbursement', confirmId: item.id
+                    confirmCollection: 'reimbursement', confirmId: item.id, confirmField: 'transferred'
                 })
             }
         })
@@ -260,24 +241,71 @@ const MutasiDana = () => {
                 }
             }
 
+            // Bagian BX: koreksi dari user -- kekurangan LPJ (perusahaan bayar
+            // SISA ke user) sebelumnya langsung dihitung "masuk" begitu LPJ
+            // diajukan, padahal belum ada konfirmasi uangnya sudah benar-benar
+            // dibayar. Disamakan dengan pola sisaLebih/transferred: butuh
+            // konfirmasi dulu (tombol di "Menunggu Konfirmasi"), field baru
+            // `sisaKurangDibayar` -- lihat canMarkSisaKurangDibayar() di
+            // firestore.rules.
             const sisaKurang = Number(item.sisaKurang) || 0
             if (sisaKurang > 0) {
-                rows.push({
-                    id: `lpj-${item.id}-kurang`,
-                    date: item.tanggalPengajuan,
-                    ket: 'Kekurangan LPJ dibayar ke Anda',
-                    doc: item.displayId,
-                    src: 'lpj',
-                    in: sisaKurang,
-                    out: 0,
-                    link: `/lpj/${item.id}`
-                })
+                if (item.sisaKurangDibayar) {
+                    rows.push({
+                        id: `lpj-${item.id}-kurang`,
+                        date: item.sisaKurangDibayarAt || item.tanggalPengajuan,
+                        ket: 'Kekurangan LPJ dibayar ke Anda',
+                        doc: item.displayId,
+                        src: 'lpj',
+                        in: sisaKurang,
+                        out: 0,
+                        link: `/lpj/${item.id}`
+                    })
+                } else {
+                    pending.push({
+                        id: `pending-lpj-${item.id}-kurang`,
+                        date: item.tanggalPengajuan,
+                        ket: 'Kekurangan LPJ, uang belum dikonfirmasi masuk',
+                        doc: item.displayId,
+                        src: 'lpj',
+                        amount: sisaKurang, direction: 'in',
+                        link: `/lpj/${item.id}`,
+                        confirmCollection: 'lpj', confirmId: item.id, confirmField: 'sisaKurangDibayar'
+                    })
+                }
             }
         })
 
         rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
         return { allRows: rows, allPending: pending }
     }, [bsDocs, rbsDocs, lpjDocs])
+
+    // Bagian BX: tab periode dibangun dari tanggal transaksi yang BENAR-BENAR
+    // ada di allRows/allPending (bukan dari tanggalPengajuan mentah seperti
+    // tahunOptions versi Bagian BW) -- supaya setiap baris yang bisa muncul
+    // di layar selalu punya tab yang cocok, termasuk baris BS/RBS yang
+    // "pindah bulan" karena tanggal dipakai adalah transferredAt (saat uang
+    // benar-benar masuk), bukan tanggal pengajuan/approval.
+    const periodTabs = useMemo(() => {
+        const map = new Map()
+        const addDate = (iso) => {
+            const d = new Date(iso || 0)
+            if (Number.isNaN(d.getTime()) || d.getFullYear() <= 1970) return
+            const bulan = d.getMonth()
+            const tahun = d.getFullYear()
+            const key = `${tahun}-${bulan}`
+            if (!map.has(key)) map.set(key, { bulan, tahun })
+        }
+        addDate(today.toISOString())
+        allRows.forEach((r) => addDate(r.date))
+        allPending.forEach((p) => addDate(p.date))
+        const periods = Array.from(map.values()).sort((a, b) => (b.tahun - a.tahun) || (b.bulan - a.bulan))
+        return [
+            ...periods.map((p) => ({ key: `${p.tahun}-${p.bulan}`, value: p, label: `${MONTH_SHORT[p.bulan]} ${p.tahun}` })),
+            { key: 'ALL', value: null, label: 'Semua' }
+        ]
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [allRows, allPending])
 
     // Bagian BW: saldo berjalan dihitung ULANG dari 0 khusus untuk transaksi
     // DI DALAM periode yang dipilih (bukan kumulatif sejak awal) -- siklus
@@ -302,9 +330,10 @@ const MutasiDana = () => {
     const handleConfirmTransferred = async (pendingItem) => {
         setConfirmingId(pendingItem.id)
         try {
+            const field = pendingItem.confirmField || 'transferred'
             await updateDoc(doc(db, pendingItem.confirmCollection, pendingItem.confirmId), {
-                transferred: true,
-                transferredAt: new Date().toISOString()
+                [field]: true,
+                [`${field}At`]: new Date().toISOString()
             })
             toast.success('Ditandai sebagai sudah masuk')
             await fetchData()
@@ -324,6 +353,9 @@ const MutasiDana = () => {
     // perlu dicek manual satu-satu (uangnya baru/masih mungkin benar-benar
     // belum masuk). transferredAt diisi tanggal APPROVAL aslinya (bukan hari
     // ini) supaya urutan di buku besar tetap sesuai kronologi sungguhan.
+    // Bagian BX: field "sisaKurangDibayar" (LPJ) juga baru ada mulai sekarang,
+    // jadi kena masalah yang sama -- tombol borongan ini otomatis ikut
+    // meng-cover-nya juga karena sama-sama punya confirmCollection/confirmField.
     const currentMonthStart = useMemo(() => {
         const now = new Date()
         return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -342,12 +374,13 @@ const MutasiDana = () => {
         if (oldPendingBsRbs.length === 0) return
         setBulkConfirming(true)
         try {
-            await Promise.all(oldPendingBsRbs.map((p) =>
-                updateDoc(doc(db, p.confirmCollection, p.confirmId), {
-                    transferred: true,
-                    transferredAt: p.date
+            await Promise.all(oldPendingBsRbs.map((p) => {
+                const field = p.confirmField || 'transferred'
+                return updateDoc(doc(db, p.confirmCollection, p.confirmId), {
+                    [field]: true,
+                    [`${field}At`]: p.date
                 })
-            ))
+            }))
             toast.success(`${oldPendingBsRbs.length} transaksi sebelum bulan ini ditandai sudah masuk`)
             await fetchData()
         } catch (error) {
@@ -396,30 +429,6 @@ const MutasiDana = () => {
     }
     const srcLabel = { bs: 'BS', rbs: 'RBS', lpj: 'LPJ' }
 
-    const selectStyles = {
-        control: (base) => ({
-            ...base,
-            backgroundColor: isDark ? '#1f2937' : '#ffffff',
-            borderColor: isDark ? '#4b5563' : '#e5e7eb',
-            fontSize: '13px',
-            minHeight: '36px',
-            borderRadius: '8px'
-        }),
-        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
-        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
-        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
-        menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
-        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-        option: (base, state) => ({
-            ...base,
-            fontSize: '13px',
-            backgroundColor: isDark
-                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
-                : base.backgroundColor,
-            color: isDark ? '#f3f4f6' : base.color
-        })
-    }
-
     if (loading) {
         return (
             <div className="container mx-auto py-10 md:py-8">
@@ -436,37 +445,33 @@ const MutasiDana = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <div className="flex flex-wrap items-start justify-between gap-4 mb-1">
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
                 <h2 className="text-xl font-bold dark:text-gray-100">Mutasi Dana Bon Sementara</h2>
-                <div className="flex gap-2">
-                    <div className="w-36">
-                        <Select
-                            options={BULAN_OPTIONS}
-                            value={selectedBulan}
-                            onChange={setSelectedBulan}
-                            styles={selectStyles}
-                            menuPortalTarget={document.body}
-                            menuPosition="absolute"
-                            isSearchable={false}
-                        />
-                    </div>
-                    <div className="w-32">
-                        <Select
-                            options={tahunOptions}
-                            value={selectedTahun}
-                            onChange={setSelectedTahun}
-                            styles={selectStyles}
-                            menuPortalTarget={document.body}
-                            menuPosition="absolute"
-                            isSearchable={false}
-                        />
-                    </div>
-                </div>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1 mb-3 -mx-1 px-1">
+                {periodTabs.map((tab) => {
+                    const isSelected = tab.value === null
+                        ? selectedPeriod === null
+                        : selectedPeriod !== null && selectedPeriod.bulan === tab.value.bulan && selectedPeriod.tahun === tab.value.tahun
+                    return (
+                        <button
+                            key={tab.key}
+                            onClick={() => setSelectedPeriod(tab.value)}
+                            className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md border whitespace-nowrap ${
+                                isSelected
+                                    ? 'bg-blue-600 border-blue-600 text-white'
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    )
+                })}
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-2xl">
                 {isAllTime
                     ? 'Menampilkan SEMUA periode (kumulatif sejak awal).'
-                    : `Menampilkan periode ${selectedBulan?.value != null ? BULAN_OPTIONS[selectedBulan.value + 1].label : 'semua bulan'} ${selectedTahun?.value != null ? selectedTahun.value : '(semua tahun)'} -- Saldo Sistem & Selisih dihitung khusus untuk periode ini. Pilih "Semua Bulan" + "Semua Tahun" untuk lihat kumulatif.`}
+                    : `Menampilkan periode ${MONTH_SHORT[selectedPeriod.bulan]} ${selectedPeriod.tahun} -- Saldo Sistem & Selisih dihitung khusus untuk periode ini. Pilih tab "Semua" untuk lihat kumulatif.`}
             </p>
 
             {pendingItems.length > 0 && (
@@ -546,7 +551,7 @@ const MutasiDana = () => {
                         />
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {loadingBalance ? 'Memuat...' : savingBalance ? 'Menyimpan...' : `Untuk periode ${isAllTime ? 'semua' : (selectedBulan?.label || 'semua') + ' ' + (selectedTahun?.label || '')} -- cek dari mutasi rekening, lalu ketik di sini.`}
+                        {loadingBalance ? 'Memuat...' : savingBalance ? 'Menyimpan...' : `Untuk periode ${isAllTime ? 'semua' : MONTH_SHORT[selectedPeriod.bulan] + ' ' + selectedPeriod.tahun} -- cek dari mutasi rekening, lalu ketik di sini.`}
                     </div>
                 </div>
 
