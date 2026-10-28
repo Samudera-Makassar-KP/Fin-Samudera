@@ -451,15 +451,21 @@ service cloud.firestore {
         && request.resource.data.targetReductionPct <= 100;
     }
 
-    // Bagian BT: saldo bank yang diketik MANUAL oleh user sendiri di halaman
-    // "Mutasi Dana" (src/components/MutasiDana.jsx) -- dibandingkan dengan
-    // saldo yang dihitung sistem dari BS/RBS/LPJ milik user itu sendiri, untuk
-    // membantu mencocokkan selisih dana. Satu dokumen per user (docId == uid),
-    // cuma bisa dibaca/ditulis oleh pemiliknya sendiri -- bukan data finansial
+    // Bagian BT/BW: saldo bank yang diketik MANUAL oleh user sendiri di
+    // halaman "Mutasi Dana" (src/components/MutasiDana.jsx) -- dibandingkan
+    // dengan saldo yang dihitung sistem dari BS/RBS/LPJ milik user itu
+    // sendiri, untuk membantu mencocokkan selisih dana. Bukan data finansial
     // perusahaan, murni catatan pribadi user untuk rekonsiliasi.
-    match /mutasiDanaSaldoBank/{uid} {
-      allow get: if isSelf(uid);
-      allow create, update: if isSelf(uid)
+    //
+    // Bagian BW: docId berubah dari `{uid}` saja jadi `{uid}_{periode}` (mis.
+    // `abc123_10-2026` untuk Oktober 2026, atau `abc123_ALL-ALL` untuk
+    // tampilan semua bulan/tahun) -- Saldo Sistem & Selisih sekarang per
+    // bulan, jadi Saldo Bank juga perlu disimpan per periode, bukan satu
+    // angka tunggal. Pola uid-prefix persis sama dengan /drafts/{draftId}.
+    match /mutasiDanaSaldoBank/{docId} {
+      allow get: if signedIn() && docId.matches(request.auth.uid + '_.*');
+      allow create, update: if signedIn()
+        && docId.matches(request.auth.uid + '_.*')
         && request.resource.data.keys().hasOnly(['saldoBank', 'updatedAt'])
         && request.resource.data.saldoBank is number
         && request.resource.data.saldoBank >= 0

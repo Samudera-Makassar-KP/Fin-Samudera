@@ -6,8 +6,22 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import Skeleton from 'react-loading-skeleton'
 import 'react-loading-skeleton/dist/skeleton.css'
+import Select from 'react-select'
+import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCircleExclamation, faCircleCheck, faArrowUp, faArrowDown, faTriangleExclamation, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
+
+// Bagian BW: Saldo Sistem & Selisih sekarang per periode (bulan+tahun) --
+// koreksi dari user karena siklus BS/LPJ memang bulanan, menjumlahkan
+// SEMUA histori langsung jadi tidak representatif. "Semua Bulan" + "Semua
+// Tahun" sekaligus = tampilan kumulatif seperti sebelumnya (Bagian BT/BU).
+const BULAN_OPTIONS = [
+    { value: null, label: 'Semua Bulan' },
+    { value: 0, label: 'Januari' }, { value: 1, label: 'Februari' }, { value: 2, label: 'Maret' },
+    { value: 3, label: 'April' }, { value: 4, label: 'Mei' }, { value: 5, label: 'Juni' },
+    { value: 6, label: 'Juli' }, { value: 7, label: 'Agustus' }, { value: 8, label: 'September' },
+    { value: 9, label: 'Oktober' }, { value: 10, label: 'November' }, { value: 11, label: 'Desember' }
+]
 
 // Bagian BT: "Mutasi Dana" -- buku kas pribadi milik user yang login, dihitung
 // dari BS/RBS/LPJ miliknya sendiri (tidak ada koleksi transaksi baru di
@@ -42,14 +56,22 @@ const formatDate = (iso) => {
 }
 
 const MutasiDana = () => {
+    const { theme } = useTheme()
+    const isDark = theme === 'dark'
+
     const [loading, setLoading] = useState(true)
     const [bsDocs, setBsDocs] = useState([])
     const [rbsDocs, setRbsDocs] = useState([])
     const [lpjDocs, setLpjDocs] = useState([])
 
     const [saldoBankInput, setSaldoBankInput] = useState('')
+    const [loadingBalance, setLoadingBalance] = useState(false)
     const [savingBalance, setSavingBalance] = useState(false)
     const [filter, setFilter] = useState('semua')
+
+    const today = new Date()
+    const [selectedBulan, setSelectedBulan] = useState(BULAN_OPTIONS[today.getMonth() + 1])
+    const [selectedTahun, setSelectedTahun] = useState({ value: today.getFullYear(), label: String(today.getFullYear()) })
 
     const uid = typeof window !== 'undefined' ? localStorage.getItem('userUid') : null
 
@@ -57,18 +79,14 @@ const MutasiDana = () => {
         if (!uid) { setLoading(false); return }
         setLoading(true)
         try {
-            const [bsSnap, rbsSnap, lpjSnap, saldoDoc] = await Promise.all([
+            const [bsSnap, rbsSnap, lpjSnap] = await Promise.all([
                 getDocs(query(collection(db, 'bonSementara'), where('user.uid', '==', uid))),
                 getDocs(query(collection(db, 'reimbursement'), where('user.uid', '==', uid))),
-                getDocs(query(collection(db, 'lpj'), where('user.uid', '==', uid))),
-                getDoc(doc(db, 'mutasiDanaSaldoBank', uid))
+                getDocs(query(collection(db, 'lpj'), where('user.uid', '==', uid)))
             ])
             setBsDocs(bsSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
             setRbsDocs(rbsSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
             setLpjDocs(lpjSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
-            if (saldoDoc.exists()) {
-                setSaldoBankInput(String(saldoDoc.data().saldoBank ?? ''))
-            }
         } catch (error) {
             console.error('Error fetching data Mutasi Dana:', error)
             toast.error('Gagal mengambil data Mutasi Dana')
@@ -78,6 +96,51 @@ const MutasiDana = () => {
     }, [uid])
 
     useEffect(() => { fetchData() }, [fetchData])
+
+    // Opsi Tahun dibangun dinamis dari tahun yang benar-benar ada di data
+    // (pola sama dengan BsTable.jsx/dll), ditambah "Semua Tahun" di awal.
+    const tahunOptions = useMemo(() => {
+        const years = new Set([today.getFullYear()])
+        ;[...bsDocs, ...rbsDocs, ...lpjDocs].forEach((item) => {
+            const y = new Date(item.tanggalPengajuan || 0).getFullYear()
+            if (!Number.isNaN(y) && y > 1970) years.add(y)
+        })
+        const sorted = Array.from(years).sort((a, b) => b - a)
+        return [{ value: null, label: 'Semua Tahun' }, ...sorted.map((y) => ({ value: y, label: String(y) }))]
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bsDocs, rbsDocs, lpjDocs])
+
+    const isAllTime = selectedBulan?.value == null && selectedTahun?.value == null
+    const matchesPeriod = useCallback((isoDate) => {
+        if (isAllTime) return true
+        const d = new Date(isoDate || 0)
+        if (selectedBulan?.value != null && d.getMonth() !== selectedBulan.value) return false
+        if (selectedTahun?.value != null && d.getFullYear() !== selectedTahun.value) return false
+        return true
+    }, [isAllTime, selectedBulan, selectedTahun])
+
+    // Bagian BW: Saldo Bank disimpan PER PERIODE (bukan satu angka tunggal
+    // lagi) -- docId mutasiDanaSaldoBank diberi akhiran periode supaya tiap
+    // kombinasi bulan/tahun (atau "ALL" untuk tampilan kumulatif) punya
+    // angka sendiri-sendiri. Lihat firestore.rules -- pola uid-prefix sama
+    // dengan /drafts/{draftId}.
+    const periodKey = `${selectedBulan?.value == null ? 'ALL' : String(selectedBulan.value + 1).padStart(2, '0')}-${selectedTahun?.value == null ? 'ALL' : selectedTahun.value}`
+    const saldoBankDocId = uid ? `${uid}_${periodKey}` : null
+
+    useEffect(() => {
+        if (!saldoBankDocId) return
+        let cancelled = false
+        setLoadingBalance(true)
+        setSaldoBankInput('')
+        getDoc(doc(db, 'mutasiDanaSaldoBank', saldoBankDocId))
+            .then((snap) => {
+                if (cancelled) return
+                setSaldoBankInput(snap.exists() ? String(snap.data().saldoBank ?? '') : '')
+            })
+            .catch((error) => console.error('Error fetching saldo bank:', error))
+            .finally(() => { if (!cancelled) setLoadingBalance(false) })
+        return () => { cancelled = true }
+    }, [saldoBankDocId])
 
     // Turunkan daftar transaksi dari BS/RBS/LPJ milik user -- lihat catatan
     // skop di atas komponen ini untuk penjelasan tiap jenis baris.
@@ -93,7 +156,7 @@ const MutasiDana = () => {
     // - Pengembalian sisa lebih LPJ yang BELUM valid/terverifikasi -> BELUM
     //   dihitung sebagai uang keluar (dipindah ke "Menunggu Konfirmasi" juga,
     //   tanpa tombol -- konfirmasinya lewat alur upload bukti yang sudah ada).
-    const { transactions, pendingItems } = useMemo(() => {
+    const { allRows, allPending } = useMemo(() => {
         const rows = []
         const pending = []
 
@@ -187,6 +250,7 @@ const MutasiDana = () => {
                 } else {
                     pending.push({
                         id: `pending-lpj-${item.id}-pengembalian`,
+                        date: item.tanggalPengajuan,
                         ket: 'Sisa LPJ belum dikembalikan/terverifikasi',
                         doc: item.displayId,
                         src: 'lpj',
@@ -212,10 +276,23 @@ const MutasiDana = () => {
         })
 
         rows.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
-        let running = 0
-        rows.forEach((r) => { running += r.in - r.out; r.saldo = running })
-        return { transactions: rows, pendingItems: pending }
+        return { allRows: rows, allPending: pending }
     }, [bsDocs, rbsDocs, lpjDocs])
+
+    // Bagian BW: saldo berjalan dihitung ULANG dari 0 khusus untuk transaksi
+    // DI DALAM periode yang dipilih (bukan kumulatif sejak awal) -- siklus
+    // BS/LPJ memang bulanan, jadi "saldo" yang berguna adalah pergerakan
+    // bersih bulan itu, bukan akumulasi sepanjang masa. Kalau "Semua Bulan"
+    // + "Semua Tahun" dipilih, ini otomatis jadi saldo kumulatif sungguhan
+    // (matchesPeriod selalu true, seluruh riwayat masuk, saldo tetap
+    // berjalan terus seperti versi sebelumnya).
+    const { transactions, pendingItems } = useMemo(() => {
+        const periodRows = allRows.filter((r) => matchesPeriod(r.date))
+        let running = 0
+        periodRows.forEach((r) => { running += r.in - r.out; r.saldo = running })
+        const periodPending = allPending.filter((p) => matchesPeriod(p.date))
+        return { transactions: periodRows, pendingItems: periodPending }
+    }, [allRows, allPending, matchesPeriod])
 
     const totalMasuk = useMemo(() => transactions.reduce((sum, r) => sum + r.in, 0), [transactions])
     const totalKeluar = useMemo(() => transactions.reduce((sum, r) => sum + r.out, 0), [transactions])
@@ -252,9 +329,12 @@ const MutasiDana = () => {
         return new Date(now.getFullYear(), now.getMonth(), 1)
     }, [])
 
+    // Dihitung dari allPending (BUKAN pendingItems yang sudah difilter
+    // periode) -- tombol borongan ini urusan maintenance data lintas waktu,
+    // independen dari periode yang sedang dilihat di layar.
     const oldPendingBsRbs = useMemo(
-        () => pendingItems.filter((p) => p.confirmCollection && p.date && new Date(p.date) < currentMonthStart),
-        [pendingItems, currentMonthStart]
+        () => allPending.filter((p) => p.confirmCollection && p.date && new Date(p.date) < currentMonthStart),
+        [allPending, currentMonthStart]
     )
 
     const [bulkConfirming, setBulkConfirming] = useState(false)
@@ -287,10 +367,10 @@ const MutasiDana = () => {
     }
 
     const handleSaldoBankBlur = async () => {
-        if (!uid || saldoBankInput === '') return
+        if (!saldoBankDocId || saldoBankInput === '') return
         setSavingBalance(true)
         try {
-            await setDoc(doc(db, 'mutasiDanaSaldoBank', uid), {
+            await setDoc(doc(db, 'mutasiDanaSaldoBank', saldoBankDocId), {
                 saldoBank: Number(saldoBankInput) || 0,
                 updatedAt: new Date().toISOString()
             })
@@ -316,6 +396,30 @@ const MutasiDana = () => {
     }
     const srcLabel = { bs: 'BS', rbs: 'RBS', lpj: 'LPJ' }
 
+    const selectStyles = {
+        control: (base) => ({
+            ...base,
+            backgroundColor: isDark ? '#1f2937' : '#ffffff',
+            borderColor: isDark ? '#4b5563' : '#e5e7eb',
+            fontSize: '13px',
+            minHeight: '36px',
+            borderRadius: '8px'
+        }),
+        singleValue: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        input: (base) => ({ ...base, color: isDark ? '#f3f4f6' : '#111827' }),
+        placeholder: (base) => ({ ...base, color: isDark ? '#9ca3af' : '#6b7280' }),
+        menu: (base) => ({ ...base, zIndex: 100, backgroundColor: isDark ? '#1f2937' : '#ffffff' }),
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+        option: (base, state) => ({
+            ...base,
+            fontSize: '13px',
+            backgroundColor: isDark
+                ? (state.isSelected ? '#374151' : state.isFocused ? '#2d3748' : '#1f2937')
+                : base.backgroundColor,
+            color: isDark ? '#f3f4f6' : base.color
+        })
+    }
+
     if (loading) {
         return (
             <div className="container mx-auto py-10 md:py-8">
@@ -332,9 +436,37 @@ const MutasiDana = () => {
 
     return (
         <div className="container mx-auto py-10 md:py-8">
-            <h2 className="text-xl font-bold dark:text-gray-100 mb-1">Mutasi Dana Bon Sementara</h2>
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-1">
+                <h2 className="text-xl font-bold dark:text-gray-100">Mutasi Dana Bon Sementara</h2>
+                <div className="flex gap-2">
+                    <div className="w-36">
+                        <Select
+                            options={BULAN_OPTIONS}
+                            value={selectedBulan}
+                            onChange={setSelectedBulan}
+                            styles={selectStyles}
+                            menuPortalTarget={document.body}
+                            menuPosition="absolute"
+                            isSearchable={false}
+                        />
+                    </div>
+                    <div className="w-32">
+                        <Select
+                            options={tahunOptions}
+                            value={selectedTahun}
+                            onChange={setSelectedTahun}
+                            styles={selectStyles}
+                            menuPortalTarget={document.body}
+                            menuPosition="absolute"
+                            isSearchable={false}
+                        />
+                    </div>
+                </div>
+            </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-2xl">
-                Uang masuk (BS &amp; Reimbursement cair) dan uang keluar (dipakai lewat LPJ) dari dana Bon Sementara Anda sendiri, dengan saldo berjalan -- supaya gampang dicocokkan dengan mutasi rekening bank.
+                {isAllTime
+                    ? 'Menampilkan SEMUA periode (kumulatif sejak awal).'
+                    : `Menampilkan periode ${selectedBulan?.value != null ? BULAN_OPTIONS[selectedBulan.value + 1].label : 'semua bulan'} ${selectedTahun?.value != null ? selectedTahun.value : '(semua tahun)'} -- Saldo Sistem & Selisih dihitung khusus untuk periode ini. Pilih "Semua Bulan" + "Semua Tahun" untuk lihat kumulatif.`}
             </p>
 
             {pendingItems.length > 0 && (
@@ -342,13 +474,13 @@ const MutasiDana = () => {
                     <div className="flex items-start gap-3 mb-2">
                         <FontAwesomeIcon icon={faTriangleExclamation} className="text-amber-500 mt-0.5 w-4 h-4 flex-shrink-0" />
                         <div className="flex-1">
-                            <strong>{pendingItems.length} transaksi menunggu konfirmasi</strong> -- belum dihitung di Saldo Sistem supaya tidak selisih dengan mutasi bank sungguhan.
+                            <strong>{pendingItems.length} transaksi {isAllTime ? '' : 'di periode ini '}menunggu konfirmasi</strong> -- belum dihitung di Saldo Sistem supaya tidak selisih dengan mutasi bank sungguhan.
                         </div>
                     </div>
                     {oldPendingBsRbs.length > 0 && (
                         <div className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-md px-3 py-2 mb-2 ml-7">
                             <span className="text-xs text-gray-600 dark:text-gray-300">
-                                {oldPendingBsRbs.length} di antaranya dari sebelum bulan ini -- kemungkinan besar sudah settle, cuma belum pernah ditandai.
+                                {oldPendingBsRbs.length} transaksi dari sebelum bulan berjalan (lintas semua periode, bukan cuma yang sedang ditampilkan) kemungkinan besar sudah settle, cuma belum pernah ditandai.
                             </span>
                             <button
                                 onClick={handleBulkConfirmOld}
@@ -408,12 +540,13 @@ const MutasiDana = () => {
                             value={saldoBankInput === '' ? '' : Number(saldoBankInput).toLocaleString('id-ID')}
                             onChange={handleSaldoBankChange}
                             onBlur={handleSaldoBankBlur}
-                            placeholder="0"
-                            className="text-2xl font-bold bg-transparent outline-none w-full dark:text-gray-100 tabular-nums focus:text-blue-600 dark:focus:text-blue-400"
+                            placeholder={loadingBalance ? '...' : '0'}
+                            disabled={loadingBalance}
+                            className="text-2xl font-bold bg-transparent outline-none w-full dark:text-gray-100 tabular-nums focus:text-blue-600 dark:focus:text-blue-400 disabled:opacity-50"
                         />
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {savingBalance ? 'Menyimpan...' : 'Cek dari mutasi rekening, lalu ketik di sini.'}
+                        {loadingBalance ? 'Memuat...' : savingBalance ? 'Menyimpan...' : `Untuk periode ${isAllTime ? 'semua' : (selectedBulan?.label || 'semua') + ' ' + (selectedTahun?.label || '')} -- cek dari mutasi rekening, lalu ketik di sini.`}
                     </div>
                 </div>
 

@@ -3075,3 +3075,31 @@ Ditambahkan tombol borongan di bagian "Menunggu Konfirmasi" `src/components/Muta
 - [x] `CI=true npm run build` sukses
 - [x] Deploy ke produksi (hosting saja) — sukses 2026-10-28, diverifikasi hash bundle live (`main.3abaf865.js`) cocok dengan hasil build lokal terbaru
 - [ ] Tes manual: klik tombol borongan, konfirmasi semua transaksi sebelum Oktober pindah ke tabel utama sekaligus, transaksi Oktober tetap di "Menunggu Konfirmasi" menunggu klik manual
+
+---
+
+# BAGIAN BW — Mutasi Dana: Saldo Sistem & Selisih Per Bulan (2026-10-28)
+
+## 85.1 Koreksi dari User
+
+User minta Saldo Menurut Sistem dan Selisih dihitung PER BULAN (bukan kumulatif sejak awal), karena siklus BS/LPJ memang bulanan -- kecuali user secara eksplisit pilih "Semua Bulan" DAN "Semua Tahun" sekaligus (baru tampil kumulatif seperti sebelumnya).
+
+## 85.2 Perbaikan
+
+`src/components/MutasiDana.jsx`:
+- Ditambahkan dropdown **Bulan** (12 bulan + "Semua Bulan") & **Tahun** (dinamis dari data + "Semua Tahun") di header halaman, default ke bulan & tahun BERJALAN.
+- Transaksi yang sudah dikonfirmasi (`allRows`) sekarang difilter dulu ke periode yang dipilih (`matchesPeriod`) sebelum saldo berjalan dihitung ULANG dari 0 khusus untuk periode itu (bukan ambil potongan dari saldo kumulatif) -- jadi "Saldo Sistem" = pergerakan bersih periode itu saja. Kalau "Semua Bulan"+"Semua Tahun" dipilih, `matchesPeriod` selalu benar, otomatis jadi tampilan kumulatif sungguhan seperti versi sebelumnya.
+- Bagian "Menunggu Konfirmasi" juga ikut difilter ke periode yang dipilih untuk daftarnya, TAPI tombol borongan "Tandai Transaksi Lama Sudah Masuk" (Bagian BV) sengaja dihitung dari `allPending` (TIDAK ikut difilter periode) -- itu aksi maintenance data lintas waktu, independen dari periode yang sedang dilihat di layar.
+- **Saldo Bank jadi per periode juga** (bukan satu angka tunggal lagi) -- `firestore.rules` koleksi `mutasiDanaSaldoBank` diubah dari `docId == uid` jadi pola uid-prefix (`{uid}_{periodeKey}`, mis. `abc123_10-2026` atau `abc123_ALL-ALL`), identik dengan pola `/drafts/{draftId}` yang sudah ada -- supaya tiap kombinasi bulan/tahun punya nilai Saldo Bank sendiri-sendiri, bukan dibagi satu nilai untuk semua periode.
+
+## 85.3 Task Development — Bagian BW
+
+- [x] `src/components/MutasiDana.jsx`: dropdown Bulan/Tahun, saldo per periode, Saldo Bank per periode
+- [x] `firestore.rules`: `mutasiDanaSaldoBank` docId jadi pola uid-prefix (pola sama dengan `/drafts/{draftId}`)
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules)
+- [ ] Tes manual: ganti Bulan/Tahun, konfirmasi Saldo Sistem & tabel ikut berubah ke periode itu saja
+- [ ] Tes manual: isi Saldo Bank di bulan Oktober, ganti ke bulan lain, konfirmasi Saldo Bank-nya BEDA/kosong (bukan ikut angka Oktober), lalu balik ke Oktober -- nilainya harus tetap tersimpan
+- [ ] Tes manual: pilih "Semua Bulan" + "Semua Tahun", konfirmasi tampilan kembali kumulatif seperti sebelum Bagian ini
