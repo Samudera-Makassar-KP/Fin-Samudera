@@ -2941,3 +2941,34 @@ Di Rekapan, khusus Super Admin, 3 kartu:
 - [x] Revisi diimplementasi; eslint bersih; 141 test PASS; build sukses; config Firebase tertanam
 - [x] Deploy hosting revisi -- sukses 2026-10-19, live `main.e62b027c.js` cocok dengan build lokal, config Firebase tertanam
 - [ ] Tes manual: ganti filter Bulan/Unit/Tampilkan Rekapan -> angka kartu & tabel ikut berubah; label periode di kartu sesuai filter
+
+---
+
+# BAGIAN BS — Ikon Status Bukti Pengembalian di Depan Nomor LPJ (2026-10-28)
+
+## 81.1 Permintaan User
+
+Tambahkan ikon kecil di depan Nomor Dokumen LPJ (`LpjBsTable.jsx`, daftar milik pengaju sendiri): tanda seru kalau bukti pengembalian belum diproses, tanda centang kalau sudah diproses.
+
+## 81.2 Catatan Penting: Sesi Ini Dimulai dari Branch `dev` yang SUDAH TERTINGGAL
+
+Sebelum mengerjakan permintaan ini, `git fetch` menemukan **19 commit baru** di `origin/dev`/`origin/main` yang tidak ada di checkout lokal -- hasil sesi lain (PR #20-#24, cakupan Bagian BO-BR: catatan SMDR-Finance, PDF reminder Finance digabung form+lampiran, reminder LPJ baru, perbaikan ikon reminder BS/RBS, dan fitur Rekapan baru "Ringkasan Biaya & Target" khusus Super Admin). Sesuai instruksi user ("pastikan dev dan main tidak ada conflict"), perubahan ikon ini dikerjakan di atas HEAD lokal yang lama dulu, baru di-merge dengan `origin/dev` -- ketemu **1 konflik nyata** di `src/components/LpjBsTable.jsx` (kedua sisi sama-sama menambah baris import baru di lokasi berdekatan: punya saya `faCircleExclamation`/`faCircleCheck`, punya sesi lain `faEnvelope`/`faSpinner` + hook `useFinanceReminder` untuk reminder Finance LPJ). Diselesaikan dengan menggabungkan kedua baris import jadi satu (tidak ada yang hilang/tertimpa) -- dikonfirmasi lewat `git diff` bahwa kode icon baru DAN kode reminder Finance LPJ dari sesi lain sama-sama utuh pasca-merge. Komentar kode saya yang semula salah pakai label "Bagian BO" (sudah dipakai sesi lain untuk hal berbeda) diganti "Bagian BS" (huruf berikutnya yang tersedia).
+
+Dependency baru dari sesi lain (`pdf-lib` di `functions/package.json`, untuk gabung PDF form+lampiran) di-`npm install` supaya `node_modules` sinkron sebelum deploy.
+
+## 81.3 Perbaikan
+
+**`src/components/LpjBsTable.jsx`**: di kolom Nomor Dokumen, untuk baris LPJ yang punya `sisaLebih > 0` (ada sisa lebih yang perlu dikembalikan) -- tampilkan ikon lingkaran centang hijau (`pengembalianStatus` sudah `'valid'` atau `'grandfathered'`) atau lingkaran seru merah (status lain/belum ada) tepat di depan link nomor dokumennya. LPJ tanpa sisa lebih (tidak perlu pengembalian sama sekali) tidak menampilkan ikon apa pun. Status `'valid'` ini otomatis ikut mencakup deteksi otomatis bukti pengembalian dari lampiran LPJ yang baru ditambahkan sesi lain (Bagian BO, `pengembalianSource: 'lampiran_lpj'`) -- tidak perlu perubahan tambahan di sisi ini.
+
+## 81.4 Task Development — Bagian BS
+
+- [x] `src/components/LpjBsTable.jsx`: ikon status pengembalian di depan Nomor Dokumen
+- [x] Merge `origin/dev` (19 commit sesi lain) ke branch kerja -- 1 konflik (import) diselesaikan, kode kedua sisi dikonfirmasi utuh
+- [x] `cd functions && npm install` -- sinkronkan `pdf-lib` (dependency baru sesi lain)
+- [x] `node --check functions/index.js` -- sintaks valid
+- [x] `cd functions && npx jest` -- 28 test PASS
+- [x] `CI=true npx eslint src/components/LpjBsTable.jsx` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test PASS (naik dari 113 karena test baru dari sesi lain)
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting -- tidak ada perubahan Cloud Functions di Bagian ini)
+- [ ] Tes manual: buka daftar LPJ sendiri, konfirmasi ikon seru/centang muncul cuma untuk LPJ bersisa lebih, dan berubah jadi centang setelah bukti pengembalian valid
