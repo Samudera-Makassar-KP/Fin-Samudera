@@ -40,6 +40,11 @@ const DashboardSummary = ({ uid, role }) => {
         saldoSistem: 0
     })
     const [loading, setLoading] = useState(true)
+    // Bagian CF: koreksi dari user -- card total saja tidak cukup, minta
+    // rincian per BS (sisa dana tiap BS) dan per RBS (sudah/belum masuk)
+    // ditampilkan sebagai daftar, bukan cuma 1 angka gabungan.
+    const [bsBreakdown, setBsBreakdown] = useState([])
+    const [rbsBreakdown, setRbsBreakdown] = useState([])
 
     // Bagian CB: Saldo Bank diisi manual per bulan -- dipakai docId yang
     // SAMA dengan yang dulu dipakai Mutasi Dana (`mutasiDanaSaldoBank`,
@@ -204,6 +209,47 @@ const DashboardSummary = ({ uid, role }) => {
                 }
                 const jumlahBsBelumLpj = bsDisetujui.length - jumlahBsSudahLpj
 
+                // Bagian CF: rincian per BS -- flatten SEMUA item di tiap dokumen
+                // BS (bukan cuma item pertama, lihat catatan multi-item Bagian CE
+                // di BsTable.jsx) supaya tiap nomorBS dapat baris sendiri dengan
+                // sisa dananya sendiri.
+                const newBsBreakdown = []
+                bsDisetujui.forEach((bs) => {
+                    const items = bs.bonSementara?.length ? bs.bonSementara : []
+                    items.forEach((it) => {
+                        const lpjData = lpjByNomorBS[normalizeNomorBS(it.nomorBS)]
+                        const jumlahBS = Number(it.jumlahBS) || 0
+                        let lpjStatusLabel = 'Belum LPJ'
+                        let sisa = jumlahBS
+                        if (lpjData && lpjData.status === 'Disetujui') {
+                            lpjStatusLabel = 'Sudah LPJ'
+                            sisa = jumlahBS - (Number(lpjData.totalBiaya) || 0)
+                        } else if (lpjData && !['Dibatalkan', 'Ditolak'].includes(lpjData.status)) {
+                            lpjStatusLabel = 'Sedang LPJ'
+                            sisa = jumlahBS - (Number(lpjData.totalBiaya) || 0)
+                        }
+                        newBsBreakdown.push({
+                            key: `${bs.id}-${it.nomorBS}`,
+                            nomorBS: it.nomorBS,
+                            jumlahBS,
+                            transferred: !!bs.transferred,
+                            lpjStatus: lpjStatusLabel,
+                            sisa
+                        })
+                    })
+                })
+
+                // Bagian CF: rincian per RBS -- sudah/belum "Transferred" (uang
+                // sudah masuk atau belum).
+                const newRbsBreakdown = rbsThisMonth
+                    .filter((item) => item.status === 'Disetujui')
+                    .map((item) => ({
+                        key: item.id,
+                        displayId: item.displayId,
+                        totalBiaya: Number(item.totalBiaya) || 0,
+                        transferred: !!item.transferred
+                    }))
+
                 // Bagian CB: rekonsiliasi dana bulan ini (sebelumnya di Mutasi Dana) --
                 // hanya uang yang BENAR-BENAR sudah berpindah yang dihitung, sama
                 // seperti prinsip Mutasi Dana Bagian BU: BS/RBS Disetujui tapi belum
@@ -325,6 +371,9 @@ const DashboardSummary = ({ uid, role }) => {
                         nominalBsDiapprove = bsResult.nominal
                     }
                 }
+
+                setBsBreakdown(newBsBreakdown)
+                setRbsBreakdown(newRbsBreakdown)
 
                 setSummary({
                     jumlahBS: bsThisMonth.length,
@@ -518,6 +567,54 @@ const DashboardSummary = ({ uid, role }) => {
                     </p>
                 </div>
             </div>
+
+            {/* Bagian CF: rincian per BS & per RBS bulan ini -- card total saja
+                dianggap tidak cukup untuk menyusuri selisih sampai ke sumbernya. */}
+            {!loading && (bsBreakdown.length > 0 || rbsBreakdown.length > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                    {bsBreakdown.length > 0 && (
+                        <div className="rounded-lg border dark:border-gray-700 p-4">
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Rincian BS Bulan Ini</p>
+                            <div className="flex flex-col gap-2">
+                                {bsBreakdown.map((bs) => (
+                                    <div key={bs.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
+                                        <div className="min-w-0">
+                                            <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{bs.nomorBS}</div>
+                                            <div className="text-gray-400 dark:text-gray-500">
+                                                {bs.transferred ? 'Sudah Transferred' : 'Belum Transferred'} &middot; {bs.lpjStatus}
+                                            </div>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <div className="font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatRupiah(bs.jumlahBS)}</div>
+                                            <div className={`tabular-nums ${bs.sisa > 0 ? 'text-amber-600 dark:text-amber-400' : bs.sisa < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                Sisa {formatRupiah(bs.sisa)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {rbsBreakdown.length > 0 && (
+                        <div className="rounded-lg border dark:border-gray-700 p-4">
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Rincian RBS Bulan Ini</p>
+                            <div className="flex flex-col gap-2">
+                                {rbsBreakdown.map((rbs) => (
+                                    <div key={rbs.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
+                                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{rbs.displayId}</div>
+                                        <div className="text-right flex-shrink-0">
+                                            <div className="font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatRupiah(rbs.totalBiaya)}</div>
+                                            <div className={rbs.transferred ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>
+                                                {rbs.transferred ? 'Sudah Masuk' : 'Belum Masuk'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     )
 }

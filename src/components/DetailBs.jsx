@@ -130,12 +130,19 @@ const DetailBs = () => {
 
     // Bagian CA: ambil nota yang sudah dicatat untuk BS ini lewat "Catat
     // Nota" -- ditawarkan sebagai baris item siap-pakai saat "Buat Laporan".
+    // Bagian CE koreksi: CatatNota.jsx menyimpan `bsId` per ITEM (format
+    // `${docId}__${index}`, karena satu dokumen BS bisa punya beberapa item
+    // dengan nomorBS sendiri-sendiri) -- bukan `id` dokumen polos lagi.
+    // `handleBuatLaporan()` di bawah cuma pernah menangani item PERTAMA
+    // (bonSementara[0]), jadi di sini juga sengaja cuma dicocokkan ke
+    // `${id}__0` -- nota milik item ke-2 dst (kalau ada) belum ditawarkan di
+    // halaman ini (lihat catatan Bagian CE di SUMMARY_PENGEMBANGAN.md).
     useEffect(() => {
         const fetchNotaDraft = async () => {
             if (!userData || userData.uid !== bonSementaraDetail?.user?.uid) return
             try {
                 const snap = await getDocs(
-                    query(collection(db, 'notaDraft'), where('user.uid', '==', userData.uid), where('bsId', '==', id))
+                    query(collection(db, 'notaDraft'), where('user.uid', '==', userData.uid), where('bsId', '==', `${id}__0`))
                 )
                 setNotaDraftForBs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
             } catch (error) {

@@ -3359,3 +3359,31 @@ Akar masalah ditemukan: satu dokumen BS BISA punya lebih dari satu item, masing-
 - [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
 - [ ] Tes manual: BS dengan 2+ item, konfirmasi kedua nomorBS muncul terpisah di "Pilih BS" Catat Nota (yang belum ada LPJ-nya), dan status Sedang/Sudah/Belum LPJ di BsTable.jsx mencerminkan SEMUA item, bukan cuma item pertama
 - [ ] Follow-up terpisah (belum dikerjakan): cek apakah `DashboardSummary.jsx` & `DetailBs.jsx` kena bug multi-item yang sama
+
+---
+
+# BAGIAN CF — Audit Lanjutan: Fix bsId Mismatch, Reminder BS, & Rincian Dashboard (2026-11-03)
+
+## 94.1 Konteks
+
+User minta audit bug/error menyeluruh sebelum lanjut dengan temuan detail mereka. Ditemukan & diperbaiki beberapa hal lewat audit kode + laporan user langsung.
+
+## 94.2 Temuan & Perbaikan
+
+1. **Bug kritis ditemukan lewat audit (belum sempat dilaporkan user, keburu ditemukan duluan)**: `DetailBs.jsx` query `notaDraft` masih pakai `bsId == id` (format dokumen polos), padahal Bagian CE sudah mengubah skema `bsId` jadi `${docId}__${index}` per item. Akibatnya SEMUA nota LPJ yang disimpan lewat Catat Nota setelah Bagian CE tidak akan pernah muncul di banner Detail BS -- silent failure. Diperbaiki: query sekarang ke `${id}__0` (konsisten dengan item pertama, satu-satunya yang ditangani `handleBuatLaporan()` saat ini). User mengonfirmasi simtom yang sama persis saat melaporkan "draftnya tidak muncul".
+2. **`src/components/BsTable.jsx`**: tombol reminder "Send Reminder to Finance" sebelumnya cuma disembunyikan kalau LPJ-nya sudah selesai (`Sudah LPJ`), TIDAK ikut disembunyikan saat `item.transferred` sudah true. User klik "Transferred" tapi icon mail tetap ada. Diperbaiki: sekarang reminder hilang begitu `item.transferred` true, konsisten dengan pola RBS (`ReimbursementTable.jsx`) dan LPJ sisaKurang (`LpjBsTable.jsx`, Bagian CD).
+3. **`src/components/DashboardSummary.jsx`**: user minta card total diperluas jadi RINCIAN per item (bukan cuma 1 angka gabungan) -- "dari BS 1 sisanya ada berapa, BS 2 berapa dll", begitu juga RBS sudah/belum masuk. Ditambahkan 2 daftar baru di bawah card yang sudah ada: **Rincian BS Bulan Ini** (nomorBS, jumlah, status Transferred, status LPJ, sisa dana -- sisa dihitung dari jumlahBS dikurangi totalBiaya LPJ yang sudah/sedang diajukan) dan **Rincian RBS Bulan Ini** (displayId, jumlah, status Sudah/Belum Masuk). Rincian BS ini SUDAH memperhitungkan multi-item (flatten semua item per dokumen, pola yang sama dengan `BsTable.jsx` Bagian CE) -- sekaligus menutup follow-up yang tercatat di Bagian CE untuk file ini.
+
+## 94.3 Task Development — Bagian CF
+
+- [x] `src/components/DetailBs.jsx`: query notaDraft diperbaiki ke skema bsId per-item
+- [x] `src/components/BsTable.jsx`: reminder disembunyikan saat BS sudah Transferred
+- [x] `src/components/DashboardSummary.jsx`: rincian per BS (dengan fix multi-item) & per RBS ditambahkan
+- [x] `CI=true npx eslint` (ketiga file) -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC/CD/CE yang juga belum ter-deploy)
+- [ ] **Catatan lingkungan**: Firebase CLI di sesi ini sudah tidak terautentikasi (`firebase login` perlu dijalankan ulang) -- tidak bisa lagi dry-run rules atau mencoba deploy dari sini sama sekali
+- [ ] Tes manual: catat nota LPJ untuk suatu BS, buka Detail BS BS itu, konfirmasi banner "nota sudah tercatat" muncul & "Buat Laporan" ter-prefill
+- [ ] Tes manual: klik "Transferred" di BsTable.jsx, konfirmasi icon mail/reminder langsung hilang
+- [ ] Tes manual: cek Dashboard, konfirmasi daftar "Rincian BS Bulan Ini"/"Rincian RBS Bulan Ini" muncul dengan sisa dana & status yang masuk akal per item

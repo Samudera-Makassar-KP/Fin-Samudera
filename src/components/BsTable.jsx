@@ -774,7 +774,13 @@ const BsTable = () => {
                                                                     <FontAwesomeIcon icon={faMoneyBillWave} />
                                                                 </button>
                                                             )}
-                                                            {lpjStatus[item.id]?.status === 'Sudah LPJ' ? (
+                                                            {item.transferred ? (
+                                                                // Bagian CF: koreksi dari user -- begitu dana sudah
+                                                                // dikonfirmasi masuk (Transferred), reminder ke Finance
+                                                                // tidak relevan lagi, sama seperti pola RBS
+                                                                // (ReimbursementTable.jsx) & LpjBsTable.jsx (Bagian CD).
+                                                                <span className="text-gray-400 dark:text-gray-500" title="Transferred -- reminder tidak diperlukan">-</span>
+                                                            ) : lpjStatus[item.id]?.status === 'Sudah LPJ' ? (
                                                                 // Bagian BQ: BS sudah Reported (LPJ-nya Disetujui) -> urusan
                                                                 // pencairan BS sudah selesai, reminder ke Finance tidak relevan.
                                                                 <span className="text-gray-400 dark:text-gray-500" title="Reported -- reminder tidak diperlukan">-</span>
