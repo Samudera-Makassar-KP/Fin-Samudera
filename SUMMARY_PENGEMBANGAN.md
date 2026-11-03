@@ -3450,3 +3450,34 @@ User lapor: nota Catat Nota berhasil tercatat, TAPI "Rincian BS" tidak mencatat 
 - [ ] Tes manual: catat nota LPJ untuk suatu BS, konfirmasi sisa dana BS tersebut & Saldo Sistem/Selisih langsung berubah tanpa perlu submit LPJ dulu
 - [ ] Tes manual: kalau ada LPJ yang dilaporkan bulan ini untuk BS bulan lalu, konfirmasi muncul di kartu "LPJ dari Bulan Sebelumnya", bukan di angka "bulan ini"
 - [ ] Tes manual: catat nota RBS, konfirmasi muncul di kartu "Draft RBS Belum Disubmit" dan TIDAK mengubah Saldo Sistem
+
+---
+
+# BAGIAN CI — Catat Nota RBS: Field Unit Bisnis, Draft Dipecah per Unit (2026-11-03)
+
+## 97.1 Permintaan User
+
+Sebelum deploy: untuk Catat Nota RBS, kalau user mencatat banyak nota, harus bisa dipecah jadi beberapa RBS -- disarankan dengan menambahkan field Unit Bisnis (pilihannya cuma unit yang terdaftar untuk user itu, bukan semua unit).
+
+## 97.2 Investigasi
+
+Satu pengajuan RBS cuma boleh 1 Unit Bisnis (`selectedUnit` wajib di `FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`). Sebelum Bagian ini, Catat Nota TIDAK punya konsep Unit Bisnis sama sekali -- draft RBS cuma dikelompokkan per varian (GA/Umum/Operasional/BBM). Kalau user punya nota dari 2 Unit Bisnis berbeda di varian yang sama, "Rangkai jadi RBS" akan menggabungkan SEMUA jadi 1 RBS, otomatis salah unit untuk sebagian item -- bug laten yang belum pernah dilaporkan tapi nyata risikonya. LPJ TIDAK perlu field ini -- unit-nya sudah otomatis ikut BS yang dipilih (BS sendiri sudah punya `user.unit`).
+
+## 97.3 Perbaikan
+
+- **`src/components/CatatNota.jsx`**: field "Unit Bisnis" baru untuk nota RBS (dropdown, opsi dari `users/{uid}.unit` milik user sendiri -- auto-terpilih kalau cuma 1 unit, pola sama dengan `FormRbsUmum.jsx`). Draft RBS sekarang dikelompokkan per KOMBINASI varian+unit (bukan per varian saja) -- nota dari unit berbeda otomatis jadi grup/tombol "Rangkai" terpisah, tidak bisa tercampur lagi.
+- **`firestore.rules`**: field `unit` ditambahkan ke whitelist `notaDraft`.
+- **`FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`**: menerima `location.state.prefillUnit` dari CatatNota.jsx, dropdown Unit Bisnis otomatis terisi begitu sampai di form (prioritas di atas auto-select single-unit yang sudah ada).
+
+## 97.4 Task Development — Bagian CI
+
+- [x] `src/components/CatatNota.jsx`: field Unit Bisnis untuk nota RBS, draft dipecah per varian+unit
+- [x] `firestore.rules`: field `unit` di whitelist `notaDraft`
+- [x] `FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`: terima `prefillUnit`
+- [x] `CI=true npx eslint` (semua file terkait) -- bersih
+- [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CH)
+- [ ] Tes manual: catat nota RBS dari 2 Unit Bisnis berbeda (kalau user terdaftar di lebih dari 1 unit) di varian yang sama, konfirmasi muncul sebagai 2 grup "Draft RBS" terpisah dengan tombol "Rangkai" masing-masing
+- [ ] Tes manual: klik "Rangkai jadi RBS", konfirmasi dropdown Unit Bisnis di form tujuan sudah otomatis terisi sesuai yang dipilih di Catat Nota

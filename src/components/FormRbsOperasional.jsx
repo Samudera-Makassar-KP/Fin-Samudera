@@ -296,7 +296,12 @@ const RbsOperasionalForm = () => {
                     const unitOptionsForUser = userUnitsArray.map(u => ({ value: u, label: u }))
                     setUserUnitOptions(unitOptionsForUser)
 
-                    if (!adminStatus && unitOptionsForUser.length === 1) {
+                    // Bagian CI: Unit Bisnis sudah dipilih di "Catat Nota" --
+                    // ikuti itu, jangan ketiban auto-select single-unit di bawah.
+                    const prefillUnit = location.state?.prefillUnit
+                    if (prefillUnit) {
+                        setSelectedUnit({ value: prefillUnit, label: prefillUnit })
+                    } else if (!adminStatus && unitOptionsForUser.length === 1) {
                         setSelectedUnit(unitOptionsForUser[0])
                     } else if (!adminStatus && unitOptionsForUser.length === 0) {
                         setSelectedUnit(null)
@@ -308,6 +313,7 @@ const RbsOperasionalForm = () => {
         }
 
         fetchUserData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const formatDate = (dateString) => {

@@ -291,8 +291,13 @@ const RbsBbmForm = () => {
                     const unitOptionsForUser = userUnitsArray.map(u => ({ value: u, label: u }))
                     setUserUnitOptions(unitOptionsForUser)
 
+                    // Bagian CI: Unit Bisnis sudah dipilih di "Catat Nota" --
+                    // ikuti itu, jangan ketiban auto-select single-unit di bawah.
+                    const prefillUnit = location.state?.prefillUnit
+                    if (prefillUnit) {
+                        setSelectedUnit({ value: prefillUnit, label: prefillUnit })
                     // Jika user (bukan admin) hanya punya 1 unit, otomatis terpilih
-                    if (!adminStatus && unitOptionsForUser.length === 1) {
+                    } else if (!adminStatus && unitOptionsForUser.length === 1) {
                         setSelectedUnit(unitOptionsForUser[0])
                     } else if (!adminStatus && unitOptionsForUser.length === 0) {
                         setSelectedUnit(null)
@@ -304,6 +309,7 @@ const RbsBbmForm = () => {
         }
 
         fetchUserData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // Auto-isi plat nomor kalau pengaju cuma punya 1 kendaraan terdaftar di profilnya.

@@ -501,9 +501,13 @@ service cloud.firestore {
     // cuma nominal+kategori bebas teks -- lihat CatatNota.jsx. `jumlahBiaya`
     // (biaya x jumlah) dipakai sebagai "nominal" untuk sisa dana/batas,
     // menggantikan field `nominal` versi sebelumnya.
+    // Bagian CI: field `unit` ditambahkan -- RBS cuma boleh 1 Unit Bisnis
+    // per pengajuan, jadi nota RBS perlu tahu unit-nya sendiri supaya bisa
+    // dipecah per unit saat "dirangkai" (lihat CatatNota.jsx). Nota LPJ tidak
+    // perlu field ini -- unitnya otomatis ikut BS yang dipilih.
     function validNotaDraftFields() {
       return request.resource.data.keys().hasOnly([
-        'user', 'jenis', 'rbsVariant', 'bsId', 'nomorBS', 'lpjKategori',
+        'user', 'jenis', 'rbsVariant', 'bsId', 'nomorBS', 'lpjKategori', 'unit',
         'namaItem', 'isLainnya', 'jenisLain', 'biaya', 'jumlah', 'jumlahBiaya',
         'item', 'keterangan', 'plat', 'lokasi', 'tanggal', 'createdAt', 'updatedAt'
       ])

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, getDocs, doc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
@@ -102,6 +102,10 @@ const emptyRow = () => ({
     keterangan: '',
     lokasi: '',
     plat: '',
+    // Bagian CI: Unit Bisnis -- cuma relevan untuk RBS (satu pengajuan RBS
+    // cuma boleh 1 Unit Bisnis). LPJ tidak perlu field ini, unitnya otomatis
+    // ikut BS yang dipilih.
+    unitOption: null,
     tanggal: todayIso()
 })
 
@@ -116,6 +120,10 @@ const CatatNota = () => {
     const [loading, setLoading] = useState(true)
     const [bsList, setBsList] = useState([])
     const [notas, setNotas] = useState([])
+    // Bagian CI: Unit Bisnis milik user sendiri -- diambil dari profil
+    // (`users/{uid}.unit`), pola sama dengan `userUnitOptions` di
+    // FormRbsUmum.jsx/FormLpjUmum.jsx. Cuma dipakai untuk nota RBS.
+    const [unitOptions, setUnitOptions] = useState([])
 
     const [jenis, setJenis] = useState(null) // 'rbs' | 'lpj'
     const [rbsVariant, setRbsVariant] = useState(null) // 'umum' | 'operasional' | 'bbm'
@@ -128,11 +136,16 @@ const CatatNota = () => {
         if (!uid) { setLoading(false); return }
         setLoading(true)
         try {
-            const [bsSnap, lpjSnap, notaSnap] = await Promise.all([
+            const [bsSnap, lpjSnap, notaSnap, userSnap] = await Promise.all([
                 getDocs(query(collection(db, 'bonSementara'), where('user.uid', '==', uid), where('status', '==', 'Disetujui'))),
                 getDocs(query(collection(db, 'lpj'), where('user.uid', '==', uid))),
-                getDocs(query(collection(db, 'notaDraft'), where('user.uid', '==', uid)))
+                getDocs(query(collection(db, 'notaDraft'), where('user.uid', '==', uid))),
+                getDoc(doc(db, 'users', uid))
             ])
+            const userUnits = userSnap.exists()
+                ? (Array.isArray(userSnap.data().unit) ? userSnap.data().unit : (userSnap.data().unit ? [userSnap.data().unit] : []))
+                : []
+            setUnitOptions(userUnits.map((u) => ({ value: u, label: u })))
             const nomorBsTerpakai = new Set(
                 lpjSnap.docs
                     .map((d) => d.data())
@@ -194,8 +207,16 @@ const CatatNota = () => {
         return jumlahBS - terpakaiDraft
     }, [bsList, notas])
 
+    // Bagian CI: auto-pilih Unit Bisnis kalau user cuma terdaftar di 1 unit
+    // -- pola sama dengan FormRbsUmum.jsx (tidak merepotkan user yang memang
+    // cuma punya 1 pilihan).
+    const buildEmptyRow = useCallback(() => ({
+        ...emptyRow(),
+        unitOption: unitOptions.length === 1 ? unitOptions[0] : null
+    }), [unitOptions])
+
     const resetRows = () => {
-        setRows([emptyRow()])
+        setRows([buildEmptyRow()])
         setEditingId(null)
     }
 
@@ -250,7 +271,7 @@ const CatatNota = () => {
         }
     }
 
-    const addRow = () => setRows((prev) => [...prev, emptyRow()])
+    const addRow = () => setRows((prev) => [...prev, buildEmptyRow()])
     const removeRow = (index) => setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev))
 
     const mulaiEdit = (nota) => {
@@ -269,6 +290,7 @@ const CatatNota = () => {
             keterangan: nota.keterangan || '',
             lokasi: nota.lokasi || '',
             plat: nota.plat || '',
+            unitOption: nota.unit ? { value: nota.unit, label: nota.unit } : null,
             tanggal: nota.tanggal || todayIso()
         }])
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -289,6 +311,7 @@ const CatatNota = () => {
 
     const validateRows = () => {
         for (const row of rows) {
+            if (jenis === 'rbs' && !row.unitOption) { toast.warning('Pilih Unit Bisnis dulu untuk setiap item'); return false }
             if (!row.isLainnya && !row.namaItemOption) { toast.warning('Pilih jenis dulu untuk setiap item'); return false }
             if (row.isLainnya && !row.jenisLain.trim()) { toast.warning('Isi jenis (Lainnya) dulu untuk setiap item'); return false }
             if (!parseDigits(row.biaya)) { toast.warning('Isi biaya dulu untuk setiap item'); return false }
@@ -316,6 +339,7 @@ const CatatNota = () => {
             namaItem: row.isLainnya ? null : (row.namaItemOption?.value || null),
             isLainnya: row.isLainnya,
             jenisLain: row.isLainnya ? row.jenisLain.trim() : '',
+            unit: jenis === 'rbs' ? (row.unitOption?.value || null) : null,
             biaya,
             jumlah,
             jumlahBiaya,
@@ -353,10 +377,19 @@ const CatatNota = () => {
         }
     }
 
-    const rbsDraftByVariant = useMemo(() => {
-        const map = { umum: [], operasional: [], bbm: [] }
-        notas.filter((n) => n.jenis === 'rbs').forEach((n) => { if (map[n.rbsVariant]) map[n.rbsVariant].push(n) })
-        return map
+    // Bagian CI: koreksi dari user -- satu pengajuan RBS cuma boleh 1 Unit
+    // Bisnis, jadi draft dikelompokkan per KOMBINASI varian+unit (bukan per
+    // varian saja) -- kalau ada nota dari 2 unit berbeda di varian yang
+    // sama, otomatis jadi 2 grup/tombol "Rangkai" terpisah, tidak tercampur
+    // jadi 1 RBS yang salah unit.
+    const rbsDraftGroups = useMemo(() => {
+        const map = {}
+        notas.filter((n) => n.jenis === 'rbs').forEach((n) => {
+            const key = `${n.rbsVariant}__${n.unit || 'tanpa-unit'}`
+            if (!map[key]) map[key] = { variant: n.rbsVariant, unit: n.unit, items: [] }
+            map[key].items.push(n)
+        })
+        return Object.values(map).filter((g) => RBS_VARIANTS[g.variant])
     }, [notas])
 
     const lpjByBs = useMemo(() => {
@@ -368,16 +401,17 @@ const CatatNota = () => {
         return map
     }, [notas])
 
-    // Bagian CC: "merangkai" draft RBS per varian jadi pengajuan RBS
-    // sungguhan -- navigasi ke form yang sesuai (GA/Umum, Operasional, atau
-    // BBM) dengan baris item pre-filled, field-per-field meniru skema
-    // reimbursements form aslinya masing-masing.
-    const rangkaiRbs = (variant) => {
-        const list = rbsDraftByVariant[variant]
-        if (!list || list.length === 0) return
-        navigate(RBS_VARIANTS[variant].route, {
+    // Bagian CC/CI: "merangkai" draft RBS per kombinasi varian+unit jadi
+    // pengajuan RBS sungguhan -- navigasi ke form yang sesuai (GA/Umum,
+    // Operasional, atau BBM) dengan baris item pre-filled, field-per-field
+    // meniru skema reimbursements form aslinya masing-masing. `prefillUnit`
+    // dikirim juga supaya dropdown Unit Bisnis di form tujuan ikut terisi.
+    const rangkaiRbs = (group) => {
+        if (!group || group.items.length === 0) return
+        navigate(RBS_VARIANTS[group.variant].route, {
             state: {
-                prefillRbsItems: list.map((n) => ({
+                prefillUnit: group.unit,
+                prefillRbsItems: group.items.map((n) => ({
                     isLainnya: n.isLainnya,
                     namaItem: n.namaItem,
                     jenisLain: n.jenisLain,
@@ -389,7 +423,7 @@ const CatatNota = () => {
                     plat: n.plat,
                     tanggal: n.tanggal
                 })),
-                prefillNotaDraftIds: list.map((n) => n.id)
+                prefillNotaDraftIds: group.items.map((n) => n.id)
             }
         })
     }
@@ -428,6 +462,21 @@ const CatatNota = () => {
                     </button>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {jenis === 'rbs' && (
+                        <div className="sm:col-span-2">
+                            <label className={labelClass}>Unit Bisnis</label>
+                            <Select
+                                options={unitOptions}
+                                value={row.unitOption}
+                                onChange={(opt) => updateRow(index, { unitOption: opt })}
+                                styles={selectStyles}
+                                menuPortalTarget={document.body}
+                                menuPosition="absolute"
+                                isSearchable={false}
+                                placeholder="Pilih Unit Bisnis..."
+                            />
+                        </div>
+                    )}
                     <div className="sm:col-span-2">
                         <label className={labelClass}>Jenis</label>
                         {row.isLainnya ? (
@@ -641,15 +690,18 @@ const CatatNota = () => {
                 </div>
             )}
 
-            {/* Draft RBS per varian */}
-            {['umum', 'operasional', 'bbm'].map((variant) => {
-                const list = rbsDraftByVariant[variant]
-                if (!list || list.length === 0) return null
+            {/* Draft RBS per kombinasi varian+Unit Bisnis -- Bagian CI */}
+            {rbsDraftGroups.map((group) => {
+                const list = group.items
                 return (
-                    <div key={variant} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-5 shadow-sm mb-6">
+                    <div key={`${group.variant}__${group.unit}`} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-5 shadow-sm mb-6">
                         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                            <h3 className="text-sm font-bold dark:text-gray-100">Draft RBS {RBS_VARIANTS[variant].label} <span className="text-gray-400 font-normal">(belum disubmit)</span></h3>
-                            <button onClick={() => rangkaiRbs(variant)} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">
+                            <h3 className="text-sm font-bold dark:text-gray-100">
+                                Draft RBS {RBS_VARIANTS[group.variant].label}
+                                {group.unit && <span className="text-gray-400 font-normal"> -- {group.unit}</span>}
+                                <span className="text-gray-400 font-normal"> (belum disubmit)</span>
+                            </h3>
+                            <button onClick={() => rangkaiRbs(group)} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">
                                 Rangkai jadi RBS ({list.length} item) <FontAwesomeIcon icon={faArrowRight} className="w-3 h-3" />
                             </button>
                         </div>
