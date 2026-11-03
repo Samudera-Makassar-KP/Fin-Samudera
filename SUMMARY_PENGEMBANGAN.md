@@ -3533,3 +3533,23 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC-CJ)
 - [ ] Tes manual: klik kartu "BS Belum Settle" & "Kekurangan Belum Dibayar", konfirmasi modal muncul dengan daftar yang benar (termasuk BS dari bulan-bulan lama, bukan cuma bulan ini)
 - [ ] Tes manual: BS/RBS dengan lebih dari 5 item di Rincian Bulan Ini, konfirmasi tombol "Tampilkan lainnya" bekerja & bisa disembunyikan lagi
+
+## 100.3 Task Development — Bagian CL
+
+**Konteks:** User minta audit menyeluruh atas Bagian CC-CK sebelum deploy, untuk memastikan semua fitur yang saling terhubung (Catat Nota, Dashboard, FormBs/FormLpj/FormRbs, DetailBs, BsTable, firestore.rules) benar-benar konsisten dan tidak ada bug logic yang lolos dari lint/test/build.
+
+**Investigasi:** Audit menyeluruh (fork agent, read-only) mengonfirmasi mayoritas keterhubungan sudah benar (whitelist `firestore.rules` vs payload `CatatNota.jsx`, checkbox split RBS, prefill unit di 3 form RBS, modal draft LPJ, fix `DetailBs.jsx`/`BsTable.jsx`/`FormBs.jsx`), TAPI menemukan 1 kelas bug nyata: beberapa agregat "bulan ini" di `DashboardSummary.jsx` masih memakai `item.bonSementara?.[0]?.jumlahBS` (cuma item pertama), TIDAK konsisten dengan `newBsBreakdown` yang sejak Bagian CE/CF sudah di-flatten per item. Untuk BS multi-item (1 dokumen, ≥2 item nomorBS berbeda), kartu "Jumlah BS bulan ini", "Sudah di-LPJ-kan", "Selisih belum LPJ", "RBS/BS Sudah Masuk", "Menunggu Konfirmasi"/"Saldo Sistem", dan kartu reviewer "BS di-approve bulan ini" semua undercount (item ke-2 dst hilang dari angka, meski tetap muncul benar di daftar Rincian BS di bawahnya) -- bertentangan langsung dengan permintaan awal user di sesi ini supaya semua yang dicatat terdokumentasi dan bisa dianalisa selisihnya. Ditemukan juga 1 bug terpisah (bukan dari sesi ini, pre-existing): `fetchAssignedThisMonth('lpj', (item) => item.bonSementara?.[0]?.jumlahBS)` untuk nominal LPJ yang direview/divalidasi -- dokumen `lpj` tidak punya field `bonSementara` sendiri (field itu milik dokumen `bonSementara`), jadi nominalnya selalu 0.
+
+**Perbaikan:**
+- **`src/components/DashboardSummary.jsx`**: tambah helper `sumBonSementaraItems(bs)` yang menjumlahkan `jumlahBS` SEMUA item di `bs.bonSementara` (bukan cuma index 0). Dipakai untuk mengganti `item.bonSementara?.[0]?.jumlahBS` di `totalNominalBS`, `totalDisetujui`, `rbsBsMasukNominal` (BS Transferred), `pendingNominal` (BS belum Transferred), dan nominal kartu reviewer "BS di-approve bulan ini".
+- `totalSudahLpj`/`jumlahBsSudahLpj`/`jumlahBsBelumLpj` ("Sudah di-LPJ-kan"/"Selisih belum LPJ") sebelumnya dihitung lewat loop terpisah per DOKUMEN BS (cek `bs.displayId` = nomorBS item pertama saja) -- dipindah jadi dihitung dari `newBsBreakdown` (per ITEM, sudah benar sejak Bagian CE/CF), supaya kedua kartu ini selalu match dengan daftar Rincian BS di bawahnya.
+- Fix bug terpisah: `fetchAssignedThisMonth('lpj', ...)` sekarang pakai `item.totalBiaya` (field yang benar untuk dokumen `lpj`), bukan `item.bonSementara?.[0]?.jumlahBS` yang selalu `undefined` di dokumen `lpj`.
+
+**Task Development:**
+- [x] Audit cross-file (fork agent, read-only)
+- [x] Fix `DashboardSummary.jsx` (6 titik `bonSementara?.[0]` + 1 bug field `lpj`)
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CK)
+- [ ] Tes manual: BS dengan 2+ item (nomorBS berbeda dalam 1 pengajuan), bandingkan total kartu "Jumlah BS bulan ini"/"Sudah di-LPJ-kan" dengan jumlah manual dari daftar Rincian BS -- harus sama persis

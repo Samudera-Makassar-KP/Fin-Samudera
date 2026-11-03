@@ -22,6 +22,12 @@ import { db } from '../firebaseConfig'
 // tanggal LPJ).
 const HIDDEN_LPJ_STATUSES = ['Ditolak', 'Dibatalkan']
 const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase()
+// Bagian CL: satu dokumen bonSementara bisa punya LEBIH DARI SATU item
+// (lihat FormBs.jsx multipleItems) -- jumlah total dokumen harus menjumlahkan
+// SEMUA item, bukan cuma bonSementara[0], supaya konsisten dengan
+// newBsBreakdown (sudah di-flatten per item sejak Bagian CE/CF).
+const sumBonSementaraItems = (bs) =>
+    (bs.bonSementara || []).reduce((sum, it) => sum + (Number(it.jumlahBS) || 0), 0)
 const formatDateShort = (iso) => {
     if (!iso) return '-'
     return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -175,10 +181,7 @@ const DashboardSummary = ({ uid, role }) => {
                 )
                 const bsAll = bsSnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
                 const bsThisMonth = bsAll.filter((item) => isThisMonth(item.tanggalPengajuan))
-                const totalNominalBS = bsThisMonth.reduce(
-                    (sum, item) => sum + (item.bonSementara?.[0]?.jumlahBS || 0),
-                    0
-                )
+                const totalNominalBS = bsThisMonth.reduce((sum, item) => sum + sumBonSementaraItems(item), 0)
 
                 // Reimbursement milik user, difilter ke bulan berjalan
                 const rbsSnapshot = await getDocs(
@@ -193,10 +196,7 @@ const DashboardSummary = ({ uid, role }) => {
 
                 // Dari BS bulan ini, ambil yang sudah Disetujui (uang sudah cair)
                 const bsDisetujui = bsThisMonth.filter((item) => item.status === 'Disetujui')
-                const totalDisetujui = bsDisetujui.reduce(
-                    (sum, item) => sum + (item.bonSementara?.[0]?.jumlahBS || 0),
-                    0
-                )
+                const totalDisetujui = bsDisetujui.reduce((sum, item) => sum + sumBonSementaraItems(item), 0)
 
                 // Cek status LPJ untuk tiap BS yang sudah disetujui.
                 // Ambil SEMUA lpj milik user sekali saja (query ini provable oleh Security Rules
@@ -256,18 +256,6 @@ const DashboardSummary = ({ uid, role }) => {
                     }
                 })
 
-                let totalSudahLpj = 0
-                let jumlahBsSudahLpj = 0
-                for (const bs of bsDisetujui) {
-                    if (!bs.displayId) continue
-                    const lpjData = lpjByNomorBS[normalizeNomorBS(bs.displayId)]
-                    if (lpjData && lpjData.status === 'Disetujui') {
-                        totalSudahLpj += bs.bonSementara?.[0]?.jumlahBS || 0
-                        jumlahBsSudahLpj += 1
-                    }
-                }
-                const jumlahBsBelumLpj = bsDisetujui.length - jumlahBsSudahLpj
-
                 // Bagian CF/CH: rincian per BS -- flatten SEMUA item di tiap
                 // dokumen BS (bukan cuma item pertama, lihat catatan multi-item
                 // Bagian CE di BsTable.jsx) supaya tiap nomorBS dapat baris
@@ -307,6 +295,17 @@ const DashboardSummary = ({ uid, role }) => {
                         })
                     })
                 })
+
+                // Bagian CL: "Sudah di-LPJ-kan"/"Selisih belum LPJ" sekarang
+                // dihitung per ITEM dari newBsBreakdown (bukan per dokumen BS
+                // seperti sebelumnya) -- sebelumnya hanya mengecek displayId
+                // (item pertama), jadi BS multi-item kehilangan nominal/status
+                // LPJ item ke-2 dst dari kedua kartu ini.
+                const totalSudahLpj = newBsBreakdown
+                    .filter((it) => it.lpjStatus === 'Sudah LPJ')
+                    .reduce((sum, it) => sum + it.jumlahBS, 0)
+                const jumlahBsSudahLpj = newBsBreakdown.filter((it) => it.lpjStatus === 'Sudah LPJ').length
+                const jumlahBsBelumLpj = newBsBreakdown.length - jumlahBsSudahLpj
 
                 // Bagian CF: rincian per RBS -- sudah/belum "Transferred" (uang
                 // sudah masuk atau belum).
@@ -398,7 +397,7 @@ const DashboardSummary = ({ uid, role }) => {
                 const rbsDisetujuiThisMonth = rbsThisMonth.filter((item) => item.status === 'Disetujui')
                 const rbsTransferredThisMonth = rbsDisetujuiThisMonth.filter((item) => item.transferred)
                 const rbsBsMasukNominal =
-                    bsTransferredThisMonth.reduce((sum, item) => sum + (item.bonSementara?.[0]?.jumlahBS || 0), 0) +
+                    bsTransferredThisMonth.reduce((sum, item) => sum + sumBonSementaraItems(item), 0) +
                     rbsTransferredThisMonth.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
                 const rbsBsMasukCount = bsTransferredThisMonth.length + rbsTransferredThisMonth.length
 
@@ -418,7 +417,7 @@ const DashboardSummary = ({ uid, role }) => {
                 // Bagian CK: sisaKurang/sisaLebih belum dihitung di sini lagi --
                 // sudah punya kartu & daftar sendiri (semua periode) di atas.
                 const pendingNominal =
-                    bsBelumTransfer.reduce((sum, item) => sum + (item.bonSementara?.[0]?.jumlahBS || 0), 0) +
+                    bsBelumTransfer.reduce((sum, item) => sum + sumBonSementaraItems(item), 0) +
                     rbsBelumTransfer.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
                 const pendingCount = bsBelumTransfer.length + rbsBelumTransfer.length
 
@@ -484,7 +483,10 @@ const DashboardSummary = ({ uid, role }) => {
                     }
 
                     const [lpjResult, rbsResult] = await Promise.all([
-                        fetchAssignedThisMonth('lpj', (item) => item.bonSementara?.[0]?.jumlahBS),
+                        // Bagian CL: dokumen `lpj` tidak punya field `bonSementara` sendiri
+                        // (itu field dokumen `bonSementara`) -- nominalnya ada di `totalBiaya`,
+                        // sama seperti dipakai di tempat lain (lpjTotalBiayaThisMonth dst).
+                        fetchAssignedThisMonth('lpj', (item) => item.totalBiaya),
                         fetchAssignedThisMonth('reimbursement', (item) => item.totalBiaya)
                     ])
 
@@ -495,10 +497,7 @@ const DashboardSummary = ({ uid, role }) => {
 
                     // Khusus Reviewer: tambahan BS (Bon Sementara) yang mereka approve bulan ini
                     if (isReviewer) {
-                        const bsResult = await fetchAssignedThisMonth(
-                            'bonSementara',
-                            (item) => item.bonSementara?.[0]?.jumlahBS
-                        )
+                        const bsResult = await fetchAssignedThisMonth('bonSementara', sumBonSementaraItems)
                         jumlahBsDiapprove = bsResult.count
                         nominalBsDiapprove = bsResult.nominal
                     }
