@@ -3481,3 +3481,24 @@ Satu pengajuan RBS cuma boleh 1 Unit Bisnis (`selectedUnit` wajib di `FormRbsUmu
 - [ ] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CH)
 - [ ] Tes manual: catat nota RBS dari 2 Unit Bisnis berbeda (kalau user terdaftar di lebih dari 1 unit) di varian yang sama, konfirmasi muncul sebagai 2 grup "Draft RBS" terpisah dengan tombol "Rangkai" masing-masing
 - [ ] Tes manual: klik "Rangkai jadi RBS", konfirmasi dropdown Unit Bisnis di form tujuan sudah otomatis terisi sesuai yang dipilih di Catat Nota
+
+---
+
+# BAGIAN CJ — Catat Nota RBS: Pilih Sebagian Nota untuk Dipecah jadi Beberapa Pengajuan (2026-11-03)
+
+## 98.1 Permintaan User
+
+Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bisa memecahnya jadi beberapa pengajuan RBS terpisah (bukan selalu semua nota di grup yang sama dirangkai jadi 1 RBS sekaligus).
+
+## 98.2 Perbaikan
+
+`src/components/CatatNota.jsx`: setiap nota di grup "Draft RBS" sekarang punya **checkbox sendiri** (default semua terpilih, supaya perilaku lama tetap jalan kalau tidak disentuh) + tombol "Pilih semua"/"Kosongkan pilihan" per grup. Tombol "Rangkai jadi RBS" cuma mengirim nota yang TERPILIH (label berubah jadi "Rangkai jadi RBS (3 dari 5 item)" kalau sebagian dikosongkan) -- nota yang tidak dipilih tetap jadi draft, bisa dirangkai belakangan jadi pengajuan RBS terpisah (mis. dipecah per tanggal, per acara, dll -- terserah user).
+
+## 98.3 Task Development — Bagian CJ
+
+- [x] `src/components/CatatNota.jsx`: checkbox per nota + "Pilih semua"/"Kosongkan pilihan" + Rangkai hanya mengirim yang terpilih
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CI)
+- [ ] Tes manual: di grup Draft RBS dengan beberapa nota, kosongkan centang sebagian, klik "Rangkai" -- konfirmasi cuma nota yang dicentang yang terbawa & terhapus dari draft, sisanya tetap ada untuk dirangkai lagi nanti

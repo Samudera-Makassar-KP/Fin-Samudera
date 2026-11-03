@@ -131,6 +131,20 @@ const CatatNota = () => {
     const [rows, setRows] = useState([emptyRow()])
     const [editingId, setEditingId] = useState(null)
     const [saving, setSaving] = useState(false)
+    // Bagian CJ: koreksi dari user -- draft RBS (varian+unit yang sama) bisa
+    // dipecah jadi beberapa pengajuan terpisah, bukan selalu dirangkai
+    // semuanya sekaligus. Default-nya SEMUA item terpilih (perilaku lama
+    // tetap jalan kalau tidak disentuh) -- disimpan sebagai Set id yang
+    // DIKECUALIKAN (bukan yang terpilih), supaya nota baru otomatis ikut
+    // terpilih tanpa perlu logic tambahan.
+    const [excludedNotaIds, setExcludedNotaIds] = useState(new Set())
+    const toggleNotaSelected = (id) => {
+        setExcludedNotaIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id); else next.add(id)
+            return next
+        })
+    }
 
     const fetchData = useCallback(async () => {
         if (!uid) { setLoading(false); return }
@@ -406,12 +420,16 @@ const CatatNota = () => {
     // Operasional, atau BBM) dengan baris item pre-filled, field-per-field
     // meniru skema reimbursements form aslinya masing-masing. `prefillUnit`
     // dikirim juga supaya dropdown Unit Bisnis di form tujuan ikut terisi.
-    const rangkaiRbs = (group) => {
-        if (!group || group.items.length === 0) return
+    // Bagian CJ: `items` di sini sudah berupa SUBSET yang dipilih user lewat
+    // checkbox (bukan selalu seluruh grup) -- supaya nota varian+unit yang
+    // sama tetap bisa dipecah jadi beberapa pengajuan RBS terpisah kalau
+    // memang diperlukan (mis. per tanggal, per acara, dll -- terserah user).
+    const rangkaiRbs = (group, items) => {
+        if (!group || !items || items.length === 0) return
         navigate(RBS_VARIANTS[group.variant].route, {
             state: {
                 prefillUnit: group.unit,
-                prefillRbsItems: group.items.map((n) => ({
+                prefillRbsItems: items.map((n) => ({
                     isLainnya: n.isLainnya,
                     namaItem: n.namaItem,
                     jenisLain: n.jenisLain,
@@ -423,7 +441,7 @@ const CatatNota = () => {
                     plat: n.plat,
                     tanggal: n.tanggal
                 })),
-                prefillNotaDraftIds: group.items.map((n) => n.id)
+                prefillNotaDraftIds: items.map((n) => n.id)
             }
         })
     }
@@ -690,27 +708,55 @@ const CatatNota = () => {
                 </div>
             )}
 
-            {/* Draft RBS per kombinasi varian+Unit Bisnis -- Bagian CI */}
+            {/* Draft RBS per kombinasi varian+Unit Bisnis -- Bagian CI.
+                Bagian CJ: tiap nota punya checkbox sendiri -- bisa pilih
+                sebagian saja untuk dirangkai jadi 1 RBS, sisanya tetap jadi
+                draft untuk pengajuan berikutnya (mis. dipecah per tanggal,
+                per acara, dll, terserah user). */}
             {rbsDraftGroups.map((group) => {
                 const list = group.items
+                const selectedItems = list.filter((n) => !excludedNotaIds.has(n.id))
+                const allSelected = selectedItems.length === list.length
                 return (
                     <div key={`${group.variant}__${group.unit}`} className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg p-5 shadow-sm mb-6">
-                        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                             <h3 className="text-sm font-bold dark:text-gray-100">
                                 Draft RBS {RBS_VARIANTS[group.variant].label}
                                 {group.unit && <span className="text-gray-400 font-normal"> -- {group.unit}</span>}
                                 <span className="text-gray-400 font-normal"> (belum disubmit)</span>
                             </h3>
-                            <button onClick={() => rangkaiRbs(group)} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700">
-                                Rangkai jadi RBS ({list.length} item) <FontAwesomeIcon icon={faArrowRight} className="w-3 h-3" />
+                            <button
+                                onClick={() => rangkaiRbs(group, selectedItems)}
+                                disabled={selectedItems.length === 0}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                Rangkai jadi RBS ({selectedItems.length}{selectedItems.length !== list.length ? ` dari ${list.length}` : ''} item) <FontAwesomeIcon icon={faArrowRight} className="w-3 h-3" />
                             </button>
                         </div>
+                        <button
+                            onClick={() => setExcludedNotaIds((prev) => {
+                                const next = new Set(prev)
+                                list.forEach((n) => { if (allSelected) next.add(n.id); else next.delete(n.id) })
+                                return next
+                            })}
+                            className="text-xs text-blue-600 dark:text-blue-400 mb-3"
+                        >
+                            {allSelected ? 'Kosongkan pilihan' : 'Pilih semua'}
+                        </button>
                         <div className="flex flex-col gap-2">
                             {list.map((n) => (
                                 <div key={n.id} className="flex items-center justify-between gap-3 px-3 py-2 border dark:border-gray-700 rounded-md">
-                                    <div className="min-w-0">
-                                        <div className="text-sm font-medium dark:text-gray-100 truncate">{n.isLainnya ? n.jenisLain : n.namaItem}{n.item || n.keterangan ? ` -- ${n.item || n.keterangan}` : ''}</div>
-                                        <div className="text-xs text-gray-400 dark:text-gray-500">{formatDate(n.tanggal)}</div>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <input
+                                            type="checkbox"
+                                            checked={!excludedNotaIds.has(n.id)}
+                                            onChange={() => toggleNotaSelected(n.id)}
+                                            className="flex-shrink-0"
+                                        />
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-medium dark:text-gray-100 truncate">{n.isLainnya ? n.jenisLain : n.namaItem}{n.item || n.keterangan ? ` -- ${n.item || n.keterangan}` : ''}</div>
+                                            <div className="text-xs text-gray-400 dark:text-gray-500">{formatDate(n.tanggal)}</div>
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0">
                                         <span className="text-sm font-semibold tabular-nums dark:text-gray-100">{formatRupiah(n.jumlahBiaya)}</span>
