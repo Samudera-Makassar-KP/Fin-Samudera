@@ -36,6 +36,11 @@ const formatDateShort = (iso) => {
 // menampilkan N item dulu + tombol "Tampilkan lainnya", supaya halaman
 // tidak kepanjangan kalau datanya banyak (tetap bisa lihat semua kalau mau).
 const VISIBLE_LIMIT = 5
+// Bagian CM: label tampilan nota Catat Nota -- sama persis pola yang sudah
+// dipakai di CatatNota.jsx supaya konsisten ("Lainnya" pakai jenisLain,
+// selain itu pakai namaItem, ditambah item/keterangan kalau ada).
+const notaDisplayLabel = (n) =>
+    `${n.isLainnya ? n.jenisLain : n.namaItem}${n.item || n.keterangan ? ` -- ${n.item || n.keterangan}` : ''}`
 
 const DashboardSummary = ({ uid, role }) => {
     const [summary, setSummary] = useState({
@@ -73,7 +78,12 @@ const DashboardSummary = ({ uid, role }) => {
         belumSettleNominal: 0,
         belumSettleCount: 0,
         belumBayarKekuranganNominal: 0,
-        belumBayarKekuranganCount: 0
+        belumBayarKekuranganCount: 0,
+        // Bagian CM: uang pribadi/talangan yang sudah dikeluarkan user untuk
+        // RBS/BS tapi belum diganti kantor -- semua periode, lihat catatan di
+        // perhitungannya (sekitar rbsBelumCairAll/notaDraftLpjBelumCair).
+        danaTalanganNominal: 0,
+        danaTalanganCount: 0
     })
     const [loading, setLoading] = useState(true)
     // Bagian CF: koreksi dari user -- card total saja tidak cukup, minta
@@ -93,7 +103,12 @@ const DashboardSummary = ({ uid, role }) => {
     // LPJ-nya diajukan.
     const [belumSettleList, setBelumSettleList] = useState([])
     const [belumBayarKekuranganList, setBelumBayarKekuranganList] = useState([])
-    const [activeModal, setActiveModal] = useState(null) // 'settle' | 'kekurangan' | null
+    // Bagian CM: gabungan 4 sumber talangan pribadi -- RBS yang sudah
+    // diajukan tapi belum cair, draft RBS yang belum disubmit, kekurangan BS
+    // yang belum dibayar kantor, dan nota LPJ yang dicatat untuk BS yang
+    // sendiri belum "Transferred". Lihat perhitungannya di fetchData().
+    const [danaTalanganList, setDanaTalanganList] = useState([])
+    const [activeModal, setActiveModal] = useState(null) // 'settle' | 'kekurangan' | 'talangan' | null
     const [expandedSections, setExpandedSections] = useState(new Set())
     const toggleSection = (key) => setExpandedSections((prev) => {
         const next = new Set(prev)
@@ -334,13 +349,18 @@ const DashboardSummary = ({ uid, role }) => {
                 // LPJ-nya). Dicari dari SELURUH BS (bsAll), bukan cuma bulan
                 // ini, karena justru BS-nya dari bulan LAIN.
                 const bsInfoByNomorBS = {}
+                // Bagian CM: transferred flag per ITEM BS, SEMUA periode (bukan
+                // cuma bulan ini) -- dipakai buat tahu nota LPJ mana yang masih
+                // "talangan" (dicatat tapi BS-nya sendiri belum cair).
+                const bsTransferredByItemId = {}
                 bsAll.forEach((bs) => {
                     const items = bs.bonSementara?.length ? bs.bonSementara : []
-                    items.forEach((it) => {
+                    items.forEach((it, index) => {
                         bsInfoByNomorBS[normalizeNomorBS(it.nomorBS)] = {
                             nomorBS: it.nomorBS,
                             tanggalPengajuan: bs.tanggalPengajuan
                         }
+                        bsTransferredByItemId[`${bs.id}__${index}`] = !!bs.transferred
                     })
                 })
 
@@ -379,10 +399,74 @@ const DashboardSummary = ({ uid, role }) => {
                 const lpjActiveAll = lpjAll.filter((item) => !HIDDEN_LPJ_STATUSES.includes(item.status))
                 const newBelumSettleList = lpjActiveAll
                     .filter((item) => (Number(item.sisaLebih) || 0) > 0 && !(item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered'))
-                    .map((item) => ({ key: item.id, displayId: item.displayId, nomorBS: item.nomorBS, amount: Number(item.sisaLebih) || 0, tanggal: item.tanggalPengajuan }))
+                    .map((item) => ({
+                        key: item.id,
+                        title: item.displayId,
+                        sub: `BS: ${item.nomorBS}`,
+                        amount: Number(item.sisaLebih) || 0,
+                        tanggal: item.tanggalPengajuan
+                    }))
                 const newBelumBayarKekuranganList = lpjActiveAll
                     .filter((item) => (Number(item.sisaKurang) || 0) > 0 && !item.sisaKurangDibayar)
-                    .map((item) => ({ key: item.id, displayId: item.displayId, nomorBS: item.nomorBS, amount: Number(item.sisaKurang) || 0, tanggal: item.tanggalPengajuan }))
+                    .map((item) => ({
+                        key: item.id,
+                        title: item.displayId,
+                        sub: `BS: ${item.nomorBS}`,
+                        amount: Number(item.sisaKurang) || 0,
+                        tanggal: item.tanggalPengajuan
+                    }))
+                const belumBayarKekuranganNominalValue = newBelumBayarKekuranganList.reduce((sum, item) => sum + item.amount, 0)
+
+                // Bagian CM: "Dana Talangan Belum Diganti" -- user keluar uang
+                // duluan (pribadi atau rekening belanja operasional) untuk
+                // RBS/BS sebelum uangnya benar-benar cair/diganti kantor.
+                // Digabung dari 4 sumber, SEMUA PERIODE:
+                // 1) RBS yang sudah diajukan tapi belum "Transferred"
+                // 2) Draft RBS di Catat Nota yang belum disubmit sama sekali
+                // 3) Kekurangan BS yang belum dibayar kantor (reuse list di atas)
+                // 4) Nota LPJ yang dicatat untuk BS yang BS-nya sendiri belum
+                //    "Transferred" (ditandai false eksplisit di
+                //    bsTransferredByItemId -- bsId yang tidak dikenal/BS sudah
+                //    dihapus tidak ikut dihitung supaya tidak salah hitung).
+                const rbsBelumCairAll = rbsAll.filter(
+                    (item) => !HIDDEN_LPJ_STATUSES.includes(item.status) && !item.transferred
+                )
+                const talanganRbsBelumCair = rbsBelumCairAll.map((item) => ({
+                    key: `rbs-${item.id}`,
+                    title: item.displayId,
+                    sub: 'RBS sudah diajukan, belum cair',
+                    amount: Number(item.totalBiaya) || 0,
+                    tanggal: item.tanggalPengajuan
+                }))
+                const talanganDraftRbs = notaDraftRbs.map((n) => ({
+                    key: `draft-rbs-${n.id}`,
+                    title: notaDisplayLabel(n),
+                    sub: 'Draft RBS, belum disubmit',
+                    amount: Number(n.jumlahBiaya) || 0,
+                    tanggal: n.tanggal
+                }))
+                const talanganKekurangan = newBelumBayarKekuranganList.map((item) => ({
+                    key: `kekurangan-${item.key}`,
+                    title: item.title,
+                    sub: 'Kekurangan BS belum dibayar kantor',
+                    amount: item.amount,
+                    tanggal: item.tanggal
+                }))
+                const notaDraftLpjBelumCair = notaDraftLpj.filter((n) => bsTransferredByItemId[n.bsId] === false)
+                const talanganNotaLpj = notaDraftLpjBelumCair.map((n) => ({
+                    key: `nota-lpj-${n.id}`,
+                    title: notaDisplayLabel(n),
+                    sub: `BS: ${n.nomorBS} -- belum cair`,
+                    amount: Number(n.jumlahBiaya) || 0,
+                    tanggal: n.tanggal
+                }))
+                const newDanaTalanganList = [
+                    ...talanganRbsBelumCair,
+                    ...talanganDraftRbs,
+                    ...talanganKekurangan,
+                    ...talanganNotaLpj
+                ].sort((a, b) => new Date(b.tanggal || 0) - new Date(a.tanggal || 0))
+                const danaTalanganNominal = newDanaTalanganList.reduce((sum, item) => sum + item.amount, 0)
 
                 // Bagian CB: rekonsiliasi dana bulan ini (sebelumnya di Mutasi Dana) --
                 // hanya uang yang BENAR-BENAR sudah berpindah yang dihitung, sama
@@ -508,6 +592,7 @@ const DashboardSummary = ({ uid, role }) => {
                 setLpjBulanSebelumnya(newLpjBulanSebelumnya)
                 setBelumSettleList(newBelumSettleList)
                 setBelumBayarKekuranganList(newBelumBayarKekuranganList)
+                setDanaTalanganList(newDanaTalanganList)
 
                 setSummary({
                     jumlahBS: bsThisMonth.length,
@@ -537,8 +622,10 @@ const DashboardSummary = ({ uid, role }) => {
                     pendingNotaRbsCount: notaDraftRbs.length,
                     belumSettleNominal: newBelumSettleList.reduce((sum, item) => sum + item.amount, 0),
                     belumSettleCount: newBelumSettleList.length,
-                    belumBayarKekuranganNominal: newBelumBayarKekuranganList.reduce((sum, item) => sum + item.amount, 0),
-                    belumBayarKekuranganCount: newBelumBayarKekuranganList.length
+                    belumBayarKekuranganNominal: belumBayarKekuranganNominalValue,
+                    belumBayarKekuranganCount: newBelumBayarKekuranganList.length,
+                    danaTalanganNominal,
+                    danaTalanganCount: newDanaTalanganList.length
                 })
             } catch (error) {
                 console.error('Error fetching dashboard summary:', error)
@@ -690,6 +777,24 @@ const DashboardSummary = ({ uid, role }) => {
             valueClass: summary.belumBayarKekuranganCount > 0 ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-gray-100',
             bgClass: summary.belumBayarKekuranganCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50',
             list: belumBayarKekuranganList
+        },
+        {
+            // Bagian CM: permintaan user -- "saya ingin tahu selisih agar saya
+            // tidak terus menggunakan uang pribadi untuk ganti". Beda dari
+            // "Selisih (Bank vs Sistem)" (cuma pengecekan kecocokan saldo),
+            // kartu ini langsung menjumlahkan uang yang SUDAH dikeluarkan
+            // user (pribadi/rekening belanja) dan masih menunggu diganti
+            // kantor -- naik begitu user keluar uang duluan, turun begitu
+            // BS/RBS-nya benar-benar "Transferred"/kekurangannya dibayar.
+            key: 'talangan',
+            label: 'Dana Talangan Belum Diganti',
+            value: formatRupiah(summary.danaTalanganNominal),
+            caption: summary.danaTalanganCount > 0
+                ? `${summary.danaTalanganCount} item -- uang Anda yang masih menunggu BS/RBS cair atau kekurangan dibayar. Klik untuk lihat rincian.`
+                : 'Tidak ada dana talangan yang menunggu diganti',
+            valueClass: summary.danaTalanganCount > 0 ? 'text-purple-700 dark:text-purple-400' : 'text-gray-900 dark:text-gray-100',
+            bgClass: summary.danaTalanganCount > 0 ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-gray-50 dark:bg-gray-700/50',
+            list: danaTalanganList
         }
     ]
 
@@ -735,7 +840,7 @@ const DashboardSummary = ({ uid, role }) => {
             <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">
                 Perlu Ditindaklanjuti <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(semua periode)</span>
             </h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {tindakLanjutCards.map((card) => (
                     <button
                         key={card.key}
@@ -809,7 +914,9 @@ const DashboardSummary = ({ uid, role }) => {
                             ? 'Isi Saldo Bank dulu'
                             : selisihBank === 0
                                 ? 'Saldo sistem & bank sudah sama'
-                                : selisihBank > 0 ? 'Bank lebih besar dari sistem' : 'Sistem lebih besar dari bank'}
+                                : selisihBank > 0
+                                    ? 'Bank lebih besar dari sistem -- kemungkinan ada pengeluaran yang belum dicatat/di-LPJ-kan'
+                                    : 'Sistem lebih besar dari bank -- cek kartu "Dana Talangan Belum Diganti" di atas'}
                     </p>
                 </div>
                 {summary.pendingNotaRbsNominal > 0 && (
@@ -942,7 +1049,10 @@ const DashboardSummary = ({ uid, role }) => {
                 ada) karena Modal.jsx dirancang untuk dialog konfirmasi
                 (title+message+tombol), bukan daftar panjang yang bisa
                 di-scroll. */}
-            {activeModal && (
+            {activeModal && (() => {
+                const activeCard = tindakLanjutCards.find((card) => card.key === activeModal)
+                if (!activeCard) return null
+                return (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
                     onClick={() => setActiveModal(null)}
@@ -952,19 +1062,17 @@ const DashboardSummary = ({ uid, role }) => {
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-gray-800 dark:text-gray-100">
-                                {activeModal === 'settle' ? 'BS Belum Settle' : 'Kekurangan Belum Dibayar'}
-                            </h3>
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-100">{activeCard.label}</h3>
                             <button onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">&times;</button>
                         </div>
                         <div className="flex flex-col gap-2">
-                            {(activeModal === 'settle' ? belumSettleList : belumBayarKekuranganList).map((item) => (
+                            {activeCard.list.map((item) => (
                                 <div key={item.key} className="flex items-center justify-between gap-3 text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
                                     <div className="min-w-0">
-                                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{item.displayId}</div>
-                                        <div className="text-xs text-gray-400 dark:text-gray-500">BS: {item.nomorBS} &middot; {formatDateShort(item.tanggal)}</div>
+                                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{item.title}</div>
+                                        <div className="text-xs text-gray-400 dark:text-gray-500">{item.sub} &middot; {formatDateShort(item.tanggal)}</div>
                                     </div>
-                                    <div className={`font-semibold tabular-nums flex-shrink-0 ${activeModal === 'settle' ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    <div className={`font-semibold tabular-nums flex-shrink-0 ${activeCard.valueClass}`}>
                                         {formatRupiah(item.amount)}
                                     </div>
                                 </div>
@@ -972,7 +1080,8 @@ const DashboardSummary = ({ uid, role }) => {
                         </div>
                     </div>
                 </div>
-            )}
+                )
+            })()}
         </div>
     )
 }

@@ -3553,3 +3553,28 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npm run build` sukses
 - [ ] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CK)
 - [ ] Tes manual: BS dengan 2+ item (nomorBS berbeda dalam 1 pengajuan), bandingkan total kartu "Jumlah BS bulan ini"/"Sudah di-LPJ-kan" dengan jumlah manual dari daftar Rincian BS -- harus sama persis
+
+## 101.3 Task Development — Bagian CM
+
+**Konteks:** User tanya apa arti kartu "Selisih (Bank vs Sistem)" -- apakah dia yang berutang ke kantor atau sebaliknya. Dijelaskan kartu itu sifatnya pengecekan kecocokan saldo (reconciliation), bukan penanda arah utang-piutang langsung. User lalu menjelaskan alur kerja aslinya: semua pengeluaran BS/RBS langsung dicatat di Catat Nota, konfirmasi "Transferred" menyusul belakangan; untuk RBS dia SELALU keluar uang duluan (pribadi atau rekening belanja operasional) sebelum RBS-nya cair. User minta ada angka eksplisit supaya dia tahu "jangan terus-terusan pakai uang pribadi untuk ganti" -- yaitu, berapa uang yang sudah dia keluarkan duluan yang BELUM diganti kantor.
+
+**Implementasi:** Ditanya dulu lewat AskUserQuestion (bukan tebak formula finansial sepihak) -- user pilih opsi "kartu baru + perjelas Selisih yang sudah ada" (bukan ganti total, bukan cuma ubah teks).
+
+- **`src/components/DashboardSummary.jsx`**: kartu baru **"Dana Talangan Belum Diganti"** (3 kartu "Perlu Ditindaklanjuti", semua periode, grid jadi `sm:grid-cols-3`), menjumlahkan 4 sumber:
+  1. RBS yang sudah diajukan tapi belum "Transferred" (`rbsBelumCairAll`, semua periode, status aktif)
+  2. Draft RBS di Catat Nota yang belum disubmit sama sekali (`notaDraftRbs`)
+  3. Kekurangan BS yang belum dibayar kantor (reuse `newBelumBayarKekuranganList` dari Bagian CK)
+  4. Nota LPJ yang dicatat untuk BS yang BS-nya sendiri belum "Transferred" (`notaDraftLpjBelumCair`, dicocokkan lewat `bsTransferredByItemId` -- map transferred flag per ITEM BS, semua periode, bukan cuma bulan ini seperti `thisMonthBsItemIds` yang sudah ada)
+  - Diklik untuk lihat rincian lewat modal yang sama (digeneralisasi: modal sekarang ambil title/list/warna langsung dari `tindakLanjutCards.find(c => c.key === activeModal)`, bukan ternary 2-cabang manual -- otomatis ikut kalau nanti nambah kartu lagi)
+  - List item sekarang pakai shape seragam `{key, title, sub, amount, tanggal}` (sebelumnya `{displayId, nomorBS}` yang cuma pas untuk BS) supaya bisa menampung sumber yang beragam (RBS, draft RBS, nota LPJ) dengan deskripsi yang sesuai masing-masing
+  - Caption kartu "Selisih (Bank vs Sistem)" diperjelas: selisih positif (Bank > Sistem) diarahkan ke "kemungkinan ada pengeluaran yang belum dicatat/di-LPJ-kan", selisih negatif (Sistem > Bank) diarahkan ke cek kartu "Dana Talangan Belum Diganti" yang baru
+
+**Task Development:**
+- [x] AskUserQuestion -- konfirmasi bentuk fitur sebelum coding
+- [x] Kartu "Dana Talangan Belum Diganti" + modal rincian + caption Selisih diperjelas
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CL)
+- [ ] Tes manual: catat RBS di Catat Nota tapi belum disubmit -> muncul di "Dana Talangan Belum Diganti"; submit RBS -> masih muncul (belum Transferred); tandai Transferred -> hilang dari daftar
+- [ ] Tes manual: catat nota LPJ untuk BS yang belum ditandai Transferred -> muncul di "Dana Talangan Belum Diganti"; setelah BS ditandai Transferred -> hilang
