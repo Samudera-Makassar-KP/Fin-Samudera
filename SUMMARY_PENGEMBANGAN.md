@@ -3420,3 +3420,33 @@ User minta audit bug/error menyeluruh sebelum lanjut dengan temuan detail mereka
 - [ ] Tes manual (kalau ada draft form lama untuk BS yang sama): konfirmasi draft lama TIDAK auto-load menimpa pilihan modal
 - [ ] Tes manual: edit BS sebagai admin tanpa mengubah Unit Bisnis, konfirmasi nomor BS tidak berubah
 - [ ] Tes manual: buka Dashboard di HP/viewport kecil, konfirmasi semua angka di card tidak lagi keluar dari batasnya
+
+---
+
+# BAGIAN CH — Nota Catat Nota Ikut Mengurangi Sisa Dana/Saldo Sistem, Pisahkan LPJ Bulan Lalu, Rapikan Susunan Card (2026-11-03)
+
+## 96.1 Laporan User
+
+User lapor: nota Catat Nota berhasil tercatat, TAPI "Rincian BS" tidak mencatat pengurangannya, jadi Saldo Bank & Selisih tidak berubah sama sekali walau sudah catat pengeluaran. Minta: (1) susunan card "Ringkasan bulan ini" & "Rincian bulan ini" dirapikan, (2) semua yang dicatat harus terdokumentasi supaya bisa memonitor dana keluar vs dana bank aktual dan selisihnya, (3) kalau ada LPJ dari BS bulan sebelumnya yang baru dilaporkan bulan ini, pindahkan ke card sendiri dengan catatan BS-nya dari bulan sebelumnya.
+
+## 96.2 Perbaikan
+
+`src/components/DashboardSummary.jsx` ditulis ulang:
+- **Nota Catat Nota (LPJ) sekarang ikut dihitung sebagai pengeluaran** -- `notaDraft` (jenis `lpj`) milik user di-fetch, dicocokkan ke item BS lewat `bsId` (`${docId}__${index}`, skema yang sama dengan `CatatNota.jsx`), dan jumlahnya dikurangkan dari (a) sisa dana BS terkait di "Rincian BS Bulan Ini" (dengan catatan kecil "Rp X via Catat Nota, belum di-LPJ-kan") dan (b) **Saldo Sistem** -- jadi Selisih langsung terlihat begitu nota dicatat, tidak perlu menunggu submit LPJ sungguhan. Nota RBS yang belum dirangkai ditampilkan sebagai kartu info terpisah ("Draft RBS Belum Disubmit") -- TIDAK ikut mengurangi Saldo Sistem (belum pasti jadi RBS, beda sifatnya dari nota LPJ yang sudah pasti memakai dana BS).
+- **Kartu "Saldo Sistem" baru** -- sebelumnya angka ini cuma dipakai diam-diam untuk hitung Selisih, sekarang ditampilkan eksplisit.
+- **LPJ dari bulan sebelumnya dipisah** -- LPJ yang `tanggalPengajuan`-nya bulan ini TAPI BS yang dirujuknya (`nomorBS`, dicari ke SELURUH riwayat BS bukan cuma bulan ini) diajukan di bulan lain, dikeluarkan dari semua hitungan "bulan ini" (Saldo Sistem, Menunggu Konfirmasi, dll) dan ditampilkan di kartu terpisah "LPJ dari Bulan Sebelumnya" dengan catatan tanggal BS aslinya.
+- **Susunan card dirapikan** -- 3 heading jelas: "Ringkasan bulan ini" (4 card dasar + card approver), "Rekonsiliasi Dana Bulan Ini" (Saldo Sistem, RBS/BS Masuk, LPJ Dikembalikan, Menunggu Konfirmasi, Saldo Bank, Selisih -- digabung 1 grid, sebelumnya tersebar di 2 grid terpisah), "Rincian Bulan Ini" (breakdown per BS/RBS).
+
+## 96.3 Task Development — Bagian CH
+
+- [x] `src/components/DashboardSummary.jsx`: nota Catat Nota (LPJ) ikut mengurangi sisa dana BS & Saldo Sistem
+- [x] Kartu "Saldo Sistem" eksplisit + kartu info "Draft RBS Belum Disubmit"
+- [x] LPJ dari bulan sebelumnya dipisah ke kartu & hitungan sendiri
+- [x] Susunan card dirapikan jadi 3 bagian bertajuk jelas
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC-CG yang juga belum ter-deploy)
+- [ ] Tes manual: catat nota LPJ untuk suatu BS, konfirmasi sisa dana BS tersebut & Saldo Sistem/Selisih langsung berubah tanpa perlu submit LPJ dulu
+- [ ] Tes manual: kalau ada LPJ yang dilaporkan bulan ini untuk BS bulan lalu, konfirmasi muncul di kartu "LPJ dari Bulan Sebelumnya", bukan di angka "bulan ini"
+- [ ] Tes manual: catat nota RBS, konfirmasi muncul di kartu "Draft RBS Belum Disubmit" dan TIDAK mengubah Saldo Sistem
