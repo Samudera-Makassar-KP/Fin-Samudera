@@ -22,6 +22,14 @@ import { db } from '../firebaseConfig'
 // tanggal LPJ).
 const HIDDEN_LPJ_STATUSES = ['Ditolak', 'Dibatalkan']
 const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase()
+const formatDateShort = (iso) => {
+    if (!iso) return '-'
+    return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+// Bagian CK: list panjang (Rincian BS/RBS, LPJ Bulan Sebelumnya) cuma
+// menampilkan N item dulu + tombol "Tampilkan lainnya", supaya halaman
+// tidak kepanjangan kalau datanya banyak (tetap bisa lihat semua kalau mau).
+const VISIBLE_LIMIT = 5
 
 const DashboardSummary = ({ uid, role }) => {
     const [summary, setSummary] = useState({
@@ -54,7 +62,12 @@ const DashboardSummary = ({ uid, role }) => {
         pendingNotaLpjNominal: 0,
         pendingNotaLpjCount: 0,
         pendingNotaRbsNominal: 0,
-        pendingNotaRbsCount: 0
+        pendingNotaRbsCount: 0,
+        // Bagian CK: 2 arah dana yang berlawanan, semua periode
+        belumSettleNominal: 0,
+        belumSettleCount: 0,
+        belumBayarKekuranganNominal: 0,
+        belumBayarKekuranganCount: 0
     })
     const [loading, setLoading] = useState(true)
     // Bagian CF: koreksi dari user -- card total saja tidak cukup, minta
@@ -65,6 +78,22 @@ const DashboardSummary = ({ uid, role }) => {
     // Bagian CH: LPJ yang baru dilaporkan bulan ini tapi BS-nya dari bulan
     // sebelumnya -- kartu terpisah, tidak campur dengan angka "bulan ini".
     const [lpjBulanSebelumnya, setLpjBulanSebelumnya] = useState([])
+    // Bagian CK: koreksi dari user -- "kekurangan BS" (perusahaan BAYAR
+    // TAMBAHAN ke karyawan) dan "pengembalian/settle BS" (karyawan
+    // KEMBALIKAN sisa ke perusahaan) adalah 2 ARAH DANA YANG BERLAWANAN,
+    // dibedakan tegas di sini sebagai 2 list & kartu terpisah. SEMUA
+    // PERIODE (bukan cuma bulan ini) -- ini daftar tindak lanjut yang masih
+    // outstanding, user perlu lihat semua yang belum selesai terlepas kapan
+    // LPJ-nya diajukan.
+    const [belumSettleList, setBelumSettleList] = useState([])
+    const [belumBayarKekuranganList, setBelumBayarKekuranganList] = useState([])
+    const [activeModal, setActiveModal] = useState(null) // 'settle' | 'kekurangan' | null
+    const [expandedSections, setExpandedSections] = useState(new Set())
+    const toggleSection = (key) => setExpandedSections((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key); else next.add(key)
+        return next
+    })
 
     // Bagian CB: Saldo Bank diisi manual per bulan -- dipakai docId yang
     // SAMA dengan yang dulu dipakai Mutasi Dana (`mutasiDanaSaldoBank`,
@@ -340,12 +369,31 @@ const DashboardSummary = ({ uid, role }) => {
                     return true
                 })
 
+                // Bagian CK: dua daftar tindak lanjut, SEMUA PERIODE (bukan cuma
+                // bulan ini) -- supaya user bisa lihat SEMUA yang masih
+                // outstanding, bukan cuma yang kebetulan LPJ-nya diajukan bulan
+                // ini. Dibedakan tegas: "Belum Settle" = karyawan belum
+                // mengembalikan sisa lebih dana BS ke perusahaan (uang MASUK ke
+                // kas). "Kekurangan Belum Dibayar" = perusahaan belum membayar
+                // TAMBAHAN ke karyawan (uang KELUAR dari kas) -- arah yang
+                // berlawanan, jangan sampai tercampur jadi satu angka.
+                const lpjActiveAll = lpjAll.filter((item) => !HIDDEN_LPJ_STATUSES.includes(item.status))
+                const newBelumSettleList = lpjActiveAll
+                    .filter((item) => (Number(item.sisaLebih) || 0) > 0 && !(item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered'))
+                    .map((item) => ({ key: item.id, displayId: item.displayId, nomorBS: item.nomorBS, amount: Number(item.sisaLebih) || 0, tanggal: item.tanggalPengajuan }))
+                const newBelumBayarKekuranganList = lpjActiveAll
+                    .filter((item) => (Number(item.sisaKurang) || 0) > 0 && !item.sisaKurangDibayar)
+                    .map((item) => ({ key: item.id, displayId: item.displayId, nomorBS: item.nomorBS, amount: Number(item.sisaKurang) || 0, tanggal: item.tanggalPengajuan }))
+
                 // Bagian CB: rekonsiliasi dana bulan ini (sebelumnya di Mutasi Dana) --
                 // hanya uang yang BENAR-BENAR sudah berpindah yang dihitung, sama
                 // seperti prinsip Mutasi Dana Bagian BU: BS/RBS Disetujui tapi belum
-                // "Transferred" belum dihitung masuk; LPJ sisaLebih yang belum
-                // dikembalikan/terverifikasi & sisaKurang yang belum dibayar juga
-                // belum dihitung -- semuanya masuk "Menunggu Konfirmasi" dulu.
+                // "Transferred" belum dihitung masuk.
+                // Bagian CK: "Menunggu Konfirmasi" di bawah ini DIPERSEMPIT jadi
+                // cuma BS/RBS yang belum Transferred -- sisaLebih/sisaKurang yang
+                // belum selesai sekarang punya kartu & daftar sendiri di atas
+                // (semua periode), supaya tidak tercampur dalam 1 angka yang
+                // membingungkan arah dananya.
                 const bsTransferredThisMonth = bsDisetujui.filter((item) => item.transferred)
                 const rbsDisetujuiThisMonth = rbsThisMonth.filter((item) => item.status === 'Disetujui')
                 const rbsTransferredThisMonth = rbsDisetujuiThisMonth.filter((item) => item.transferred)
@@ -367,16 +415,12 @@ const DashboardSummary = ({ uid, role }) => {
 
                 const bsBelumTransfer = bsDisetujui.filter((item) => !item.transferred)
                 const rbsBelumTransfer = rbsDisetujuiThisMonth.filter((item) => !item.transferred)
-                const lpjSisaKurangBelumDibayar = lpjSisaKurangThisMonth.filter((item) => !item.sisaKurangDibayar)
-                const lpjSisaLebihBelumKembali = lpjSisaLebihThisMonth.filter(
-                    (item) => !(item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered')
-                )
+                // Bagian CK: sisaKurang/sisaLebih belum dihitung di sini lagi --
+                // sudah punya kartu & daftar sendiri (semua periode) di atas.
                 const pendingNominal =
                     bsBelumTransfer.reduce((sum, item) => sum + (item.bonSementara?.[0]?.jumlahBS || 0), 0) +
-                    rbsBelumTransfer.reduce((sum, item) => sum + (item.totalBiaya || 0), 0) +
-                    lpjSisaKurangBelumDibayar.reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0) +
-                    lpjSisaLebihBelumKembali.reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0)
-                const pendingCount = bsBelumTransfer.length + rbsBelumTransfer.length + lpjSisaKurangBelumDibayar.length + lpjSisaLebihBelumKembali.length
+                    rbsBelumTransfer.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const pendingCount = bsBelumTransfer.length + rbsBelumTransfer.length
 
                 // Saldo Sistem = uang masuk terkonfirmasi (BS/RBS Transferred + sisaKurang
                 // yang sudah dibayar) dikurangi uang keluar (total biaya LPJ bulan ini +
@@ -463,6 +507,8 @@ const DashboardSummary = ({ uid, role }) => {
                 setBsBreakdown(newBsBreakdown)
                 setRbsBreakdown(newRbsBreakdown)
                 setLpjBulanSebelumnya(newLpjBulanSebelumnya)
+                setBelumSettleList(newBelumSettleList)
+                setBelumBayarKekuranganList(newBelumBayarKekuranganList)
 
                 setSummary({
                     jumlahBS: bsThisMonth.length,
@@ -489,7 +535,11 @@ const DashboardSummary = ({ uid, role }) => {
                     pendingNotaLpjNominal,
                     pendingNotaLpjCount: pendingNotaLpjThisMonth.length,
                     pendingNotaRbsNominal,
-                    pendingNotaRbsCount: notaDraftRbs.length
+                    pendingNotaRbsCount: notaDraftRbs.length,
+                    belumSettleNominal: newBelumSettleList.reduce((sum, item) => sum + item.amount, 0),
+                    belumSettleCount: newBelumSettleList.length,
+                    belumBayarKekuranganNominal: newBelumBayarKekuranganList.reduce((sum, item) => sum + item.amount, 0),
+                    belumBayarKekuranganCount: newBelumBayarKekuranganList.length
                 })
             } catch (error) {
                 console.error('Error fetching dashboard summary:', error)
@@ -598,14 +648,49 @@ const DashboardSummary = ({ uid, role }) => {
             bgClass: 'bg-green-50 dark:bg-green-900/20'
         },
         {
+            // Bagian CK: dipersempit jadi cuma BS/RBS belum Transferred --
+            // sisaLebih/sisaKurang sekarang di kartu "Perlu Ditindaklanjuti"
+            // (semua periode) supaya arah dananya tidak tercampur di sini.
             label: 'Menunggu Konfirmasi',
             value: formatRupiah(summary.pendingNominal),
             caption:
                 summary.pendingCount > 0
-                    ? `${summary.pendingCount} transaksi -- BS/RBS belum masuk atau LPJ belum dikembalikan/dibayar`
-                    : 'Semua transaksi bulan ini sudah dikonfirmasi',
+                    ? `${summary.pendingCount} BS/RBS bulan ini belum "Transferred"`
+                    : 'Semua BS/RBS bulan ini sudah masuk',
             valueClass: summary.pendingCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100',
             bgClass: summary.pendingCount > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50'
+        }
+    ]
+
+    // Bagian CK: 2 kartu "Perlu Ditindaklanjuti" -- SEMUA PERIODE, bukan cuma
+    // bulan ini, supaya tidak ada yang "hilang" dari pantauan hanya karena
+    // LPJ-nya diajukan bulan lalu. Diklik untuk lihat daftar lengkapnya lewat
+    // modal (`activeModal`). Dibedakan tegas dari arah uangnya: "Belum
+    // Settle" = karyawan belum kembalikan sisa ke perusahaan (uang MASUK).
+    // "Kekurangan Belum Dibayar" = perusahaan belum bayar tambahan ke
+    // karyawan (uang KELUAR) -- kebalikan arahnya, jangan sampai tertukar.
+    const tindakLanjutCards = [
+        {
+            key: 'settle',
+            label: 'BS Belum Settle',
+            value: formatRupiah(summary.belumSettleNominal),
+            caption: summary.belumSettleCount > 0
+                ? `${summary.belumSettleCount} BS -- sisa lebih belum dikembalikan ke kas. Klik untuk lihat daftar.`
+                : 'Semua sisa lebih BS sudah dikembalikan',
+            valueClass: summary.belumSettleCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100',
+            bgClass: summary.belumSettleCount > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50',
+            list: belumSettleList
+        },
+        {
+            key: 'kekurangan',
+            label: 'Kekurangan Belum Dibayar',
+            value: formatRupiah(summary.belumBayarKekuranganNominal),
+            caption: summary.belumBayarKekuranganCount > 0
+                ? `${summary.belumBayarKekuranganCount} BS -- kekurangan belum dibayar ke karyawan. Klik untuk lihat daftar.`
+                : 'Semua kekurangan sudah dibayar ke karyawan',
+            valueClass: summary.belumBayarKekuranganCount > 0 ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-gray-100',
+            bgClass: summary.belumBayarKekuranganCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50',
+            list: belumBayarKekuranganList
         }
     ]
 
@@ -641,6 +726,35 @@ const DashboardSummary = ({ uid, role }) => {
                             </>
                         )}
                     </div>
+                ))}
+            </div>
+
+            {/* Bagian CK: "Perlu Ditindaklanjuti" -- SEMUA PERIODE (bukan cuma
+                bulan ini), 2 kartu diklik untuk lihat daftar lengkap lewat
+                modal. Diletakkan di atas "Rekonsiliasi Dana Bulan Ini" karena
+                sifatnya tindak lanjut yang mendesak, lintas waktu. */}
+            <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">
+                Perlu Ditindaklanjuti <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(semua periode)</span>
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+                {tindakLanjutCards.map((card) => (
+                    <button
+                        key={card.key}
+                        type="button"
+                        onClick={() => card.list.length > 0 && setActiveModal(card.key)}
+                        disabled={card.list.length === 0}
+                        className={`text-left rounded-lg p-4 min-w-0 ${card.bgClass} ${card.list.length > 0 ? 'cursor-pointer hover:brightness-95 dark:hover:brightness-110' : 'cursor-default'}`}
+                    >
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{card.label}</p>
+                        {loading ? (
+                            <div className="h-7 w-24 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />
+                        ) : (
+                            <>
+                                <p className={`text-lg sm:text-2xl font-semibold break-words ${card.valueClass}`}>{card.value}</p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{card.caption}</p>
+                            </>
+                        )}
+                    </button>
                 ))}
             </div>
 
@@ -710,19 +824,23 @@ const DashboardSummary = ({ uid, role }) => {
                 )}
             </div>
 
-            {/* Bagian CF/CH: rincian per BS & per RBS bulan ini -- card total saja
-                dianggap tidak cukup untuk menyusuri selisih sampai ke sumbernya.
-                Rincian BS sekarang ikut menampilkan nota Catat Nota yang sudah
-                dicatat tapi belum di-LPJ-kan. */}
+            {/* Bagian CF/CH/CK: rincian per BS & per RBS bulan ini -- card total
+                saja dianggap tidak cukup untuk menyusuri selisih sampai ke
+                sumbernya. Rincian BS sekarang ikut menampilkan nota Catat Nota
+                yang sudah dicatat tapi belum di-LPJ-kan. Tampilan diubah jadi
+                FULL WIDTH (sama seperti "LPJ dari Bulan Sebelumnya"), bukan 2
+                kolom berdampingan -- dan dibatasi `VISIBLE_LIMIT` dulu kalau
+                datanya banyak, dengan tombol "Tampilkan lainnya" untuk buka
+                semuanya, supaya halaman tetap rapi tapi tidak kehilangan data. */}
             {!loading && (bsBreakdown.length > 0 || rbsBreakdown.length > 0) && (
                 <>
                     <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">Rincian Bulan Ini</h3>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-4">
                         {bsBreakdown.length > 0 && (
                             <div className="rounded-lg border dark:border-gray-700 p-4">
                                 <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Rincian BS Bulan Ini</p>
                                 <div className="flex flex-col gap-2">
-                                    {bsBreakdown.map((bs) => (
+                                    {(expandedSections.has('bs') ? bsBreakdown : bsBreakdown.slice(0, VISIBLE_LIMIT)).map((bs) => (
                                         <div key={bs.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
                                             <div className="min-w-0">
                                                 <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{bs.nomorBS}</div>
@@ -744,13 +862,18 @@ const DashboardSummary = ({ uid, role }) => {
                                         </div>
                                     ))}
                                 </div>
+                                {bsBreakdown.length > VISIBLE_LIMIT && (
+                                    <button onClick={() => toggleSection('bs')} className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-3">
+                                        {expandedSections.has('bs') ? 'Sembunyikan' : `Tampilkan ${bsBreakdown.length - VISIBLE_LIMIT} lainnya`}
+                                    </button>
+                                )}
                             </div>
                         )}
                         {rbsBreakdown.length > 0 && (
                             <div className="rounded-lg border dark:border-gray-700 p-4">
                                 <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Rincian RBS Bulan Ini</p>
                                 <div className="flex flex-col gap-2">
-                                    {rbsBreakdown.map((rbs) => (
+                                    {(expandedSections.has('rbs') ? rbsBreakdown : rbsBreakdown.slice(0, VISIBLE_LIMIT)).map((rbs) => (
                                         <div key={rbs.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
                                             <div className="font-semibold text-gray-700 dark:text-gray-200 truncate min-w-0">{rbs.displayId}</div>
                                             <div className="text-right flex-shrink-0">
@@ -762,6 +885,11 @@ const DashboardSummary = ({ uid, role }) => {
                                         </div>
                                     ))}
                                 </div>
+                                {rbsBreakdown.length > VISIBLE_LIMIT && (
+                                    <button onClick={() => toggleSection('rbs')} className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-3">
+                                        {expandedSections.has('rbs') ? 'Sembunyikan' : `Tampilkan ${rbsBreakdown.length - VISIBLE_LIMIT} lainnya`}
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -777,7 +905,7 @@ const DashboardSummary = ({ uid, role }) => {
                     <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">LPJ dari Bulan Sebelumnya</h3>
                     <div className="rounded-lg border dark:border-gray-700 p-4">
                         <div className="flex flex-col gap-2">
-                            {lpjBulanSebelumnya.map((lpj) => (
+                            {(expandedSections.has('lpjLama') ? lpjBulanSebelumnya : lpjBulanSebelumnya.slice(0, VISIBLE_LIMIT)).map((lpj) => (
                                 <div key={lpj.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
                                     <div className="min-w-0">
                                         <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{lpj.displayId}</div>
@@ -801,8 +929,50 @@ const DashboardSummary = ({ uid, role }) => {
                                 </div>
                             ))}
                         </div>
+                        {lpjBulanSebelumnya.length > VISIBLE_LIMIT && (
+                            <button onClick={() => toggleSection('lpjLama')} className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-3">
+                                {expandedSections.has('lpjLama') ? 'Sembunyikan' : `Tampilkan ${lpjBulanSebelumnya.length - VISIBLE_LIMIT} lainnya`}
+                            </button>
+                        )}
                     </div>
                 </>
+            )}
+
+            {/* Bagian CK: modal daftar lengkap untuk kartu "Perlu
+                Ditindaklanjuti" -- dibangun manual (bukan pakai Modal.jsx yang
+                ada) karena Modal.jsx dirancang untuk dialog konfirmasi
+                (title+message+tombol), bukan daftar panjang yang bisa
+                di-scroll. */}
+            {activeModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                    onClick={() => setActiveModal(null)}
+                >
+                    <div
+                        className="bg-white dark:bg-gray-800 rounded-lg p-5 max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-100">
+                                {activeModal === 'settle' ? 'BS Belum Settle' : 'Kekurangan Belum Dibayar'}
+                            </h3>
+                            <button onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">&times;</button>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            {(activeModal === 'settle' ? belumSettleList : belumBayarKekuranganList).map((item) => (
+                                <div key={item.key} className="flex items-center justify-between gap-3 text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{item.displayId}</div>
+                                        <div className="text-xs text-gray-400 dark:text-gray-500">BS: {item.nomorBS} &middot; {formatDateShort(item.tanggal)}</div>
+                                    </div>
+                                    <div className={`font-semibold tabular-nums flex-shrink-0 ${activeModal === 'settle' ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                                        {formatRupiah(item.amount)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     )

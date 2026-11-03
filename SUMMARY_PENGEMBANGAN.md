@@ -3502,3 +3502,34 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npm run build` sukses
 - [ ] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CI)
 - [ ] Tes manual: di grup Draft RBS dengan beberapa nota, kosongkan centang sebagian, klik "Rangkai" -- konfirmasi cuma nota yang dicentang yang terbawa & terhapus dari draft, sisanya tetap ada untuk dirangkai lagi nanti
+
+---
+
+# BAGIAN CK — Pisahkan Arah Dana (Settle vs Kekurangan), Modal Daftar Lengkap, Rincian Full-Width + Expand/Collapse (2026-11-03)
+
+## 99.1 Permintaan User
+
+1. Pastikan dibedakan tegas antara "BS kurang bayar" (perusahaan BAYAR TAMBAHAN ke karyawan) vs "pengembalian/settle BS" (karyawan KEMBALIKAN sisa ke perusahaan) -- dua arah dana yang berlawanan.
+2. Card yang kalau diklik memunculkan modal berisi SEMUA BS yang belum di-settle, dan terpisah untuk BS yang kekurangannya belum dibayarkan ke karyawan.
+3. Card "Rincian Bulan Ini" dibuat FULL (selebar card "LPJ dari Bulan Sebelumnya"), dan kalau sudah banyak item, bisa di-expand/hide supaya tetap rapi.
+
+## 99.2 Perbaikan
+
+`src/components/DashboardSummary.jsx`:
+- **2 kartu baru "Perlu Ditindaklanjuti"** (section baru, SEMUA PERIODE -- bukan cuma bulan ini, supaya tidak ada yang "hilang" dari pantauan hanya karena LPJ-nya diajukan bulan lalu): **"BS Belum Settle"** (sisaLebih belum dikembalikan ke kas -- uang MASUK) dan **"Kekurangan Belum Dibayar"** (sisaKurang belum dibayar ke karyawan -- uang KELUAR, warna merah supaya beda dari yang amber). Keduanya diklik untuk membuka **modal** berisi daftar lengkap (nomorBS, displayId LPJ, tanggal, nominal).
+- **"Menunggu Konfirmasi" dipersempit** jadi cuma BS/RBS belum "Transferred" bulan ini -- sisaLebih/sisaKurang yang belum selesai TIDAK lagi dicampur di sini (sudah pindah ke 2 kartu baru di atas), supaya arah dananya tidak membingungkan dalam 1 angka gabungan.
+- **"Rincian Bulan Ini" jadi full-width** (satu kolom berurutan: BS lalu RBS), bukan 2 kolom berdampingan lagi -- gaya sama dengan "LPJ dari Bulan Sebelumnya".
+- **Expand/collapse** ditambahkan ke Rincian BS, Rincian RBS, dan LPJ dari Bulan Sebelumnya -- tampil 5 item dulu (`VISIBLE_LIMIT`), tombol "Tampilkan N lainnya"/"Sembunyikan" untuk sisanya.
+- Modal dibangun manual (bukan pakai `Modal.jsx` yang sudah ada) karena `Modal.jsx` dirancang untuk dialog konfirmasi singkat, bukan daftar panjang yang bisa di-scroll.
+
+## 99.3 Task Development — Bagian CK
+
+- [x] 2 kartu "Perlu Ditindaklanjuti" (semua periode) + modal daftar lengkap
+- [x] "Menunggu Konfirmasi" dipersempit jadi BS/RBS saja
+- [x] "Rincian Bulan Ini" full-width + expand/collapse (BS, RBS, LPJ Bulan Sebelumnya)
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC-CJ)
+- [ ] Tes manual: klik kartu "BS Belum Settle" & "Kekurangan Belum Dibayar", konfirmasi modal muncul dengan daftar yang benar (termasuk BS dari bulan-bulan lama, bukan cuma bulan ini)
+- [ ] Tes manual: BS/RBS dengan lebih dari 5 item di Rincian Bulan Ini, konfirmasi tombol "Tampilkan lainnya" bekerja & bisa disembunyikan lagi
