@@ -9,6 +9,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
 import useFormDraft from '../hooks/useFormDraft'
+import Modal from './Modal'
 import { uploadPdfFile } from '../utils/uploadPdfFile'
 import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES, getUploadableAttachments, isValidAttachmentFile, mergeAttachmentsToPdf } from '../utils/attachmentUpload'
 import { PENGEMBALIAN_ACCEPT, PENGEMBALIAN_MAX_SIZE_BYTES, describePengembalianStatus, isValidPengembalianFile, uploadAndValidatePengembalian } from '../utils/pengembalianUpload'
@@ -61,29 +62,40 @@ const FormLpjUmum = () => {
     const editData = location.state?.editData || null
     // Bagian CA: baris item bisa pre-filled dari nota yang sudah dicatat di
     // "Catat Nota" untuk BS ini -- lihat DetailBs.jsx `handleBuatLaporan()`.
-    // Bagian CC: field pre-fill disamakan dengan skema nota di
-    // CatatNota.jsx (isLainnya/namaItem/jenisLain/biaya/jumlah/plat), bukan
-    // kategori bebas teks lagi -- supaya dropdown "Item" di sini otomatis
-    // terisi benar (bukan selalu jatuh ke "Lainnya"). `namaItem`
-    // dikonstruksi ulang sebagai {value,label} -- react-select mencocokkan
-    // lewat `value`.
+    // Bagian CC: field pre-fill disamakan dengan skema nota di CatatNota.jsx
+    // (isLainnya/namaItem/jenisLain/biaya/jumlah/plat), bukan kategori bebas
+    // teks lagi. `namaItem` dikonstruksi ulang sebagai {value,label} --
+    // react-select mencocokkan lewat `value`.
+    // Bagian CG: koreksi dari user -- sebelumnya di-auto-fill DIAM-DIAM lewat
+    // initial state, dua masalah: (1) user tidak sadar data nota dimuat, (2)
+    // efek auto-load draft LAMA (`useFormDraft`/koleksi `drafts`, di bawah)
+    // bisa MENIMPA prefill ini tanpa disadari kalau user kebetulan punya
+    // draft form yang belum disubmit untuk nomorBS yang sama. Sekarang
+    // ditampilkan sebagai MODAL konfirmasi dulu -- baris item baru benar-
+    // benar terisi setelah user klik "Muat Draft", dan auto-load draft lama
+    // di bawah sengaja di-skip kalau modal ini sedang/sudah ditawarkan.
     const prefillLpjItems = location.state?.prefillLpjItems || null
-    const [lpj, setLpj] = useState(() => {
-        if (prefillLpjItems && prefillLpjItems.length > 0) {
-            return prefillLpjItems.map((p) => ({
-                ...initialLpjState,
-                isLainnya: p.isLainnya,
-                namaItem: p.isLainnya ? null : { value: p.namaItem, label: p.namaItem },
-                jenisLain: p.isLainnya ? (p.jenisLain || 'Lainnya') : '',
-                biaya: String(p.biaya || ''),
-                jumlah: String(p.jumlah || '1'),
-                jumlahBiaya: Number(p.jumlahBiaya) || 0,
-                plat: p.plat || '',
-                keterangan: p.keterangan || ''
-            }))
-        }
-        return [initialLpjState]
-    })
+    const [lpj, setLpj] = useState([initialLpjState])
+    const [showNotaDraftModal, setShowNotaDraftModal] = useState(!!(prefillLpjItems && prefillLpjItems.length > 0))
+
+    const buildLpjRowsFromPrefill = (items) => items.map((p) => ({
+        ...initialLpjState,
+        isLainnya: p.isLainnya,
+        namaItem: p.isLainnya ? null : { value: p.namaItem, label: p.namaItem },
+        jenisLain: p.isLainnya ? (p.jenisLain || 'Lainnya') : '',
+        biaya: String(p.biaya || ''),
+        jumlah: String(p.jumlah || '1'),
+        jumlahBiaya: Number(p.jumlahBiaya) || 0,
+        plat: p.plat || '',
+        keterangan: p.keterangan || ''
+    }))
+
+    const handleMuatNotaDraft = () => {
+        setLpj(buildLpjRowsFromPrefill(prefillLpjItems))
+        setShowNotaDraftModal(false)
+    }
+
+    const handleLewatiNotaDraft = () => setShowNotaDraftModal(false)
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
     // Bagian BB: dulu "Nomor Bon Sementara" adalah kolom teks bebas -- rawan
     // typo/spasi nyangkut yang membuat status LPJ di BsTable.jsx gagal
@@ -1168,6 +1180,11 @@ const FormLpjUmum = () => {
             location.state &&
             location.state.nomorBS &&
             hasDraft &&
+            // Bagian CG: kalau ada nota Catat Nota yang ditawarkan (modal di
+            // atas), JANGAN auto-load draft form lama -- biarkan user
+            // memutuskan dulu lewat modal, supaya draft lama tidak menimpa
+            // pilihannya diam-diam.
+            !prefillLpjItems &&
             !draftAutoLoadedRef.current
         ) {
             draftAutoLoadedRef.current = true
@@ -1177,10 +1194,22 @@ const FormLpjUmum = () => {
             // dari state React Router, bukan cuma dari address bar.
             navigate(location.pathname, { replace: true, state: {} })
         }
-    }, [handleLoadDraft, hasDraft, location.state, location.pathname, navigate]);
+    }, [handleLoadDraft, hasDraft, location.state, location.pathname, navigate, prefillLpjItems]);
 
     return (
         <div className="container mx-auto py-10 md:py-8">
+            {/* Bagian CG: modal konfirmasi muat nota Catat Nota -- lihat
+                catatan di atas komponen ini. */}
+            <Modal
+                showModal={showNotaDraftModal}
+                title="Muat Draft dari Catat Nota?"
+                message={`Ditemukan ${prefillLpjItems?.length || 0} nota yang sudah dicatat untuk BS ini. Muat sebagai baris item LPJ sekarang?`}
+                onClose={handleLewatiNotaDraft}
+                onConfirm={handleMuatNotaDraft}
+                cancelText="Lewati"
+                confirmText="Muat Draft"
+            />
+
             <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Tambah <span className="font-bold">LPJ Bon Sementara GA/Umum</span>
             </h2>

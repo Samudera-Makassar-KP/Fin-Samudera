@@ -511,15 +511,23 @@ const DashboardSummary = ({ uid, role }) => {
                     </span>
                 )}
             </h3>
+            {/* Bagian CG: koreksi dari user -- angka di card "keluar" dari
+                batasnya di mobile. Sumbernya 2 hal yang ketemu barengan: grid
+                item lebar default-nya ikut lebar KONTEN (bukan ikut kolom
+                grid) kalau tidak diberi `min-w-0`, dan `text-2xl` untuk
+                nominal Rupiah yang panjang jadi kepanjangan buat kolom
+                selebar itu di layar kecil -- `min-w-0` + ukuran font
+                responsif (lebih kecil di mobile) + `break-words` sebagai
+                jaring pengaman. */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {cards.map((card) => (
-                    <div key={card.label} className={`rounded-lg p-4 ${card.bgClass}`}>
+                    <div key={card.label} className={`rounded-lg p-4 min-w-0 ${card.bgClass}`}>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{card.label}</p>
                         {loading ? (
                             <div className="h-7 w-24 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />
                         ) : (
                             <>
-                                <p className={`text-2xl font-semibold ${card.valueClass}`}>{card.value}</p>
+                                <p className={`text-lg sm:text-2xl font-semibold break-words ${card.valueClass}`}>{card.value}</p>
                                 {card.caption && (
                                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{card.caption}</p>
                                 )}
@@ -532,12 +540,12 @@ const DashboardSummary = ({ uid, role }) => {
             {/* Bagian CB: Saldo Bank (isi manual) & Selisih -- sebelumnya di
                 Mutasi Dana, sekarang di sini, selalu untuk bulan berjalan. */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-                <div className="rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
+                <div className="rounded-lg p-4 min-w-0 bg-gray-50 dark:bg-gray-700/50">
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                         Saldo Bank <span className="text-xs">(isi manual)</span>
                     </p>
                     <div className="flex items-baseline gap-1">
-                        <span className="text-lg text-gray-400 dark:text-gray-500 font-semibold">Rp</span>
+                        <span className="text-base sm:text-lg text-gray-400 dark:text-gray-500 font-semibold flex-shrink-0">Rp</span>
                         <input
                             type="text"
                             inputMode="decimal"
@@ -546,16 +554,16 @@ const DashboardSummary = ({ uid, role }) => {
                             onBlur={handleSaldoBankBlur}
                             placeholder={loadingBalance ? '...' : '0'}
                             disabled={loadingBalance}
-                            className="text-2xl font-semibold bg-transparent outline-none w-full dark:text-gray-100 tabular-nums focus:text-blue-600 dark:focus:text-blue-400 disabled:opacity-50"
+                            className="text-lg sm:text-2xl font-semibold bg-transparent outline-none w-full min-w-0 dark:text-gray-100 tabular-nums focus:text-blue-600 dark:focus:text-blue-400 disabled:opacity-50"
                         />
                     </div>
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         {loadingBalance ? 'Memuat...' : savingBalance ? 'Menyimpan...' : 'Cek dari mutasi rekening, lalu ketik di sini'}
                     </p>
                 </div>
-                <div className={`rounded-lg p-4 ${selisihBank === null ? 'bg-gray-50 dark:bg-gray-700/50' : selisihBank === 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}`}>
+                <div className={`rounded-lg p-4 min-w-0 ${selisihBank === null ? 'bg-gray-50 dark:bg-gray-700/50' : selisihBank === 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}`}>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Selisih (Bank vs Sistem)</p>
-                    <p className={`text-2xl font-semibold ${selisihBank === null ? 'text-gray-900 dark:text-gray-100' : selisihBank === 0 ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                    <p className={`text-lg sm:text-2xl font-semibold break-words ${selisihBank === null ? 'text-gray-900 dark:text-gray-100' : selisihBank === 0 ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
                         {selisihBank === null ? '-' : formatRupiah(selisihBank)}
                     </p>
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
@@ -601,7 +609,7 @@ const DashboardSummary = ({ uid, role }) => {
                             <div className="flex flex-col gap-2">
                                 {rbsBreakdown.map((rbs) => (
                                     <div key={rbs.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
-                                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{rbs.displayId}</div>
+                                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate min-w-0">{rbs.displayId}</div>
                                         <div className="text-right flex-shrink-0">
                                             <div className="font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatRupiah(rbs.totalBiaya)}</div>
                                             <div className={rbs.transferred ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>

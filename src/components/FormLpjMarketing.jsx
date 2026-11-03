@@ -9,6 +9,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner, faTimes } from '@fortawesome/free-solid-svg-icons'
 import useFormDraft from '../hooks/useFormDraft'
+import Modal from './Modal'
 import { uploadPdfFile } from '../utils/uploadPdfFile'
 import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_SIZE_BYTES, getUploadableAttachments, isValidAttachmentFile, mergeAttachmentsToPdf } from '../utils/attachmentUpload'
 import { PENGEMBALIAN_ACCEPT, PENGEMBALIAN_MAX_SIZE_BYTES, describePengembalianStatus, isValidPengembalianFile, uploadAndValidatePengembalian } from '../utils/pengembalianUpload'
@@ -67,23 +68,32 @@ const FormLpjMarketing = () => {
     // pre-filled dari nota yang sudah dicatat di "Catat Nota" untuk BS ini.
     // Bagian CC: lihat catatan sama di FormLpjUmum.jsx -- field pre-fill
     // disamakan dengan skema nota di CatatNota.jsx.
+    // Bagian CG: lihat catatan sama di FormLpjUmum.jsx -- sekarang lewat
+    // modal konfirmasi, bukan auto-fill diam-diam, supaya tidak ketiban
+    // auto-load draft lama (`useFormDraft`) kalau user kebetulan punya draft
+    // form lama untuk nomorBS yang sama.
     const prefillLpjItems = location.state?.prefillLpjItems || null
-    const [lpj, setLpj] = useState(() => {
-        if (prefillLpjItems && prefillLpjItems.length > 0) {
-            return prefillLpjItems.map((p) => ({
-                ...initialLpjState,
-                isLainnya: p.isLainnya,
-                namaItem: p.isLainnya ? null : { value: p.namaItem, label: p.namaItem },
-                jenisLain: p.isLainnya ? (p.jenisLain || 'Lainnya') : '',
-                biaya: String(p.biaya || ''),
-                jumlah: String(p.jumlah || '1'),
-                jumlahBiaya: Number(p.jumlahBiaya) || 0,
-                plat: p.plat || '',
-                keterangan: p.keterangan || ''
-            }))
-        }
-        return [initialLpjState]
-    })
+    const [lpj, setLpj] = useState([initialLpjState])
+    const [showNotaDraftModal, setShowNotaDraftModal] = useState(!!(prefillLpjItems && prefillLpjItems.length > 0))
+
+    const buildLpjRowsFromPrefill = (items) => items.map((p) => ({
+        ...initialLpjState,
+        isLainnya: p.isLainnya,
+        namaItem: p.isLainnya ? null : { value: p.namaItem, label: p.namaItem },
+        jenisLain: p.isLainnya ? (p.jenisLain || 'Lainnya') : '',
+        biaya: String(p.biaya || ''),
+        jumlah: String(p.jumlah || '1'),
+        jumlahBiaya: Number(p.jumlahBiaya) || 0,
+        plat: p.plat || '',
+        keterangan: p.keterangan || ''
+    }))
+
+    const handleMuatNotaDraft = () => {
+        setLpj(buildLpjRowsFromPrefill(prefillLpjItems))
+        setShowNotaDraftModal(false)
+    }
+
+    const handleLewatiNotaDraft = () => setShowNotaDraftModal(false)
     const [nomorBS, setNomorBS] = useState(location.state?.nomorBS || '')
     // Bagian BB: lihat catatan sama di FormLpjUmum.jsx -- dropdown BS asli
     // milik user, bukan kolom teks bebas yang rawan typo.
@@ -1151,6 +1161,17 @@ const FormLpjMarketing = () => {
     
     return (
         <div className="container mx-auto py-10 md:py-8">
+            {/* Bagian CG: lihat catatan sama di FormLpjUmum.jsx. */}
+            <Modal
+                showModal={showNotaDraftModal}
+                title="Muat Draft dari Catat Nota?"
+                message={`Ditemukan ${prefillLpjItems?.length || 0} nota yang sudah dicatat untuk BS ini. Muat sebagai baris item LPJ sekarang?`}
+                onClose={handleLewatiNotaDraft}
+                onConfirm={handleMuatNotaDraft}
+                cancelText="Lewati"
+                confirmText="Muat Draft"
+            />
+
             <h2 className="text-xl font-medium mb-4 dark:text-gray-100">
                 Tambah <span className="font-bold">LPJ Bon Sementara Marketing/Operasional</span>
             </h2>

@@ -3387,3 +3387,36 @@ User minta audit bug/error menyeluruh sebelum lanjut dengan temuan detail mereka
 - [ ] Tes manual: catat nota LPJ untuk suatu BS, buka Detail BS BS itu, konfirmasi banner "nota sudah tercatat" muncul & "Buat Laporan" ter-prefill
 - [ ] Tes manual: klik "Transferred" di BsTable.jsx, konfirmasi icon mail/reminder langsung hilang
 - [ ] Tes manual: cek Dashboard, konfirmasi daftar "Rincian BS Bulan Ini"/"Rincian RBS Bulan Ini" muncul dengan sisa dana & status yang masuk akal per item
+
+---
+
+# BAGIAN CG — Modal Muat Draft Nota, Bug Nomor BS Berubah Saat Edit, & Rapikan Card Mobile (2026-11-03)
+
+## 95.1 Laporan User
+
+1. "Apakah catat nota akan tercatat ke draftnya juga?" -- user bingung soal hubungan antara draft Catat Nota dan mekanisme "Save Draft"/"Load Draft" yang sudah ada di form LPJ.
+2. Minta: begitu klik "Buat Laporan" dan ada nota tercatat, harus langsung muncul MODAL konfirmasi "load draft dari Catat Nota", bukan auto-fill diam-diam seperti sebelumnya.
+3. "Saat saya melakukan edit dari admin saya mendapatkan ada perubahan no bs pada saat menampilkan detail BS" -- nomor BS berubah tiba-tiba setelah admin mengedit pengajuan.
+4. Card ringkasan Dashboard perlu dirapikan, khususnya di mobile -- angka sampai keluar dari batas card.
+
+## 95.2 Investigasi & Perbaikan
+
+**Poin 1 & 2 -- relasi dua sistem "draft" yang berbeda.** Ditemukan ada DUA sistem draft yang terpisah total: (a) koleksi `drafts` + hook `useFormDraft` (SUDAH ADA sebelum Catat Nota, auto-save isi form LPJ yang belum disubmit, dengan tombol "Save Draft"/"Load Draft" manual) dan (b) koleksi `notaDraft` (Catat Nota, BARU). Ditemukan KONFLIK NYATA: `FormLpjUmum.jsx` punya `useEffect` yang AUTO-LOAD draft lama (a) begitu `hasDraft` true untuk nomorBS yang sama -- efek ini jalan di belakang layar dan BISA MENIMPA prefill dari Catat Nota tanpa user sadari, kalau kebetulan ada draft form lama yang belum sempat disubmit untuk BS yang sama. Diperbaiki sekaligus memenuhi poin 2: prefill dari Catat Nota sekarang via MODAL konfirmasi eksplisit ("Muat Draft dari Catat Nota?" / "Lewati"), dan auto-load draft lama (a) di-skip total kalau modal ini sedang ditawarkan -- user yang memutuskan, bukan dua sistem yang diam-diam rebutan.
+
+**Poin 3 -- bug nyata ditemukan di `FormBs.jsx`.** `handleUnitChange` (dipanggil setiap dropdown "Unit Bisnis" berubah) meng-generate nomor BS "preview" (baca counter TANPA increment) dan menimpa `nomorBS` SEMUA item di form. Untuk pengajuan BARU ini aman -- preview selalu dibuang & diganti nomor FINAL yang digenerate ulang di dalam `runTransaction` saat submit (komentar di kode sudah menjelaskan ini). TAPI mode EDIT tidak punya langkah regenerasi itu -- `updateDoc` mengirim `bonSementara` apa adanya dari state, jadi preview yang seharusnya sementara malah ikut tersimpan PERMANEN begitu dropdown Unit Bisnis tersentuh selama edit (termasuk re-select unit yang sama). Diperbaiki: `handleUnitChange` sekarang langsung return di mode edit (cuma update `selectedUnit`, tidak menyentuh `nomorBS` sama sekali) -- kalau admin memang perlu mengubah nomor BS, field "Nomor BS" tetap bisa diedit manual seperti biasa.
+
+**Poin 4 -- `DashboardSummary.jsx`.** Dua sumber overflow yang ketemu bersamaan: grid item tidak diberi `min-w-0` (default-nya ikut lebar konten, bukan ikut lebar kolom grid), dan `text-2xl` untuk nominal Rupiah yang panjang kepanjangan untuk kolom selebar itu di layar kecil. Diperbaiki: `min-w-0` ditambahkan ke semua card, ukuran font nominal dibuat responsif (`text-lg` di mobile, `text-2xl` di layar lebih besar ke atas), `break-words` sebagai jaring pengaman.
+
+## 95.3 Task Development — Bagian CG
+
+- [x] `src/components/FormLpjUmum.jsx`/`FormLpjMarketing.jsx`: modal konfirmasi "Muat Draft dari Catat Nota", auto-load draft lama di-skip kalau modal ini ditawarkan
+- [x] `src/components/FormBs.jsx`: `handleUnitChange` tidak lagi menimpa nomorBS di mode edit
+- [x] `src/components/DashboardSummary.jsx`: `min-w-0` + font responsif + `break-words` di semua card
+- [x] `CI=true npx eslint` (semua file terkait) -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC/CD/CE/CF yang juga belum ter-deploy)
+- [ ] Tes manual: klik "Buat Laporan" dari BS yang punya nota Catat Nota, konfirmasi modal muncul duluan (bukan auto-fill diam-diam), coba tombol "Muat Draft" dan "Lewati" keduanya
+- [ ] Tes manual (kalau ada draft form lama untuk BS yang sama): konfirmasi draft lama TIDAK auto-load menimpa pilihan modal
+- [ ] Tes manual: edit BS sebagai admin tanpa mengubah Unit Bisnis, konfirmasi nomor BS tidak berubah
+- [ ] Tes manual: buka Dashboard di HP/viewport kecil, konfirmasi semua angka di card tidak lagi keluar dari batasnya

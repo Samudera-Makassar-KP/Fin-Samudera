@@ -432,6 +432,22 @@ const FormBs = () => {
     const handleUnitChange = async (selectedOption) => {
         setSelectedUnit(selectedOption);
 
+        // Bagian CG: koreksi dari user -- nomor BS berubah tiba-tiba setiap
+        // kali admin mengedit pengajuan. Akar masalahnya: nomor yang
+        // digenerate di sini CUMA PREVIEW (baca counter TANPA increment,
+        // lihat catatan di handleSubmit bagian "LOGIKA JIKA BIKIN BARU") --
+        // untuk pengajuan BARU, preview ini selalu dibuang & diganti nomor
+        // FINAL yang digenerate ulang di dalam runTransaction saat submit,
+        // jadi aman. TAPI mode EDIT tidak punya langkah regenerasi itu --
+        // updateDoc mengirim `bonSementara` apa adanya dari state ini, jadi
+        // preview yang seharusnya sementara malah ikut tersimpan PERMANEN
+        // sebagai nomor BS baru, menimpa nomor asli, begitu dropdown Unit
+        // Bisnis ini tersentuh (termasuk re-select unit yang sama).
+        // Nomor BS yang sudah ada tidak boleh ikut berubah hanya karena
+        // field lain diedit -- kalau admin memang perlu mengganti nomor BS
+        // satu per satu, field "Nomor BS" di bawah tetap bisa diedit manual.
+        if (isEditMode) return;
+
         if (!selectedOption) {
             setBonSementara(prev => prev.map(item => ({ ...item, nomorBS: '' })));
             return;
