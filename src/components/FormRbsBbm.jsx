@@ -48,7 +48,11 @@ const RbsBbmForm = () => {
         tanggal: '',
         isLainnya: false,
         jenisLain: '',
-        tanggalPengajuan: todayDate
+        tanggalPengajuan: todayDate,
+        // Bagian CO: titipan per NOTA (bukan per pengajuan) -- lihat catatan
+        // di DashboardSummary.jsx (rbsNonTitipanAmount).
+        isTitipan: false,
+        titipanUntuk: ''
     }
 
     // Bagian CC: baris item bisa pre-filled dari "Catat Nota" -- lihat
@@ -84,13 +88,6 @@ const RbsBbmForm = () => {
     const [attachmentFiles, setAttachmentFiles] = useState([])
 
     const [selectedUnit, setSelectedUnit] = useState(null)
-    // Bagian CN: RBS titipan untuk orang lain (mis. pimpinan) -- begitu cair,
-    // uangnya langsung diteruskan, bukan nyangkut jadi uang pribadi pengaju.
-    // Dikecualikan dari Saldo Sistem & Dana Talangan di Dashboard (lihat
-    // DashboardSummary.jsx) supaya tidak bikin Selisih Bank vs Sistem salah
-    // terbaca seolah uang pribadi, padahal cuma transit.
-    const [isTitipan, setIsTitipan] = useState(false)
-    const [titipanUntuk, setTitipanUntuk] = useState('')
     const [userUnitOptions, setUserUnitOptions] = useState([])
     const [isAdmin, setIsAdmin] = useState(false)
     const [isSuperAdmin, setIsSuperAdmin] = useState(false)
@@ -571,8 +568,6 @@ const RbsBbmForm = () => {
                         : item.jenis,
             }));
             setReimbursements(formattedReimbursements);
-            setIsTitipan(!!editData.isTitipan);
-            setTitipanUntuk(editData.titipanUntuk || '');
 
             // 2. Paksa set data user pengaju (Gunakan setTimeout agar tidak tertimpa data login)
             setTimeout(() => {
@@ -716,12 +711,13 @@ const RbsBbmForm = () => {
                     liter: Number(item.liter) || 0,
                     tanggal: item.tanggal,
                     isLainnya: item.isLainnya,
-                    jenis: item.isLainnya ? item.jenisLain : item.jenis.value
+                    jenis: item.isLainnya ? item.jenisLain : item.jenis.value,
+                    // Bagian CO: per nota, bukan per pengajuan.
+                    isTitipan: !!item.isTitipan,
+                    titipanUntuk: item.isTitipan ? (item.titipanUntuk || '').trim() : ''
                 })),
                 displayId: displayId,
                 kategori: 'BBM',
-                isTitipan,
-                titipanUntuk: isTitipan ? titipanUntuk.trim() : '',
                 status: 'Diajukan',
                 approvedByReviewer1: false,
                 approvedByReviewer2: false,
@@ -766,8 +762,6 @@ const RbsBbmForm = () => {
                     user: reimbursementData.user,
                     reimbursements: reimbursementData.reimbursements,
                     totalBiaya: reimbursementData.totalBiaya,
-                    isTitipan: reimbursementData.isTitipan,
-                    titipanUntuk: reimbursementData.titipanUntuk,
                     statusHistory: arrayUnion({
                         status: `Data Diubah oleh ${editorRole}`,
                         timestamp: new Date().toISOString(),
@@ -1040,29 +1034,6 @@ const RbsBbmForm = () => {
                             menuPosition="absolute"
                         />
                     </div>
-
-                    <div className="xl:col-span-2">
-                        <label className="flex items-center gap-2 cursor-pointer w-fit">
-                            <input
-                                type="checkbox"
-                                checked={isTitipan}
-                                onChange={(e) => setIsTitipan(e.target.checked)}
-                                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600"
-                            />
-                            <span className="text-gray-700 dark:text-gray-300 font-medium">
-                                Dana ini titipan untuk orang lain (bukan dipakai sendiri)
-                            </span>
-                        </label>
-                        {isTitipan && (
-                            <input
-                                type="text"
-                                placeholder="Untuk siapa? (mis. nama pimpinan)"
-                                value={titipanUntuk}
-                                onChange={(e) => setTitipanUntuk(e.target.value)}
-                                className="mt-2 w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
-                            />
-                        )}
-                    </div>
                 </div>
 
                 <hr className="border-gray-300 dark:border-gray-600 my-6" />
@@ -1225,6 +1196,28 @@ const RbsBbmForm = () => {
                                 </button>
                             </div>
                         </div>
+
+                        {/* Bagian CO: titipan per NOTA (bukan per pengajuan). */}
+                        <label className="flex items-center gap-2 cursor-pointer w-fit mb-2">
+                            <input
+                                type="checkbox"
+                                checked={!!reimbursement.isTitipan}
+                                onChange={(e) => handleInputChange(index, 'isTitipan', e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                Nota ini titipan untuk orang lain (bukan dipakai sendiri)
+                            </span>
+                        </label>
+                        {reimbursement.isTitipan && (
+                            <input
+                                type="text"
+                                placeholder="Untuk siapa? (mis. nama pimpinan)"
+                                value={reimbursement.titipanUntuk || ''}
+                                onChange={(e) => handleInputChange(index, 'titipanUntuk', e.target.value)}
+                                className="mb-2 w-full h-10 px-4 py-2 border dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:border-blue-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                            />
+                        )}
                     </div>
                 ))}
 

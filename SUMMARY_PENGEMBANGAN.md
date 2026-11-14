@@ -3608,3 +3608,22 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [ ] Tes manual: submit RBS dengan centang "titipan untuk orang lain", tandai Transferred -> konfirmasi TIDAK ikut menambah Saldo Sistem/"RBS/BS Sudah Masuk", tapi tetap muncul di "Jumlah RBS bulan ini" dengan catatan titipan
 - [ ] Tes manual: klik kartu "Jumlah BS bulan ini"/"Jumlah RBS bulan ini"/"RBS/BS Sudah Masuk"/"Menunggu Konfirmasi", konfirmasi modal muncul dan tiap baris bisa diklik ke halaman detail yang benar
 - [ ] Tes manual: BS dengan sisa lebih yang SUDAH dikembalikan (all-period), konfirmasi caption "BS Belum Settle" menampilkan keterangan "(Rp X sudah dikembalikan)" yang benar
+
+## 103.3 Task Development — Bagian CO
+
+**Konteks:** User koreksi hasil Bagian CN lewat screenshot form RBS: checkbox "titipan" yang dipasang di LEVEL PENGAJUAN (1 per form) tidak cukup -- contoh nyata dari user, 1 pengajuan RBS bisa berisi 3 nota sekaligus yang titipan untuk orang BERBEDA (2 nota RBS Toll Pak Wahyu, 1 nota RBS BBM Pak Joko), dan bisa saja dicampur dengan nota milik sendiri dalam pengajuan yang sama. Checkbox tunggal per form tidak bisa merepresentasikan campuran seperti itu.
+
+**Perbaikan:** Pindahkan "titipan" dari level dokumen RBS ke level NOTA/baris (per item di array `reimbursements[]`), supaya 1 pengajuan RBS bisa punya kombinasi nota titipan (untuk orang berbeda-beda) dan nota milik sendiri sekaligus.
+
+- **`FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`**: checkbox "Nota ini titipan untuk orang lain" + field "Untuk siapa" dipindah dari bawah Unit Bisnis (sekali per form) ke BAWAH TIAP BARIS nota (sekali per item), pakai `handleInputChange(index, 'isTitipan'/'titipanUntuk', value)` yang sudah ada (field generik per-row, sama pola dengan `isLainnya`/`jenisLain`). Field `isTitipan`/`titipanUntuk` dihapus dari level dokumen, dipindah ke tiap elemen `reimbursements[]` saat disimpan. `firestore.rules`: validasi level-dokumen yang sempat ditambah Bagian CN dihapus lagi (tidak relevan lagi -- field sekarang nested di dalam list item yang memang tidak divalidasi deep, sama seperti field item lain `isLainnya`/`jenis`/`biaya`).
+- **`DashboardSummary.jsx`**: `isTitipanRbs(item)` (whole-document boolean) diganti `rbsNonTitipanAmount(rbs)`/`rbsTitipanAmount(rbs)` -- menjumlahkan `biaya` HANYA dari item yang `isTitipan`/bukan, bukan cek flag di level dokumen. Semua tempat yang tadinya exclude RBS titipan (Saldo Sistem, "RBS/BS Sudah Masuk", "Menunggu Konfirmasi", "Dana Talangan Belum Diganti") sekarang pakai porsi non-titipan saja -- RBS campuran (sebagian titipan, sebagian sendiri) tetap ikut terhitung untuk porsi miliknya sendiri, bukan dikecualikan total seperti sebelumnya. Modal rincian RBS menampilkan keterangan "Sebagian titipan (Rp X)" kalau campuran, atau "Semua nota titipan untuk orang lain" kalau seluruhnya titipan.
+
+**Task Development:**
+- [x] Pindah checkbox "titipan" dari per-pengajuan ke per-nota di 3 form RBS
+- [x] `DashboardSummary.jsx`: `rbsNonTitipanAmount`/`rbsTitipanAmount` menggantikan `isTitipanRbs`
+- [x] `firestore.rules`: hapus validasi level-dokumen yang sudah tidak relevan
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore.rules -- menumpuk dengan Bagian CC-CN)
+- [ ] Tes manual: submit 1 RBS dengan 3 nota -- 2 nota dicentang titipan (nama berbeda-beda), 1 nota tidak -- setelah Transferred, konfirmasi cuma nominal nota yang TIDAK titipan yang masuk Saldo Sistem/"RBS/BS Sudah Masuk"

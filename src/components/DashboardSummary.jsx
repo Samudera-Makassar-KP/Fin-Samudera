@@ -29,11 +29,17 @@ const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase(
 // newBsBreakdown (sudah di-flatten per item sejak Bagian CE/CF).
 const sumBonSementaraItems = (bs) =>
     (bs.bonSementara || []).reduce((sum, it) => sum + (Number(it.jumlahBS) || 0), 0)
-// Bagian CN: RBS titipan untuk orang lain (mis. pimpinan) -- begitu cair,
-// uangnya langsung diteruskan, bukan nyangkut jadi uang pribadi pengaju.
-// Dikecualikan dari Saldo Sistem/Dana Talangan supaya tidak bikin Selisih
-// Bank vs Sistem salah terbaca seolah uang pribadi, padahal cuma transit.
-const isTitipanRbs = (item) => item.isTitipan === true
+// Bagian CO: RBS titipan untuk orang lain (mis. pimpinan/rekan) -- begitu
+// cair, uangnya langsung diteruskan, bukan nyangkut jadi uang pribadi
+// pengaju. Ditandai PER NOTA (per item di `reimbursements[]`), bukan per
+// dokumen RBS, karena 1 pengajuan bisa berisi campuran nota titipan & nota
+// milik sendiri sekaligus (lihat FormRbsUmum/Operasional/Bbm.jsx). Porsi
+// titipan dikecualikan dari Saldo Sistem/Dana Talangan di Dashboard supaya
+// tidak bikin Selisih Bank vs Sistem salah terbaca seolah uang pribadi.
+const rbsNonTitipanAmount = (rbs) =>
+    (rbs.reimbursements || []).reduce((sum, it) => sum + (it.isTitipan ? 0 : (Number(it.biaya) || 0)), 0)
+const rbsTitipanAmount = (rbs) =>
+    (rbs.reimbursements || []).reduce((sum, it) => sum + (it.isTitipan ? (Number(it.biaya) || 0) : 0), 0)
 const formatDateShort = (iso) => {
     if (!iso) return '-'
     return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -65,8 +71,8 @@ const DashboardSummary = ({ uid, role }) => {
         jumlahBsDiapprove: 0,
         nominalBsDiapprove: 0,
         // Bagian CB: rekonsiliasi dana bulan ini (sebelumnya di Mutasi Dana)
-        // Bagian CN: dipecah per BS/RBS (bukan 1 angka gabungan) + RBS titipan
-        // dikecualikan -- lihat isTitipanRbs.
+        // Bagian CN/CO: dipecah per BS/RBS (bukan 1 angka gabungan) + porsi
+        // titipan per nota dikecualikan -- lihat rbsNonTitipanAmount.
         rbsBsMasukNominal: 0,
         rbsBsMasukCount: 0,
         bsMasukNominal: 0,
@@ -236,13 +242,11 @@ const DashboardSummary = ({ uid, role }) => {
                     (sum, item) => sum + (item.totalBiaya || 0),
                     0
                 )
-                // Bagian CN: nominal RBS titipan bulan ini -- sudah ikut
-                // "Jumlah RBS bulan ini" di atas (tetap dihitung sebagai
+                // Bagian CO: nominal porsi titipan dari RBS bulan ini -- sudah
+                // ikut "Jumlah RBS bulan ini" di atas (tetap dihitung sebagai
                 // aktivitas pengajuan), tapi TIDAK ikut Saldo Sistem/Dana
                 // Talangan di bawah -- dicatat terpisah untuk keterangan.
-                const rbsTitipanThisMonthNominal = rbsThisMonth
-                    .filter(isTitipanRbs)
-                    .reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const rbsTitipanThisMonthNominal = rbsThisMonth.reduce((sum, item) => sum + rbsTitipanAmount(item), 0)
 
                 // Dari BS bulan ini, ambil yang sudah Disetujui (uang sudah cair)
                 const bsDisetujui = bsThisMonth.filter((item) => item.status === 'Disetujui')
@@ -369,7 +373,11 @@ const DashboardSummary = ({ uid, role }) => {
                         displayId: item.displayId,
                         totalBiaya: Number(item.totalBiaya) || 0,
                         transferred: !!item.transferred,
-                        isTitipan: isTitipanRbs(item),
+                        // Bagian CO: titipan per nota (bukan whole-doc) -- simpan
+                        // porsi non-titipan/titipan supaya kartu rekonsiliasi &
+                        // Dana Talangan cuma menghitung porsi milik pengaju sendiri.
+                        nonTitipanAmount: rbsNonTitipanAmount(item),
+                        titipanAmount: rbsTitipanAmount(item),
                         tanggal: item.tanggalPengajuan
                     }))
 
@@ -484,14 +492,18 @@ const DashboardSummary = ({ uid, role }) => {
                 //    "Transferred" (ditandai false eksplisit di
                 //    bsTransferredByItemId -- bsId yang tidak dikenal/BS sudah
                 //    dihapus tidak ikut dihitung supaya tidak salah hitung).
-                const rbsBelumCairAll = rbsAll.filter(
-                    (item) => !HIDDEN_LPJ_STATUSES.includes(item.status) && !item.transferred && !isTitipanRbs(item)
-                )
-                const talanganRbsBelumCair = rbsBelumCairAll.map((item) => ({
+                // Bagian CO: porsi titipan (per nota) dikecualikan di sini --
+                // RBS yang SEMUA notanya titipan (nonTitipanAmount == 0) tidak
+                // ikut sama sekali; yang campuran cuma menghitung porsi sendiri.
+                const rbsBelumCairAll = rbsAll
+                    .filter((item) => !HIDDEN_LPJ_STATUSES.includes(item.status) && !item.transferred)
+                    .map((item) => ({ item, nonTitipanAmount: rbsNonTitipanAmount(item) }))
+                    .filter(({ nonTitipanAmount }) => nonTitipanAmount > 0)
+                const talanganRbsBelumCair = rbsBelumCairAll.map(({ item, nonTitipanAmount }) => ({
                     key: `rbs-${item.id}`,
                     title: item.displayId,
-                    sub: 'RBS sudah diajukan, belum cair',
-                    amount: Number(item.totalBiaya) || 0,
+                    sub: rbsTitipanAmount(item) > 0 ? 'RBS sudah diajukan, belum cair (sebagian titipan)' : 'RBS sudah diajukan, belum cair',
+                    amount: nonTitipanAmount,
                     tanggal: item.tanggalPengajuan,
                     linkTo: `/reimbursement/${item.id}`
                 }))
@@ -537,15 +549,17 @@ const DashboardSummary = ({ uid, role }) => {
                 // belum selesai sekarang punya kartu & daftar sendiri di atas
                 // (semua periode), supaya tidak tercampur dalam 1 angka yang
                 // membingungkan arah dananya.
-                // Bagian CN: dipisah tegas jadi BS vs RBS (bukan 1 angka gabungan
-                // lagi, permintaan user) + RBS titipan dikecualikan (lihat
-                // isTitipanRbs di atas) supaya tidak bikin Saldo Sistem naik
-                // padahal uangnya bukan untuk pengaju sendiri.
+                // Bagian CN/CO: dipisah tegas jadi BS vs RBS (bukan 1 angka
+                // gabungan lagi, permintaan user) + porsi titipan per nota
+                // dikecualikan (lihat rbsNonTitipanAmount di atas) supaya tidak
+                // bikin Saldo Sistem naik padahal uangnya bukan untuk pengaju
+                // sendiri. RBS yang SEMUA notanya titipan otomatis ikut keluar
+                // (nonTitipanAmount == 0 -> difilter).
                 const bsTransferredThisMonth = bsDisetujui.filter((item) => item.transferred)
                 const rbsDisetujuiThisMonth = rbsThisMonth.filter((item) => item.status === 'Disetujui')
-                const rbsTransferredThisMonth = rbsDisetujuiThisMonth.filter((item) => item.transferred && !isTitipanRbs(item))
+                const rbsTransferredThisMonth = rbsDisetujuiThisMonth.filter((item) => item.transferred && rbsNonTitipanAmount(item) > 0)
                 const bsMasukNominal = bsTransferredThisMonth.reduce((sum, item) => sum + sumBonSementaraItems(item), 0)
-                const rbsMasukNominal = rbsTransferredThisMonth.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const rbsMasukNominal = rbsTransferredThisMonth.reduce((sum, item) => sum + rbsNonTitipanAmount(item), 0)
                 const rbsBsMasukNominal = bsMasukNominal + rbsMasukNominal
                 const rbsBsMasukCount = bsTransferredThisMonth.length + rbsTransferredThisMonth.length
 
@@ -557,34 +571,37 @@ const DashboardSummary = ({ uid, role }) => {
                 )
 
                 const bsBelumTransfer = bsDisetujui.filter((item) => !item.transferred)
-                const rbsBelumTransfer = rbsDisetujuiThisMonth.filter((item) => !item.transferred && !isTitipanRbs(item))
+                const rbsBelumTransfer = rbsDisetujuiThisMonth.filter((item) => !item.transferred && rbsNonTitipanAmount(item) > 0)
                 // Bagian CK: sisaKurang/sisaLebih belum dihitung di sini lagi --
                 // sudah punya kartu & daftar sendiri (semua periode) di atas.
                 const bsPendingNominal = bsBelumTransfer.reduce((sum, item) => sum + sumBonSementaraItems(item), 0)
-                const rbsPendingNominal = rbsBelumTransfer.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const rbsPendingNominal = rbsBelumTransfer.reduce((sum, item) => sum + rbsNonTitipanAmount(item), 0)
                 const pendingNominal = bsPendingNominal + rbsPendingNominal
                 const pendingCount = bsBelumTransfer.length + rbsBelumTransfer.length
 
-                // Bagian CN: daftar isi untuk modal "RBS/BS Sudah Masuk" &
+                // Bagian CN/CO: daftar isi untuk modal "RBS/BS Sudah Masuk" &
                 // "Menunggu Konfirmasi" -- dibangun dari breakdown BS/RBS yang
                 // sudah ada (newBsBreakdown/newRbsBreakdown) supaya tidak perlu
-                // query ulang, RBS titipan ikut dikecualikan di sini juga.
+                // query ulang. Nominal RBS yang dipakai di sini SELALU porsi
+                // non-titipan saja (`nonTitipanAmount`), bukan `totalBiaya`.
                 const toBsModalItem = (b) => ({
                     key: `bs-${b.key}`, title: b.nomorBS, sub: 'BS', amount: b.jumlahBS,
                     tanggal: b.tanggal, linkTo: `/bon-sementara/${b.docId}`
                 })
                 const toRbsModalItem = (r) => ({
-                    key: `rbs-${r.key}`, title: r.displayId, sub: 'RBS', amount: r.totalBiaya,
+                    key: `rbs-${r.key}`, title: r.displayId,
+                    sub: r.titipanAmount > 0 ? 'RBS (sebagian titipan)' : 'RBS',
+                    amount: r.nonTitipanAmount,
                     tanggal: r.tanggal, linkTo: `/reimbursement/${r.docId}`
                 })
                 const byTanggalDesc = (a, b) => new Date(b.tanggal || 0) - new Date(a.tanggal || 0)
                 const newSudahMasukList = [
                     ...newBsBreakdown.filter((b) => b.transferred).map(toBsModalItem),
-                    ...newRbsBreakdown.filter((r) => r.transferred && !r.isTitipan).map(toRbsModalItem)
+                    ...newRbsBreakdown.filter((r) => r.transferred && r.nonTitipanAmount > 0).map(toRbsModalItem)
                 ].sort(byTanggalDesc)
                 const newMenungguKonfirmasiList = [
                     ...newBsBreakdown.filter((b) => !b.transferred).map(toBsModalItem),
-                    ...newRbsBreakdown.filter((r) => !r.transferred && !r.isTitipan).map(toRbsModalItem)
+                    ...newRbsBreakdown.filter((r) => !r.transferred && r.nonTitipanAmount > 0).map(toRbsModalItem)
                 ].sort(byTanggalDesc)
 
                 // Saldo Sistem = uang masuk terkonfirmasi (BS/RBS Transferred + sisaKurang
@@ -760,7 +777,9 @@ const DashboardSummary = ({ uid, role }) => {
     const rincianRbsList = rbsBreakdown.map((r) => ({
         key: r.key,
         title: r.displayId,
-        sub: r.isTitipan ? 'Titipan untuk orang lain' : null,
+        sub: r.titipanAmount > 0
+            ? (r.nonTitipanAmount > 0 ? `Sebagian titipan (${formatRupiah(r.titipanAmount)})` : 'Semua nota titipan untuk orang lain')
+            : null,
         amount: r.totalBiaya,
         amountSub: r.transferred ? 'Sudah Masuk' : 'Belum Masuk',
         amountSubClass: r.transferred ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400',

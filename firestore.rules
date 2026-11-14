@@ -148,12 +148,7 @@ service cloud.firestore {
         // membuat evaluasi rule ERROR (dianggap deny), bukan mengembalikan null.
         && validApproverList(data.user.get('validator', null))
         && validApproverList(data.user.get('reviewer1', null))
-        && validApproverList(data.user.get('reviewer2', null))
-        // Bagian CN: `isTitipan`/`titipanUntuk` cuma ada di RBS (reimbursement) --
-        // untuk BS/LPJ field ini memang tidak pernah dikirim (null), validasi
-        // tetap jalan karena null diizinkan eksplisit di kedua baris di bawah.
-        && (data.get('isTitipan', null) == null || data.get('isTitipan', null) is bool)
-        && validOptionalString(data.get('titipanUntuk', null), 120);
+        && validApproverList(data.user.get('reviewer2', null));
     }
 
     function keepsWorkflowIdentity() {
