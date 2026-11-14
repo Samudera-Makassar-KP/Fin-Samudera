@@ -3578,3 +3578,33 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [ ] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CL)
 - [ ] Tes manual: catat RBS di Catat Nota tapi belum disubmit -> muncul di "Dana Talangan Belum Diganti"; submit RBS -> masih muncul (belum Transferred); tandai Transferred -> hilang dari daftar
 - [ ] Tes manual: catat nota LPJ untuk BS yang belum ditandai Transferred -> muncul di "Dana Talangan Belum Diganti"; setelah BS ditandai Transferred -> hilang
+
+## 102.3 Task Development — Bagian CN
+
+**Konteks:** User minta "bedah lagi" Dashboard hasil Bagian CM -- 4 keluhan konkret: (1) RBS yang diajukan BUKAN untuk diri sendiri (mis. RBS atas nama pimpinan) bikin Saldo Sistem naik begitu cair padahal uangnya langsung diteruskan, bukan uang pribadi -- Selisih Bank vs Sistem jadi salah baca; (2) BS dan RBS yang sudah/belum masuk harus dipisah tegas, bukan 1 angka gabungan; (3) terlalu banyak kartu -- kartu "sudah dibayar/dikembalikan" sebaiknya jadi keterangan di kartu "belum dibayar" yang sama, bukan kartu terpisah; (4) seksi "Rincian Bulan Ini" (selalu terbuka, panjang) ganggu -- sebaiknya jadi modal; LPJ bulan sebelumnya yang sudah Disetujui tidak perlu ditampilkan lagi, cukup yang masih menunggu approval; Saldo Sistem & Selisih perlu tampilkan sumber angkanya; "Menunggu Konfirmasi" & kartu lain yang punya modal harus bisa diklik ke halaman detail masing-masing item.
+
+**Keputusan (AskUserQuestion):** Untuk poin RBS titipan, user pilih opsi "tambah penanda 'bukan untuk saya'" (bukan sekadar catatan/skip) -- fitur baru, bukan cuma penjelasan.
+
+**Implementasi:**
+- **RBS "titipan" (`FormRbsUmum.jsx`/`FormRbsOperasional.jsx`/`FormRbsBbm.jsx`)**: checkbox baru "Dana ini titipan untuk orang lain (bukan dipakai sendiri)" + field teks opsional "Untuk siapa" di Row 5 (sebelah Unit Bisnis). Tersimpan sebagai `isTitipan`/`titipanUntuk` di level dokumen `reimbursement` (bukan di dalam `user`), ikut di create & edit mode. `firestore.rules`: `validWorkflowCreate()` divalidasi ringan (`isTitipan` opsional boolean, `titipanUntuk` opsional string max 120) -- tidak perlu `hasOnly` baru karena collection `reimbursement`/`lpj`/`bonSementara` memang tidak membatasi field tambahan.
+- **`src/components/DashboardSummary.jsx`** (redesign besar):
+  - Helper `isTitipanRbs(item)` -- RBS titipan DIKECUALIKAN dari Saldo Sistem (`rbsBsMasukNominal`/`pendingNominal`) dan Dana Talangan (`rbsBelumCairAll`), tetap dihitung di "Jumlah RBS bulan ini" (aktivitas) dengan catatan nominal titipan terpisah di caption.
+  - "RBS/BS Sudah Masuk" & "Menunggu Konfirmasi" dipecah jadi `bsMasukNominal`/`rbsMasukNominal` dan `bsPendingNominal`/`rbsPendingNominal`, caption tampilkan "BS: Rp x · RBS: Rp y" -- kedua kartu jadi clickable (modal daftar item, dibangun dari `newBsBreakdown`/`newRbsBreakdown` yang sudah ada).
+  - Kartu "LPJ Dikembalikan/Dibayar" (terpisah, bulan ini) DIHAPUS -- nominalnya (`settleSudahNominal`/`kekuranganSudahNominal`, semua periode) jadi keterangan dalam kurung di kartu "BS Belum Settle"/"Kekurangan Belum Dibayar" yang sudah ada ("Rp X belum dikembalikan (Rp Y sudah dikembalikan)").
+  - Seksi "Rincian Bulan Ini" (full-width, selalu terbuka) DIHAPUS -- isinya pindah jadi modal kartu "Jumlah BS bulan ini"/"Jumlah RBS bulan ini" (klik untuk buka), dengan baris tambahan `extra`/`amountSub` di item modal supaya info status LPJ & sisa dana yang dulu ada di seksi lama tidak hilang.
+  - "LPJ dari Bulan Sebelumnya": item dengan status `'Disetujui'` difilter keluar dari tampilan (tapi tetap dihitung di exclude dari `lpjThisMonth` untuk Saldo Sistem, tidak berubah) -- hanya yang masih menunggu approval yang tampil, masing-masing jadi link ke `/lpj/:id`.
+  - Saldo Sistem: caption sekarang `(Masuk Rp x − Keluar Rp y)` + catatan nota Catat Nota. Selisih (Bank vs Sistem): caption sekarang `(Bank Rp x − Sistem Rp y)` + penjelasan arah seperti sebelumnya.
+  - Modal digeneralisasi total: `allModalCards` menggabung SEMUA kartu yang punya `key`+`list` dari 3 grup kartu (ringkasan/rekonsiliasi/tindak lanjut), satu komponen modal melayani semuanya. Tiap item modal yang punya `linkTo` (BS -> `/bon-sementara/:id`, RBS -> `/reimbursement/:id`, LPJ -> `/lpj/:id`, draft Catat Nota -> `/catat-nota`) dibungkus `<Link>` -- klik baris modal langsung pindah ke halaman detail.
+  - `renderCard()` jadi 1 fungsi render dipakai bareng untuk ketiga grid kartu (ringkasan/rekonsiliasi/tindak lanjut) -- sebelumnya 3 blok JSX hampir identik, sekarang 1 (dedup).
+
+**Task Development:**
+- [x] AskUserQuestion -- konfirmasi scope RBS titipan sebelum coding
+- [x] Checkbox "titipan" di 3 form RBS + `firestore.rules`
+- [x] Redesign `DashboardSummary.jsx` (pisah BS/RBS, konsolidasi kartu sudah/belum, modal-kan Rincian Bulan Ini, filter LPJ Bulan Sebelumnya, breakdown caption Saldo Sistem/Selisih, modal generik + link ke detail)
+- [x] `CI=true npx eslint` -- bersih
+- [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
+- [x] `CI=true npm run build` sukses
+- [ ] Deploy ke produksi (hosting + firestore.rules -- menumpuk dengan Bagian CC-CM)
+- [ ] Tes manual: submit RBS dengan centang "titipan untuk orang lain", tandai Transferred -> konfirmasi TIDAK ikut menambah Saldo Sistem/"RBS/BS Sudah Masuk", tapi tetap muncul di "Jumlah RBS bulan ini" dengan catatan titipan
+- [ ] Tes manual: klik kartu "Jumlah BS bulan ini"/"Jumlah RBS bulan ini"/"RBS/BS Sudah Masuk"/"Menunggu Konfirmasi", konfirmasi modal muncul dan tiap baris bisa diklik ke halaman detail yang benar
+- [ ] Tes manual: BS dengan sisa lebih yang SUDAH dikembalikan (all-period), konfirmasi caption "BS Belum Settle" menampilkan keterangan "(Rp X sudah dikembalikan)" yang benar

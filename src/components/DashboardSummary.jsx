@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../firebaseConfig'
 
@@ -28,6 +29,11 @@ const normalizeNomorBS = (value) => (value || '').toString().trim().toUpperCase(
 // newBsBreakdown (sudah di-flatten per item sejak Bagian CE/CF).
 const sumBonSementaraItems = (bs) =>
     (bs.bonSementara || []).reduce((sum, it) => sum + (Number(it.jumlahBS) || 0), 0)
+// Bagian CN: RBS titipan untuk orang lain (mis. pimpinan) -- begitu cair,
+// uangnya langsung diteruskan, bukan nyangkut jadi uang pribadi pengaju.
+// Dikecualikan dari Saldo Sistem/Dana Talangan supaya tidak bikin Selisih
+// Bank vs Sistem salah terbaca seolah uang pribadi, padahal cuma transit.
+const isTitipanRbs = (item) => item.isTitipan === true
 const formatDateShort = (iso) => {
     if (!iso) return '-'
     return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -59,13 +65,19 @@ const DashboardSummary = ({ uid, role }) => {
         jumlahBsDiapprove: 0,
         nominalBsDiapprove: 0,
         // Bagian CB: rekonsiliasi dana bulan ini (sebelumnya di Mutasi Dana)
+        // Bagian CN: dipecah per BS/RBS (bukan 1 angka gabungan) + RBS titipan
+        // dikecualikan -- lihat isTitipanRbs.
         rbsBsMasukNominal: 0,
         rbsBsMasukCount: 0,
-        lpjDikembalikanNominal: 0,
-        lpjDikembalikanCount: 0,
+        bsMasukNominal: 0,
+        rbsMasukNominal: 0,
         pendingNominal: 0,
         pendingCount: 0,
+        bsPendingNominal: 0,
+        rbsPendingNominal: 0,
         saldoSistem: 0,
+        saldoSistemMasuk: 0,
+        saldoSistemKeluar: 0,
         // Bagian CH: total nota Catat Nota (LPJ) yang sudah dicatat tapi
         // belum dirangkai jadi LPJ sungguhan, untuk BS bulan ini -- sudah
         // ikut dikurangi dari saldoSistem di atas, disimpan terpisah juga
@@ -74,11 +86,19 @@ const DashboardSummary = ({ uid, role }) => {
         pendingNotaLpjCount: 0,
         pendingNotaRbsNominal: 0,
         pendingNotaRbsCount: 0,
-        // Bagian CK: 2 arah dana yang berlawanan, semua periode
+        // Bagian CN: nominal RBS titipan bulan ini -- bukan uang pribadi,
+        // ditampilkan sebagai keterangan saja di kartu "Jumlah RBS bulan ini".
+        rbsTitipanThisMonthNominal: 0,
+        // Bagian CK: 2 arah dana yang berlawanan, semua periode. Bagian CN:
+        // *SudahNominal = lawan arahnya yang SUDAH selesai (semua periode),
+        // ditampilkan sebagai keterangan dalam kurung di kartu yang sama --
+        // menggantikan kartu "LPJ Dikembalikan/Dibayar" yang terpisah.
         belumSettleNominal: 0,
         belumSettleCount: 0,
+        settleSudahNominal: 0,
         belumBayarKekuranganNominal: 0,
         belumBayarKekuranganCount: 0,
+        kekuranganSudahNominal: 0,
         // Bagian CM: uang pribadi/talangan yang sudah dikeluarkan user untuk
         // RBS/BS tapi belum diganti kantor -- semua periode, lihat catatan di
         // perhitungannya (sekitar rbsBelumCairAll/notaDraftLpjBelumCair).
@@ -108,7 +128,15 @@ const DashboardSummary = ({ uid, role }) => {
     // yang belum dibayar kantor, dan nota LPJ yang dicatat untuk BS yang
     // sendiri belum "Transferred". Lihat perhitungannya di fetchData().
     const [danaTalanganList, setDanaTalanganList] = useState([])
-    const [activeModal, setActiveModal] = useState(null) // 'settle' | 'kekurangan' | 'talangan' | null
+    // Bagian CN: isi modal untuk kartu "RBS/BS Sudah Masuk" & "Menunggu
+    // Konfirmasi" -- dibangun dari breakdown BS/RBS bulan ini yang sama.
+    const [sudahMasukList, setSudahMasukList] = useState([])
+    const [menungguKonfirmasiList, setMenungguKonfirmasiList] = useState([])
+    // Bagian CN: satu state modal untuk SEMUA kartu yang punya daftar rincian
+    // (Jumlah BS/RBS, Sudah Masuk, Menunggu Konfirmasi, Perlu Ditindaklanjuti)
+    // -- lihat `allModalCards` di bawah, digabung dari beberapa sumber supaya
+    // satu komponen modal bisa melayani semuanya.
+    const [activeModal, setActiveModal] = useState(null)
     const [expandedSections, setExpandedSections] = useState(new Set())
     const toggleSection = (key) => setExpandedSections((prev) => {
         const next = new Set(prev)
@@ -208,6 +236,13 @@ const DashboardSummary = ({ uid, role }) => {
                     (sum, item) => sum + (item.totalBiaya || 0),
                     0
                 )
+                // Bagian CN: nominal RBS titipan bulan ini -- sudah ikut
+                // "Jumlah RBS bulan ini" di atas (tetap dihitung sebagai
+                // aktivitas pengajuan), tapi TIDAK ikut Saldo Sistem/Dana
+                // Talangan di bawah -- dicatat terpisah untuk keterangan.
+                const rbsTitipanThisMonthNominal = rbsThisMonth
+                    .filter(isTitipanRbs)
+                    .reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
 
                 // Dari BS bulan ini, ambil yang sudah Disetujui (uang sudah cair)
                 const bsDisetujui = bsThisMonth.filter((item) => item.status === 'Disetujui')
@@ -301,12 +336,14 @@ const DashboardSummary = ({ uid, role }) => {
                             .reduce((sum, n) => sum + (Number(n.jumlahBiaya) || 0), 0)
                         newBsBreakdown.push({
                             key: `${bs.id}-${it.nomorBS}`,
+                            docId: bs.id,
                             nomorBS: it.nomorBS,
                             jumlahBS,
                             transferred: !!bs.transferred,
                             lpjStatus: lpjStatusLabel,
                             pendingNota,
-                            sisa: jumlahBS - lpjTotalBiaya - pendingNota
+                            sisa: jumlahBS - lpjTotalBiaya - pendingNota,
+                            tanggal: bs.tanggalPengajuan
                         })
                     })
                 })
@@ -328,9 +365,12 @@ const DashboardSummary = ({ uid, role }) => {
                     .filter((item) => item.status === 'Disetujui')
                     .map((item) => ({
                         key: item.id,
+                        docId: item.id,
                         displayId: item.displayId,
                         totalBiaya: Number(item.totalBiaya) || 0,
-                        transferred: !!item.transferred
+                        transferred: !!item.transferred,
+                        isTitipan: isTitipanRbs(item),
+                        tanggal: item.tanggalPengajuan
                     }))
 
                 // Bagian CH: nota Catat Nota (LPJ) yang masuk hitungan sisa
@@ -374,8 +414,10 @@ const DashboardSummary = ({ uid, role }) => {
                     if (bsInfo && !isThisMonth(bsInfo.tanggalPengajuan)) {
                         newLpjBulanSebelumnya.push({
                             key: item.id,
+                            docId: item.id,
                             displayId: item.displayId,
                             nomorBS: item.nomorBS,
+                            status: item.status,
                             totalBiaya: Number(item.totalBiaya) || 0,
                             sisaLebih: Number(item.sisaLebih) || 0,
                             sisaKurang: Number(item.sisaKurang) || 0,
@@ -404,7 +446,8 @@ const DashboardSummary = ({ uid, role }) => {
                         title: item.displayId,
                         sub: `BS: ${item.nomorBS}`,
                         amount: Number(item.sisaLebih) || 0,
-                        tanggal: item.tanggalPengajuan
+                        tanggal: item.tanggalPengajuan,
+                        linkTo: `/lpj/${item.id}`
                     }))
                 const newBelumBayarKekuranganList = lpjActiveAll
                     .filter((item) => (Number(item.sisaKurang) || 0) > 0 && !item.sisaKurangDibayar)
@@ -413,9 +456,22 @@ const DashboardSummary = ({ uid, role }) => {
                         title: item.displayId,
                         sub: `BS: ${item.nomorBS}`,
                         amount: Number(item.sisaKurang) || 0,
-                        tanggal: item.tanggalPengajuan
+                        tanggal: item.tanggalPengajuan,
+                        linkTo: `/lpj/${item.id}`
                     }))
                 const belumBayarKekuranganNominalValue = newBelumBayarKekuranganList.reduce((sum, item) => sum + item.amount, 0)
+
+                // Bagian CN: lawan dari 2 daftar di atas -- SUDAH selesai (semua
+                // periode), dipakai sebagai keterangan "(Rp X sudah
+                // dikembalikan/dibayar)" di kartu yang sama, menggantikan kartu
+                // "LPJ Dikembalikan/Dibayar" yang terpisah supaya tampilan tidak
+                // terlalu ramai (permintaan user).
+                const settleSudahNominal = lpjActiveAll
+                    .filter((item) => (Number(item.sisaLebih) || 0) > 0 && (item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered'))
+                    .reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0)
+                const kekuranganSudahNominal = lpjActiveAll
+                    .filter((item) => (Number(item.sisaKurang) || 0) > 0 && item.sisaKurangDibayar)
+                    .reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0)
 
                 // Bagian CM: "Dana Talangan Belum Diganti" -- user keluar uang
                 // duluan (pribadi atau rekening belanja operasional) untuk
@@ -429,28 +485,31 @@ const DashboardSummary = ({ uid, role }) => {
                 //    bsTransferredByItemId -- bsId yang tidak dikenal/BS sudah
                 //    dihapus tidak ikut dihitung supaya tidak salah hitung).
                 const rbsBelumCairAll = rbsAll.filter(
-                    (item) => !HIDDEN_LPJ_STATUSES.includes(item.status) && !item.transferred
+                    (item) => !HIDDEN_LPJ_STATUSES.includes(item.status) && !item.transferred && !isTitipanRbs(item)
                 )
                 const talanganRbsBelumCair = rbsBelumCairAll.map((item) => ({
                     key: `rbs-${item.id}`,
                     title: item.displayId,
                     sub: 'RBS sudah diajukan, belum cair',
                     amount: Number(item.totalBiaya) || 0,
-                    tanggal: item.tanggalPengajuan
+                    tanggal: item.tanggalPengajuan,
+                    linkTo: `/reimbursement/${item.id}`
                 }))
                 const talanganDraftRbs = notaDraftRbs.map((n) => ({
                     key: `draft-rbs-${n.id}`,
                     title: notaDisplayLabel(n),
                     sub: 'Draft RBS, belum disubmit',
                     amount: Number(n.jumlahBiaya) || 0,
-                    tanggal: n.tanggal
+                    tanggal: n.tanggal,
+                    linkTo: '/catat-nota'
                 }))
                 const talanganKekurangan = newBelumBayarKekuranganList.map((item) => ({
                     key: `kekurangan-${item.key}`,
                     title: item.title,
                     sub: 'Kekurangan BS belum dibayar kantor',
                     amount: item.amount,
-                    tanggal: item.tanggal
+                    tanggal: item.tanggal,
+                    linkTo: item.linkTo
                 }))
                 const notaDraftLpjBelumCair = notaDraftLpj.filter((n) => bsTransferredByItemId[n.bsId] === false)
                 const talanganNotaLpj = notaDraftLpjBelumCair.map((n) => ({
@@ -458,7 +517,8 @@ const DashboardSummary = ({ uid, role }) => {
                     title: notaDisplayLabel(n),
                     sub: `BS: ${n.nomorBS} -- belum cair`,
                     amount: Number(n.jumlahBiaya) || 0,
-                    tanggal: n.tanggal
+                    tanggal: n.tanggal,
+                    linkTo: '/catat-nota'
                 }))
                 const newDanaTalanganList = [
                     ...talanganRbsBelumCair,
@@ -477,12 +537,16 @@ const DashboardSummary = ({ uid, role }) => {
                 // belum selesai sekarang punya kartu & daftar sendiri di atas
                 // (semua periode), supaya tidak tercampur dalam 1 angka yang
                 // membingungkan arah dananya.
+                // Bagian CN: dipisah tegas jadi BS vs RBS (bukan 1 angka gabungan
+                // lagi, permintaan user) + RBS titipan dikecualikan (lihat
+                // isTitipanRbs di atas) supaya tidak bikin Saldo Sistem naik
+                // padahal uangnya bukan untuk pengaju sendiri.
                 const bsTransferredThisMonth = bsDisetujui.filter((item) => item.transferred)
                 const rbsDisetujuiThisMonth = rbsThisMonth.filter((item) => item.status === 'Disetujui')
-                const rbsTransferredThisMonth = rbsDisetujuiThisMonth.filter((item) => item.transferred)
-                const rbsBsMasukNominal =
-                    bsTransferredThisMonth.reduce((sum, item) => sum + sumBonSementaraItems(item), 0) +
-                    rbsTransferredThisMonth.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const rbsTransferredThisMonth = rbsDisetujuiThisMonth.filter((item) => item.transferred && !isTitipanRbs(item))
+                const bsMasukNominal = bsTransferredThisMonth.reduce((sum, item) => sum + sumBonSementaraItems(item), 0)
+                const rbsMasukNominal = rbsTransferredThisMonth.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const rbsBsMasukNominal = bsMasukNominal + rbsMasukNominal
                 const rbsBsMasukCount = bsTransferredThisMonth.length + rbsTransferredThisMonth.length
 
                 const lpjSisaKurangThisMonth = lpjThisMonth.filter((item) => (Number(item.sisaKurang) || 0) > 0)
@@ -491,19 +555,37 @@ const DashboardSummary = ({ uid, role }) => {
                 const lpjSudahDikembalikan = lpjSisaLebihThisMonth.filter(
                     (item) => item.pengembalianStatus === 'valid' || item.pengembalianStatus === 'grandfathered'
                 )
-                const lpjDikembalikanNominal =
-                    lpjKekuranganDibayar.reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0) +
-                    lpjSudahDikembalikan.reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0)
-                const lpjDikembalikanCount = lpjKekuranganDibayar.length + lpjSudahDikembalikan.length
 
                 const bsBelumTransfer = bsDisetujui.filter((item) => !item.transferred)
-                const rbsBelumTransfer = rbsDisetujuiThisMonth.filter((item) => !item.transferred)
+                const rbsBelumTransfer = rbsDisetujuiThisMonth.filter((item) => !item.transferred && !isTitipanRbs(item))
                 // Bagian CK: sisaKurang/sisaLebih belum dihitung di sini lagi --
                 // sudah punya kartu & daftar sendiri (semua periode) di atas.
-                const pendingNominal =
-                    bsBelumTransfer.reduce((sum, item) => sum + sumBonSementaraItems(item), 0) +
-                    rbsBelumTransfer.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const bsPendingNominal = bsBelumTransfer.reduce((sum, item) => sum + sumBonSementaraItems(item), 0)
+                const rbsPendingNominal = rbsBelumTransfer.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
+                const pendingNominal = bsPendingNominal + rbsPendingNominal
                 const pendingCount = bsBelumTransfer.length + rbsBelumTransfer.length
+
+                // Bagian CN: daftar isi untuk modal "RBS/BS Sudah Masuk" &
+                // "Menunggu Konfirmasi" -- dibangun dari breakdown BS/RBS yang
+                // sudah ada (newBsBreakdown/newRbsBreakdown) supaya tidak perlu
+                // query ulang, RBS titipan ikut dikecualikan di sini juga.
+                const toBsModalItem = (b) => ({
+                    key: `bs-${b.key}`, title: b.nomorBS, sub: 'BS', amount: b.jumlahBS,
+                    tanggal: b.tanggal, linkTo: `/bon-sementara/${b.docId}`
+                })
+                const toRbsModalItem = (r) => ({
+                    key: `rbs-${r.key}`, title: r.displayId, sub: 'RBS', amount: r.totalBiaya,
+                    tanggal: r.tanggal, linkTo: `/reimbursement/${r.docId}`
+                })
+                const byTanggalDesc = (a, b) => new Date(b.tanggal || 0) - new Date(a.tanggal || 0)
+                const newSudahMasukList = [
+                    ...newBsBreakdown.filter((b) => b.transferred).map(toBsModalItem),
+                    ...newRbsBreakdown.filter((r) => r.transferred && !r.isTitipan).map(toRbsModalItem)
+                ].sort(byTanggalDesc)
+                const newMenungguKonfirmasiList = [
+                    ...newBsBreakdown.filter((b) => !b.transferred).map(toBsModalItem),
+                    ...newRbsBreakdown.filter((r) => !r.transferred && !r.isTitipan).map(toRbsModalItem)
+                ].sort(byTanggalDesc)
 
                 // Saldo Sistem = uang masuk terkonfirmasi (BS/RBS Transferred + sisaKurang
                 // yang sudah dibayar) dikurangi uang keluar (total biaya LPJ bulan ini +
@@ -511,12 +593,14 @@ const DashboardSummary = ({ uid, role }) => {
                 // tapi belum di-LPJ-kan -- Bagian CH, supaya selisih langsung terlihat
                 // begitu nota dicatat, tidak perlu menunggu submit LPJ sungguhan).
                 const lpjTotalBiayaThisMonth = lpjThisMonth.reduce((sum, item) => sum + (item.totalBiaya || 0), 0)
-                const saldoSistem =
-                    rbsBsMasukNominal +
-                    lpjKekuranganDibayar.reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0) -
-                    lpjTotalBiayaThisMonth -
-                    lpjSudahDikembalikan.reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0) -
-                    pendingNotaLpjNominal
+                const lpjKekuranganDibayarNominal = lpjKekuranganDibayar.reduce((sum, item) => sum + (Number(item.sisaKurang) || 0), 0)
+                const lpjSudahDikembalikanNominal = lpjSudahDikembalikan.reduce((sum, item) => sum + (Number(item.sisaLebih) || 0), 0)
+                // Bagian CN: masuk/keluar dipisah jadi variabel sendiri supaya bisa
+                // ditampilkan sebagai sumber angka Saldo Sistem di caption kartu
+                // (permintaan user -- "tampilkan dalam kurung sumbernya dari mana").
+                const saldoSistemMasuk = rbsBsMasukNominal + lpjKekuranganDibayarNominal
+                const saldoSistemKeluar = lpjTotalBiayaThisMonth + lpjSudahDikembalikanNominal + pendingNotaLpjNominal
+                const saldoSistem = saldoSistemMasuk - saldoSistemKeluar
 
                 // Khusus role Validator/Reviewer: hitung LPJ & RBS yang sudah mereka
                 // validasi/review bulan ini, beserta nominalnya. Query pakai array-contains
@@ -589,10 +673,17 @@ const DashboardSummary = ({ uid, role }) => {
 
                 setBsBreakdown(newBsBreakdown)
                 setRbsBreakdown(newRbsBreakdown)
-                setLpjBulanSebelumnya(newLpjBulanSebelumnya)
+                // Bagian CN: LPJ bulan sebelumnya yang statusnya sudah
+                // "Disetujui" tidak ditampilkan lagi di sini -- sisa lebih/
+                // kurangnya (kalau ada) sudah punya kartu tindak lanjut sendiri
+                // (semua periode) di atas, jadi daftar ini cukup fokus ke yang
+                // MASIH menunggu approval (permintaan user).
+                setLpjBulanSebelumnya(newLpjBulanSebelumnya.filter((item) => item.status !== 'Disetujui'))
                 setBelumSettleList(newBelumSettleList)
                 setBelumBayarKekuranganList(newBelumBayarKekuranganList)
                 setDanaTalanganList(newDanaTalanganList)
+                setSudahMasukList(newSudahMasukList)
+                setMenungguKonfirmasiList(newMenungguKonfirmasiList)
 
                 setSummary({
                     jumlahBS: bsThisMonth.length,
@@ -611,19 +702,26 @@ const DashboardSummary = ({ uid, role }) => {
                     nominalBsDiapprove,
                     rbsBsMasukNominal,
                     rbsBsMasukCount,
-                    lpjDikembalikanNominal,
-                    lpjDikembalikanCount,
+                    bsMasukNominal,
+                    rbsMasukNominal,
                     pendingNominal,
                     pendingCount,
+                    bsPendingNominal,
+                    rbsPendingNominal,
                     saldoSistem,
+                    saldoSistemMasuk,
+                    saldoSistemKeluar,
                     pendingNotaLpjNominal,
                     pendingNotaLpjCount: pendingNotaLpjThisMonth.length,
                     pendingNotaRbsNominal,
                     pendingNotaRbsCount: notaDraftRbs.length,
+                    rbsTitipanThisMonthNominal,
                     belumSettleNominal: newBelumSettleList.reduce((sum, item) => sum + item.amount, 0),
                     belumSettleCount: newBelumSettleList.length,
+                    settleSudahNominal,
                     belumBayarKekuranganNominal: belumBayarKekuranganNominalValue,
                     belumBayarKekuranganCount: newBelumBayarKekuranganList.length,
+                    kekuranganSudahNominal,
                     danaTalanganNominal,
                     danaTalanganCount: newDanaTalanganList.length
                 })
@@ -641,20 +739,53 @@ const DashboardSummary = ({ uid, role }) => {
 
     const approverLabel = isValidator ? 'divalidasi' : 'direview'
 
+    // Bagian CN: "Rincian BS/RBS Bulan Ini" (dulu seksi terpisah full-width,
+    // selalu terbuka -- dikeluhkan user kepanjangan) sekarang jadi isi modal
+    // kartu "Jumlah BS/RBS bulan ini" di bawah, dipakai bareng `allModalCards`.
+    // Bentuk item disamakan sejauh mungkin dengan kartu modal lain
+    // ({title,sub,amount,tanggal,linkTo}), ditambah `extra`/`amountSub`
+    // opsional untuk info tambahan (status LPJ, sisa dana) yang sebelumnya
+    // ada di seksi lama.
+    const rincianBsList = bsBreakdown.map((b) => ({
+        key: b.key,
+        title: b.nomorBS,
+        sub: `${b.transferred ? 'Sudah Transferred' : 'Belum Transferred'} · ${b.lpjStatus}`,
+        extra: b.pendingNota > 0 ? `${formatRupiah(b.pendingNota)} via Catat Nota (belum di-LPJ-kan)` : null,
+        amount: b.jumlahBS,
+        amountSub: `Sisa ${formatRupiah(b.sisa)}`,
+        amountSubClass: b.sisa > 0 ? 'text-amber-600 dark:text-amber-400' : b.sisa < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400',
+        tanggal: b.tanggal,
+        linkTo: `/bon-sementara/${b.docId}`
+    }))
+    const rincianRbsList = rbsBreakdown.map((r) => ({
+        key: r.key,
+        title: r.displayId,
+        sub: r.isTitipan ? 'Titipan untuk orang lain' : null,
+        amount: r.totalBiaya,
+        amountSub: r.transferred ? 'Sudah Masuk' : 'Belum Masuk',
+        amountSubClass: r.transferred ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400',
+        tanggal: r.tanggal,
+        linkTo: `/reimbursement/${r.docId}`
+    }))
+
     const ringkasanCards = [
         {
+            key: 'rincianBs',
             label: 'Jumlah BS bulan ini',
             value: formatRupiah(summary.nominalBS),
-            caption: `${summary.jumlahBS} pengajuan`,
+            caption: `${summary.jumlahBS} pengajuan${summary.jumlahBS > 0 ? ' -- klik untuk lihat rincian' : ''}`,
             valueClass: 'text-gray-900 dark:text-gray-100',
-            bgClass: 'bg-gray-50 dark:bg-gray-700/50'
+            bgClass: 'bg-gray-50 dark:bg-gray-700/50',
+            list: rincianBsList
         },
         {
+            key: 'rincianRbs',
             label: 'Jumlah RBS bulan ini',
             value: formatRupiah(summary.nominalRbs),
-            caption: `${summary.jumlahRbs} pengajuan`,
+            caption: `${summary.jumlahRbs} pengajuan${summary.rbsTitipanThisMonthNominal > 0 ? ` (termasuk ${formatRupiah(summary.rbsTitipanThisMonthNominal)} titipan, tidak masuk Saldo Sistem)` : summary.jumlahRbs > 0 ? ' -- klik untuk lihat rincian' : ''}`,
             valueClass: 'text-gray-900 dark:text-gray-100',
-            bgClass: 'bg-gray-50 dark:bg-gray-700/50'
+            bgClass: 'bg-gray-50 dark:bg-gray-700/50',
+            list: rincianRbsList
         },
         {
             label: 'Sudah di-LPJ-kan',
@@ -709,42 +840,44 @@ const DashboardSummary = ({ uid, role }) => {
     // (sebelumnya cuma dipakai diam-diam buat hitung Selisih, tidak pernah
     // ditampilkan sendiri) -- supaya user bisa langsung lihat angka yang
     // dipakai sistem, bukan cuma selisihnya.
+    // Bagian CN: "LPJ Dikembalikan/Dibayar" (kartu terpisah, bulan ini saja)
+    // dihapus -- angkanya sekarang jadi keterangan "(Rp X sudah
+    // dikembalikan/dibayar)" di kartu "BS Belum Settle"/"Kekurangan Belum
+    // Dibayar" (semua periode) supaya tidak ada 2 kartu untuk 1 topik yang
+    // sama (permintaan user, mengurangi jumlah kartu). "RBS/BS Sudah
+    // Masuk"/"Menunggu Konfirmasi" dipisah BS vs RBS di caption + jadi
+    // clickable (modal) supaya kelihatan dari mana saja angkanya.
     const rekonsiliasiCards = [
         {
             label: 'Saldo Sistem',
             value: formatRupiah(summary.saldoSistem),
-            caption: summary.pendingNotaLpjNominal > 0
-                ? `Termasuk ${formatRupiah(summary.pendingNotaLpjNominal)} dari ${summary.pendingNotaLpjCount} nota Catat Nota (belum di-LPJ-kan)`
-                : 'Masuk terkonfirmasi dikurangi keluar bulan ini',
+            caption: `(Masuk ${formatRupiah(summary.saldoSistemMasuk)} − Keluar ${formatRupiah(summary.saldoSistemKeluar)})${summary.pendingNotaLpjNominal > 0 ? ` -- termasuk ${formatRupiah(summary.pendingNotaLpjNominal)} dari ${summary.pendingNotaLpjCount} nota Catat Nota belum di-LPJ-kan` : ''}`,
             valueClass: 'text-gray-900 dark:text-gray-100',
             bgClass: 'bg-gray-50 dark:bg-gray-700/50'
         },
         {
+            key: 'sudahMasuk',
             label: 'RBS/BS Sudah Masuk',
             value: formatRupiah(summary.rbsBsMasukNominal),
-            caption: `${summary.rbsBsMasukCount} transaksi -- sudah "Transferred"`,
+            caption: `BS: ${formatRupiah(summary.bsMasukNominal)} · RBS: ${formatRupiah(summary.rbsMasukNominal)} (${summary.rbsBsMasukCount} transaksi, sudah "Transferred")${summary.rbsBsMasukCount > 0 ? '. Klik untuk lihat daftar.' : ''}`,
             valueClass: 'text-green-700 dark:text-green-400',
-            bgClass: 'bg-green-50 dark:bg-green-900/20'
-        },
-        {
-            label: 'LPJ Dikembalikan/Dibayar',
-            value: formatRupiah(summary.lpjDikembalikanNominal),
-            caption: `${summary.lpjDikembalikanCount} LPJ -- sisa lebih dikembalikan / kekurangan dibayar`,
-            valueClass: 'text-green-700 dark:text-green-400',
-            bgClass: 'bg-green-50 dark:bg-green-900/20'
+            bgClass: 'bg-green-50 dark:bg-green-900/20',
+            list: sudahMasukList
         },
         {
             // Bagian CK: dipersempit jadi cuma BS/RBS belum Transferred --
             // sisaLebih/sisaKurang sekarang di kartu "Perlu Ditindaklanjuti"
             // (semua periode) supaya arah dananya tidak tercampur di sini.
+            key: 'menunggu',
             label: 'Menunggu Konfirmasi',
             value: formatRupiah(summary.pendingNominal),
             caption:
                 summary.pendingCount > 0
-                    ? `${summary.pendingCount} BS/RBS bulan ini belum "Transferred"`
+                    ? `BS: ${formatRupiah(summary.bsPendingNominal)} · RBS: ${formatRupiah(summary.rbsPendingNominal)} (${summary.pendingCount} belum "Transferred"). Klik untuk lihat daftar.`
                     : 'Semua BS/RBS bulan ini sudah masuk',
             valueClass: summary.pendingCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100',
-            bgClass: summary.pendingCount > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50'
+            bgClass: summary.pendingCount > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50',
+            list: menungguKonfirmasiList
         }
     ]
 
@@ -761,8 +894,10 @@ const DashboardSummary = ({ uid, role }) => {
             label: 'BS Belum Settle',
             value: formatRupiah(summary.belumSettleNominal),
             caption: summary.belumSettleCount > 0
-                ? `${summary.belumSettleCount} BS -- sisa lebih belum dikembalikan ke kas. Klik untuk lihat daftar.`
-                : 'Semua sisa lebih BS sudah dikembalikan',
+                ? `${summary.belumSettleCount} BS belum dikembalikan ke kas${summary.settleSudahNominal > 0 ? ` (${formatRupiah(summary.settleSudahNominal)} sudah dikembalikan)` : ''}. Klik untuk lihat daftar.`
+                : summary.settleSudahNominal > 0
+                    ? `Semua sudah dikembalikan (${formatRupiah(summary.settleSudahNominal)})`
+                    : 'Semua sisa lebih BS sudah dikembalikan',
             valueClass: summary.belumSettleCount > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-gray-100',
             bgClass: summary.belumSettleCount > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/50',
             list: belumSettleList
@@ -772,8 +907,10 @@ const DashboardSummary = ({ uid, role }) => {
             label: 'Kekurangan Belum Dibayar',
             value: formatRupiah(summary.belumBayarKekuranganNominal),
             caption: summary.belumBayarKekuranganCount > 0
-                ? `${summary.belumBayarKekuranganCount} BS -- kekurangan belum dibayar ke karyawan. Klik untuk lihat daftar.`
-                : 'Semua kekurangan sudah dibayar ke karyawan',
+                ? `${summary.belumBayarKekuranganCount} BS belum dibayar ke karyawan${summary.kekuranganSudahNominal > 0 ? ` (${formatRupiah(summary.kekuranganSudahNominal)} sudah dibayar)` : ''}. Klik untuk lihat daftar.`
+                : summary.kekuranganSudahNominal > 0
+                    ? `Semua sudah dibayar (${formatRupiah(summary.kekuranganSudahNominal)})`
+                    : 'Semua kekurangan sudah dibayar ke karyawan',
             valueClass: summary.belumBayarKekuranganCount > 0 ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-gray-100',
             bgClass: summary.belumBayarKekuranganCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50',
             list: belumBayarKekuranganList
@@ -798,6 +935,32 @@ const DashboardSummary = ({ uid, role }) => {
         }
     ]
 
+    // Bagian CN: satu sumber lookup untuk SEMUA modal di halaman ini --
+    // digabung dari 3 grup kartu (ringkasan, rekonsiliasi, tindak lanjut)
+    // yang masing-masing bisa punya kartu dengan `key`+`list`.
+    const allModalCards = [...ringkasanCards, ...rekonsiliasiCards, ...tindakLanjutCards].filter((card) => card.key)
+
+    const renderCard = (card) => {
+        const clickable = Array.isArray(card.list) && card.list.length > 0
+        const Tag = clickable ? 'button' : 'div'
+        const tagProps = clickable
+            ? { type: 'button', onClick: () => setActiveModal(card.key), className: `text-left rounded-lg p-4 min-w-0 ${card.bgClass} cursor-pointer hover:brightness-95 dark:hover:brightness-110` }
+            : { className: `rounded-lg p-4 min-w-0 ${card.bgClass}` }
+        return (
+            <Tag key={card.key || card.label} {...tagProps}>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{card.label}</p>
+                {loading ? (
+                    <div className="h-7 w-24 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />
+                ) : (
+                    <>
+                        <p className={`text-lg sm:text-2xl font-semibold break-words ${card.valueClass}`}>{card.value}</p>
+                        {card.caption && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{card.caption}</p>}
+                    </>
+                )}
+            </Tag>
+        )
+    }
+
     return (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg mb-6 shadow-sm transition-colors">
             <h3 className="text-xl font-medium mb-4 dark:text-gray-100">
@@ -816,72 +979,26 @@ const DashboardSummary = ({ uid, role }) => {
                 kecil -- `min-w-0` + ukuran font responsif + `break-words`
                 sebagai jaring pengaman. */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {ringkasanCards.map((card) => (
-                    <div key={card.label} className={`rounded-lg p-4 min-w-0 ${card.bgClass}`}>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{card.label}</p>
-                        {loading ? (
-                            <div className="h-7 w-24 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />
-                        ) : (
-                            <>
-                                <p className={`text-lg sm:text-2xl font-semibold break-words ${card.valueClass}`}>{card.value}</p>
-                                {card.caption && (
-                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{card.caption}</p>
-                                )}
-                            </>
-                        )}
-                    </div>
-                ))}
+                {ringkasanCards.map(renderCard)}
             </div>
 
             {/* Bagian CK: "Perlu Ditindaklanjuti" -- SEMUA PERIODE (bukan cuma
-                bulan ini), 2 kartu diklik untuk lihat daftar lengkap lewat
-                modal. Diletakkan di atas "Rekonsiliasi Dana Bulan Ini" karena
+                bulan ini), diklik untuk lihat daftar lengkap lewat modal.
+                Diletakkan di atas "Rekonsiliasi Dana Bulan Ini" karena
                 sifatnya tindak lanjut yang mendesak, lintas waktu. */}
             <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">
                 Perlu Ditindaklanjuti <span className="text-xs font-normal text-gray-400 dark:text-gray-500">(semua periode)</span>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {tindakLanjutCards.map((card) => (
-                    <button
-                        key={card.key}
-                        type="button"
-                        onClick={() => card.list.length > 0 && setActiveModal(card.key)}
-                        disabled={card.list.length === 0}
-                        className={`text-left rounded-lg p-4 min-w-0 ${card.bgClass} ${card.list.length > 0 ? 'cursor-pointer hover:brightness-95 dark:hover:brightness-110' : 'cursor-default'}`}
-                    >
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{card.label}</p>
-                        {loading ? (
-                            <div className="h-7 w-24 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />
-                        ) : (
-                            <>
-                                <p className={`text-lg sm:text-2xl font-semibold break-words ${card.valueClass}`}>{card.value}</p>
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{card.caption}</p>
-                            </>
-                        )}
-                    </button>
-                ))}
+                {tindakLanjutCards.map(renderCard)}
             </div>
 
-            {/* Bagian CH: semua kartu rekonsiliasi (Saldo Sistem, RBS/BS Masuk,
-                LPJ Dikembalikan, Menunggu Konfirmasi) digabung 1 grid dengan
-                heading sendiri, Saldo Bank & Selisih menyusul di bawahnya. */}
+            {/* Bagian CH/CN: kartu rekonsiliasi (Saldo Sistem, RBS/BS Sudah
+                Masuk, Menunggu Konfirmasi) digabung 1 grid dengan heading
+                sendiri, Saldo Bank & Selisih menyusul di bawahnya. */}
             <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">Rekonsiliasi Dana Bulan Ini</h3>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {rekonsiliasiCards.map((card) => (
-                    <div key={card.label} className={`rounded-lg p-4 min-w-0 ${card.bgClass}`}>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{card.label}</p>
-                        {loading ? (
-                            <div className="h-7 w-24 bg-gray-200 dark:bg-gray-600 rounded animate-pulse" />
-                        ) : (
-                            <>
-                                <p className={`text-lg sm:text-2xl font-semibold break-words ${card.valueClass}`}>{card.value}</p>
-                                {card.caption && (
-                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{card.caption}</p>
-                                )}
-                            </>
-                        )}
-                    </div>
-                ))}
+                {rekonsiliasiCards.map(renderCard)}
 
                 <div className="rounded-lg p-4 min-w-0 bg-gray-50 dark:bg-gray-700/50">
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
@@ -912,11 +1029,13 @@ const DashboardSummary = ({ uid, role }) => {
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         {selisihBank === null
                             ? 'Isi Saldo Bank dulu'
-                            : selisihBank === 0
-                                ? 'Saldo sistem & bank sudah sama'
-                                : selisihBank > 0
-                                    ? 'Bank lebih besar dari sistem -- kemungkinan ada pengeluaran yang belum dicatat/di-LPJ-kan'
-                                    : 'Sistem lebih besar dari bank -- cek kartu "Dana Talangan Belum Diganti" di atas'}
+                            : `(Bank ${formatRupiah(saldoBankNumber)} − Sistem ${formatRupiah(summary.saldoSistem)}) ${
+                                selisihBank === 0
+                                    ? '-- sudah sama'
+                                    : selisihBank > 0
+                                        ? '-- kemungkinan ada pengeluaran yang belum dicatat/di-LPJ-kan'
+                                        : '-- cek kartu "Dana Talangan Belum Diganti" di atas'
+                            }`}
                     </p>
                 </div>
                 {summary.pendingNotaRbsNominal > 0 && (
@@ -930,94 +1049,36 @@ const DashboardSummary = ({ uid, role }) => {
                 )}
             </div>
 
-            {/* Bagian CF/CH/CK: rincian per BS & per RBS bulan ini -- card total
-                saja dianggap tidak cukup untuk menyusuri selisih sampai ke
-                sumbernya. Rincian BS sekarang ikut menampilkan nota Catat Nota
-                yang sudah dicatat tapi belum di-LPJ-kan. Tampilan diubah jadi
-                FULL WIDTH (sama seperti "LPJ dari Bulan Sebelumnya"), bukan 2
-                kolom berdampingan -- dan dibatasi `VISIBLE_LIMIT` dulu kalau
-                datanya banyak, dengan tombol "Tampilkan lainnya" untuk buka
-                semuanya, supaya halaman tetap rapi tapi tidak kehilangan data. */}
-            {!loading && (bsBreakdown.length > 0 || rbsBreakdown.length > 0) && (
-                <>
-                    <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">Rincian Bulan Ini</h3>
-                    <div className="flex flex-col gap-4">
-                        {bsBreakdown.length > 0 && (
-                            <div className="rounded-lg border dark:border-gray-700 p-4">
-                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Rincian BS Bulan Ini</p>
-                                <div className="flex flex-col gap-2">
-                                    {(expandedSections.has('bs') ? bsBreakdown : bsBreakdown.slice(0, VISIBLE_LIMIT)).map((bs) => (
-                                        <div key={bs.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
-                                            <div className="min-w-0">
-                                                <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{bs.nomorBS}</div>
-                                                <div className="text-gray-400 dark:text-gray-500">
-                                                    {bs.transferred ? 'Sudah Transferred' : 'Belum Transferred'} &middot; {bs.lpjStatus}
-                                                </div>
-                                                {bs.pendingNota > 0 && (
-                                                    <div className="text-blue-500 dark:text-blue-400">
-                                                        {formatRupiah(bs.pendingNota)} via Catat Nota (belum di-LPJ-kan)
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="text-right flex-shrink-0">
-                                                <div className="font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatRupiah(bs.jumlahBS)}</div>
-                                                <div className={`tabular-nums ${bs.sisa > 0 ? 'text-amber-600 dark:text-amber-400' : bs.sisa < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                                                    Sisa {formatRupiah(bs.sisa)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                {bsBreakdown.length > VISIBLE_LIMIT && (
-                                    <button onClick={() => toggleSection('bs')} className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-3">
-                                        {expandedSections.has('bs') ? 'Sembunyikan' : `Tampilkan ${bsBreakdown.length - VISIBLE_LIMIT} lainnya`}
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                        {rbsBreakdown.length > 0 && (
-                            <div className="rounded-lg border dark:border-gray-700 p-4">
-                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Rincian RBS Bulan Ini</p>
-                                <div className="flex flex-col gap-2">
-                                    {(expandedSections.has('rbs') ? rbsBreakdown : rbsBreakdown.slice(0, VISIBLE_LIMIT)).map((rbs) => (
-                                        <div key={rbs.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
-                                            <div className="font-semibold text-gray-700 dark:text-gray-200 truncate min-w-0">{rbs.displayId}</div>
-                                            <div className="text-right flex-shrink-0">
-                                                <div className="font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatRupiah(rbs.totalBiaya)}</div>
-                                                <div className={rbs.transferred ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}>
-                                                    {rbs.transferred ? 'Sudah Masuk' : 'Belum Masuk'}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                {rbsBreakdown.length > VISIBLE_LIMIT && (
-                                    <button onClick={() => toggleSection('rbs')} className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-3">
-                                        {expandedSections.has('rbs') ? 'Sembunyikan' : `Tampilkan ${rbsBreakdown.length - VISIBLE_LIMIT} lainnya`}
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </>
-            )}
+            {/* Bagian CN: seksi "Rincian Bulan Ini" (selalu terbuka, full-width)
+                dihapus -- isinya sekarang ada di modal kartu "Jumlah BS/RBS
+                bulan ini" di atas (klik kartunya), supaya halaman tidak
+                kepanjangan (keluhan user). */}
 
-            {/* Bagian CH: LPJ yang baru dilaporkan BULAN INI untuk BS dari
+            {/* Bagian CH/CN: LPJ yang baru dilaporkan BULAN INI untuk BS dari
                 BULAN SEBELUMNYA -- kartu terpisah atas permintaan user, supaya
                 tidak bercampur dengan angka "bulan ini" di atas (yang basisnya
-                tanggal BS, bukan tanggal LPJ). */}
+                tanggal BS, bukan tanggal LPJ). Hanya LPJ yang MASIH menunggu
+                approval yang ditampilkan di sini (status != 'Disetujui',
+                difilter saat setLpjBulanSebelumnya) -- yang sudah Disetujui
+                sudah tercakup kartu "BS Belum Settle"/"Kekurangan Belum
+                Dibayar" (semua periode) di atas, tidak perlu ditampilkan 2x. */}
             {!loading && lpjBulanSebelumnya.length > 0 && (
                 <>
                     <h3 className="text-base font-medium mt-6 mb-3 dark:text-gray-100">LPJ dari Bulan Sebelumnya</h3>
                     <div className="rounded-lg border dark:border-gray-700 p-4">
                         <div className="flex flex-col gap-2">
                             {(expandedSections.has('lpjLama') ? lpjBulanSebelumnya : lpjBulanSebelumnya.slice(0, VISIBLE_LIMIT)).map((lpj) => (
-                                <div key={lpj.key} className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
+                                <Link
+                                    key={lpj.key}
+                                    to={`/lpj/${lpj.docId}`}
+                                    className="flex items-center justify-between gap-3 text-xs border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0 -mx-1 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
+                                >
                                     <div className="min-w-0">
                                         <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{lpj.displayId}</div>
                                         <div className="text-gray-400 dark:text-gray-500">
                                             BS: {lpj.nomorBS} &middot; diajukan {new Date(lpj.bsTanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </div>
+                                        <div className="text-blue-500 dark:text-blue-400">Menunggu approval: {lpj.status}</div>
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                         <div className="font-semibold tabular-nums text-gray-700 dark:text-gray-200">{formatRupiah(lpj.totalBiaya)}</div>
@@ -1032,7 +1093,7 @@ const DashboardSummary = ({ uid, role }) => {
                                             </div>
                                         )}
                                     </div>
-                                </div>
+                                </Link>
                             ))}
                         </div>
                         {lpjBulanSebelumnya.length > VISIBLE_LIMIT && (
@@ -1044,13 +1105,15 @@ const DashboardSummary = ({ uid, role }) => {
                 </>
             )}
 
-            {/* Bagian CK: modal daftar lengkap untuk kartu "Perlu
-                Ditindaklanjuti" -- dibangun manual (bukan pakai Modal.jsx yang
-                ada) karena Modal.jsx dirancang untuk dialog konfirmasi
-                (title+message+tombol), bukan daftar panjang yang bisa
-                di-scroll. */}
+            {/* Bagian CK/CN: satu modal untuk SEMUA kartu yang punya daftar
+                rincian (lihat `allModalCards`) -- dibangun manual (bukan
+                pakai Modal.jsx yang ada) karena Modal.jsx dirancang untuk
+                dialog konfirmasi (title+message+tombol), bukan daftar
+                panjang yang bisa di-scroll. Tiap baris diklik untuk langsung
+                ke halaman detailnya (`item.linkTo`), kalau ada -- permintaan
+                user supaya modal tidak jadi jalan buntu. */}
             {activeModal && (() => {
-                const activeCard = tindakLanjutCards.find((card) => card.key === activeModal)
+                const activeCard = allModalCards.find((card) => card.key === activeModal)
                 if (!activeCard) return null
                 return (
                 <div
@@ -1066,17 +1129,37 @@ const DashboardSummary = ({ uid, role }) => {
                             <button onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">&times;</button>
                         </div>
                         <div className="flex flex-col gap-2">
-                            {activeCard.list.map((item) => (
-                                <div key={item.key} className="flex items-center justify-between gap-3 text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0">
-                                    <div className="min-w-0">
-                                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{item.title}</div>
-                                        <div className="text-xs text-gray-400 dark:text-gray-500">{item.sub} &middot; {formatDateShort(item.tanggal)}</div>
-                                    </div>
-                                    <div className={`font-semibold tabular-nums flex-shrink-0 ${activeCard.valueClass}`}>
-                                        {formatRupiah(item.amount)}
-                                    </div>
-                                </div>
-                            ))}
+                            {activeCard.list.map((item) => {
+                                const Row = item.linkTo ? Link : 'div'
+                                const rowProps = item.linkTo ? { to: item.linkTo, onClick: () => setActiveModal(null) } : {}
+                                return (
+                                    <Row
+                                        key={item.key}
+                                        {...rowProps}
+                                        className={`flex items-center justify-between gap-3 text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0 last:pb-0 ${item.linkTo ? '-mx-1 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors' : ''}`}
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{item.title}</div>
+                                            <div className="text-xs text-gray-400 dark:text-gray-500">
+                                                {item.sub ? `${item.sub} · ` : ''}{formatDateShort(item.tanggal)}
+                                            </div>
+                                            {item.extra && (
+                                                <div className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">{item.extra}</div>
+                                            )}
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <div className={`font-semibold tabular-nums ${activeCard.valueClass}`}>
+                                                {formatRupiah(item.amount)}
+                                            </div>
+                                            {item.amountSub && (
+                                                <div className={`tabular-nums text-xs ${item.amountSubClass || 'text-gray-400 dark:text-gray-500'}`}>
+                                                    {item.amountSub}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </Row>
+                                )
+                            })}
                         </div>
                     </div>
                 </div>
