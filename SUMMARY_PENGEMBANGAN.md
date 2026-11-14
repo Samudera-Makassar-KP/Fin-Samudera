@@ -3167,7 +3167,7 @@ Poin (2) dikerjakan langsung sesuai permintaan. Untuk poin (1), ditelusuri ulang
 - [x] `CI=true npx eslint src/components/MutasiDana.jsx` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini) — diblokir classifier keamanan ("Production Deploy") 2x berturut-turut di sesi ini, menyusul langsung ke Bagian BZ di bawah sebelum percobaan deploy berikutnya
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini) — diblokir classifier keamanan ("Production Deploy") 2x berturut-turut di sesi ini, menyusul langsung ke Bagian BZ di bawah sebelum percobaan deploy berikutnya
 - [x] Tes manual: user coba di produksi (kode Bagian BY belum sempat ter-deploy saat ini, jadi kemungkinan besar masih menguji kode SEBELUMNYA/Bagian BX), lapor nominal RBS/BS Oktober "terlalu tinggi" -- jadi pemicu Bagian BZ di bawah
 - [ ] Tes manual: centang "Semua Periode", konfirmasi kedua dropdown jadi disabled & tampilan balik kumulatif
 - [ ] Tes manual: klik tombol centang individual pada item LAMA (bukan bulan berjalan) di "Menunggu Konfirmasi", lalu cek tanggalnya di tabel -- harus tercatat di bulan transaksi ASLINYA, bukan bulan saat tombol diklik
@@ -3201,7 +3201,7 @@ Karena tidak ada akses langsung ke data Firestore user dari sesi ini untuk memve
 - [x] `CI=true npx eslint src/components/MutasiDana.jsx` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja)
+- [x] Deploy ke produksi (hosting saja)
 - [ ] Tes manual: klik ikon pensil di tanggal BS/RBS yang sudah "Disetujui"/masuk, ganti tanggalnya, konfirmasi baris pindah periode sesuai tanggal baru & Saldo Sistem ikut berubah
 - [ ] Tes manual: cek ulang satu per satu baris Oktober yang dianggap "terlalu tinggi" -- pastikan tanggalnya memang bulan Oktober yang sebenarnya, koreksi lewat ikon pensil kalau salah
 - [ ] Tes manual: BS dengan lebih dari 1 item (nomorBS lebih dari satu) -- konfirmasi jumlah yang muncul di Mutasi Dana sekarang total semua item, bukan cuma item pertama
@@ -3238,7 +3238,7 @@ Supaya TIDAK perlu mengubah Cloud Functions/storage.rules (upload file wajib lew
 - [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules)
+- [x] Deploy ke produksi (hosting + firestore rules)
 - [ ] **Belum ada pengujian UI manual sama sekali** -- sesi ini tidak punya alat untuk klik-jalan di browser dengan login sungguhan, cuma lint/test/build. Mohon ditest langsung: catat beberapa nota RBS & LPJ, cek sisa dana BS live-update, edit/hapus nota, rangkai draft RBS, dan buka Detail BS untuk BS yang sudah punya nota tercatat -- cek banner muncul & form LPJ ter-prefill dengan benar
 - [ ] Tes manual: submit LPJ/RBS yang item-nya pre-filled dari nota -- konfirmasi notaDraft yang dipakai otomatis terhapus dari halaman Catat Nota setelah submit berhasil
 
@@ -3273,7 +3273,7 @@ User minta menu "Mutasi Dana" dihapus total ("agak kacau prosesnya" -- dropdown/
 - [x] `CI=true npx eslint` (semua file terkait) -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses (bundle JS malah mengecil -2.98kB karena MutasiDana.jsx terhapus)
-- [ ] Deploy ke produksi (hosting saja -- TIDAK ada perubahan `firestore.rules` di Bagian ini)
+- [x] Deploy ke produksi (hosting saja -- TIDAK ada perubahan `firestore.rules` di Bagian ini)
 - [ ] **Belum ada pengujian UI manual** -- cek: tombol Transferred muncul di BsTable untuk BS Disetujui, tombol Kekurangan Dibayar muncul di LpjBsTable untuk LPJ bersisaKurang, 5 kartu baru muncul di Dashboard dengan angka yang masuk akal, Saldo Bank bisa diisi & tersimpan, link "Mutasi Dana" sudah tidak ada di sidebar
 
 ---
@@ -3306,7 +3306,7 @@ Sebelum deploy, user minta "Catat Nota" RBS disamakan formatnya dengan form peng
 - [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules)
+- [x] Deploy ke produksi (hosting + firestore rules)
 - [ ] **Belum ada pengujian UI manual sama sekali** -- mohon ditest: catat nota RBS untuk ketiga varian (Umum/Operasional/BBM) termasuk item BBM (cek auto-liter), catat nota LPJ (cek auto-biaya BBM), tambah beberapa item sekaligus lalu simpan, rangkai draft RBS per varian ke form yang benar, rangkai nota LPJ dari Detail BS -- pastikan dropdown jenis di form tujuan terisi benar (bukan jatuh ke "Lainnya")
 
 ---
@@ -3327,7 +3327,7 @@ Di `LpjBsTable.jsx` (Bagian CB), tombol "Tandai Kekurangan Sudah Dibayar" sudah 
 - [x] `CI=true npx eslint src/components/LpjBsTable.jsx` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
 - [ ] Tes manual: klik "Tandai Kekurangan Sudah Dibayar" pada LPJ bersisaKurang, konfirmasi tombol reminder di sebelahnya langsung hilang & berubah jadi centang abu-abu
 
 ---
@@ -3356,7 +3356,7 @@ Akar masalah ditemukan: satu dokumen BS BISA punya lebih dari satu item, masing-
 - [x] `CI=true npx eslint` (kedua file) -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini)
 - [ ] Tes manual: BS dengan 2+ item, konfirmasi kedua nomorBS muncul terpisah di "Pilih BS" Catat Nota (yang belum ada LPJ-nya), dan status Sedang/Sudah/Belum LPJ di BsTable.jsx mencerminkan SEMUA item, bukan cuma item pertama
 - [ ] Follow-up terpisah (belum dikerjakan): cek apakah `DashboardSummary.jsx` & `DetailBs.jsx` kena bug multi-item yang sama
 
@@ -3382,7 +3382,7 @@ User minta audit bug/error menyeluruh sebelum lanjut dengan temuan detail mereka
 - [x] `CI=true npx eslint` (ketiga file) -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC/CD/CE yang juga belum ter-deploy)
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC/CD/CE yang juga belum ter-deploy)
 - [ ] **Catatan lingkungan**: Firebase CLI di sesi ini sudah tidak terautentikasi (`firebase login` perlu dijalankan ulang) -- tidak bisa lagi dry-run rules atau mencoba deploy dari sini sama sekali
 - [ ] Tes manual: catat nota LPJ untuk suatu BS, buka Detail BS BS itu, konfirmasi banner "nota sudah tercatat" muncul & "Buat Laporan" ter-prefill
 - [ ] Tes manual: klik "Transferred" di BsTable.jsx, konfirmasi icon mail/reminder langsung hilang
@@ -3415,7 +3415,7 @@ User minta audit bug/error menyeluruh sebelum lanjut dengan temuan detail mereka
 - [x] `CI=true npx eslint` (semua file terkait) -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC/CD/CE/CF yang juga belum ter-deploy)
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC/CD/CE/CF yang juga belum ter-deploy)
 - [ ] Tes manual: klik "Buat Laporan" dari BS yang punya nota Catat Nota, konfirmasi modal muncul duluan (bukan auto-fill diam-diam), coba tombol "Muat Draft" dan "Lewati" keduanya
 - [ ] Tes manual (kalau ada draft form lama untuk BS yang sama): konfirmasi draft lama TIDAK auto-load menimpa pilihan modal
 - [ ] Tes manual: edit BS sebagai admin tanpa mengubah Unit Bisnis, konfirmasi nomor BS tidak berubah
@@ -3446,7 +3446,7 @@ User lapor: nota Catat Nota berhasil tercatat, TAPI "Rincian BS" tidak mencatat 
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC-CG yang juga belum ter-deploy)
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC-CG yang juga belum ter-deploy)
 - [ ] Tes manual: catat nota LPJ untuk suatu BS, konfirmasi sisa dana BS tersebut & Saldo Sistem/Selisih langsung berubah tanpa perlu submit LPJ dulu
 - [ ] Tes manual: kalau ada LPJ yang dilaporkan bulan ini untuk BS bulan lalu, konfirmasi muncul di kartu "LPJ dari Bulan Sebelumnya", bukan di angka "bulan ini"
 - [ ] Tes manual: catat nota RBS, konfirmasi muncul di kartu "Draft RBS Belum Disubmit" dan TIDAK mengubah Saldo Sistem
@@ -3478,7 +3478,7 @@ Satu pengajuan RBS cuma boleh 1 Unit Bisnis (`selectedUnit` wajib di `FormRbsUmu
 - [x] `npx firebase-tools deploy --only firestore:rules --dry-run` -- rules compile sukses
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CH)
+- [x] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CH)
 - [ ] Tes manual: catat nota RBS dari 2 Unit Bisnis berbeda (kalau user terdaftar di lebih dari 1 unit) di varian yang sama, konfirmasi muncul sebagai 2 grup "Draft RBS" terpisah dengan tombol "Rangkai" masing-masing
 - [ ] Tes manual: klik "Rangkai jadi RBS", konfirmasi dropdown Unit Bisnis di form tujuan sudah otomatis terisi sesuai yang dipilih di Catat Nota
 
@@ -3500,7 +3500,7 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CI)
+- [x] Deploy ke produksi (hosting + firestore rules -- menumpuk dengan Bagian CC-CI)
 - [ ] Tes manual: di grup Draft RBS dengan beberapa nota, kosongkan centang sebagian, klik "Rangkai" -- konfirmasi cuma nota yang dicentang yang terbawa & terhapus dari draft, sisanya tetap ada untuk dirangkai lagi nanti
 
 ---
@@ -3530,7 +3530,7 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC-CJ)
+- [x] Deploy ke produksi (hosting saja -- tidak ada perubahan `firestore.rules` di Bagian ini, menumpuk dengan Bagian CC-CJ)
 - [ ] Tes manual: klik kartu "BS Belum Settle" & "Kekurangan Belum Dibayar", konfirmasi modal muncul dengan daftar yang benar (termasuk BS dari bulan-bulan lama, bukan cuma bulan ini)
 - [ ] Tes manual: BS/RBS dengan lebih dari 5 item di Rincian Bulan Ini, konfirmasi tombol "Tampilkan lainnya" bekerja & bisa disembunyikan lagi
 
@@ -3551,7 +3551,7 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CK)
+- [x] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CK)
 - [ ] Tes manual: BS dengan 2+ item (nomorBS berbeda dalam 1 pengajuan), bandingkan total kartu "Jumlah BS bulan ini"/"Sudah di-LPJ-kan" dengan jumlah manual dari daftar Rincian BS -- harus sama persis
 
 ## 101.3 Task Development — Bagian CM
@@ -3575,7 +3575,7 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CL)
+- [x] Deploy ke produksi (hosting saja -- menumpuk dengan Bagian CC-CL)
 - [ ] Tes manual: catat RBS di Catat Nota tapi belum disubmit -> muncul di "Dana Talangan Belum Diganti"; submit RBS -> masih muncul (belum Transferred); tandai Transferred -> hilang dari daftar
 - [ ] Tes manual: catat nota LPJ untuk BS yang belum ditandai Transferred -> muncul di "Dana Talangan Belum Diganti"; setelah BS ditandai Transferred -> hilang
 
@@ -3604,7 +3604,7 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore.rules -- menumpuk dengan Bagian CC-CM)
+- [x] Deploy ke produksi (hosting + firestore.rules -- menumpuk dengan Bagian CC-CM)
 - [ ] Tes manual: submit RBS dengan centang "titipan untuk orang lain", tandai Transferred -> konfirmasi TIDAK ikut menambah Saldo Sistem/"RBS/BS Sudah Masuk", tapi tetap muncul di "Jumlah RBS bulan ini" dengan catatan titipan
 - [ ] Tes manual: klik kartu "Jumlah BS bulan ini"/"Jumlah RBS bulan ini"/"RBS/BS Sudah Masuk"/"Menunggu Konfirmasi", konfirmasi modal muncul dan tiap baris bisa diklik ke halaman detail yang benar
 - [ ] Tes manual: BS dengan sisa lebih yang SUDAH dikembalikan (all-period), konfirmasi caption "BS Belum Settle" menampilkan keterangan "(Rp X sudah dikembalikan)" yang benar
@@ -3625,5 +3625,7 @@ Lanjutan Bagian CI: meskipun nota RBS Unit Bisnis-nya SAMA, user tetap ingin bis
 - [x] `CI=true npx eslint` -- bersih
 - [x] `CI=true npm test -- --watchAll=false` -- 141 test tetap PASS
 - [x] `CI=true npm run build` sukses
-- [ ] Deploy ke produksi (hosting + firestore.rules -- menumpuk dengan Bagian CC-CN)
+- [x] Deploy ke produksi (hosting + firestore.rules -- menumpuk dengan Bagian CC-CN)
 - [ ] Tes manual: submit 1 RBS dengan 3 nota -- 2 nota dicentang titipan (nama berbeda-beda), 1 nota tidak -- setelah Transferred, konfirmasi cuma nominal nota yang TIDAK titipan yang masuk Saldo Sistem/"RBS/BS Sudah Masuk"
+
+**Verifikasi deploy gabungan Bagian CC-CO (2026-11-14):** `firebase deploy --only hosting,firestore:rules` dijalankan dari sesi ini (user sudah login Firebase CLI sendiri di environment-nya), sukses dalam satu kali run untuk SELURUH backlog Bagian CC-CO sekaligus. Diverifikasi: hash bundle live (`main.f468a776.js`) cocok persis dengan hasil `npm run build` lokal terakhir, dan teks "Nota ini titipan untuk orang lain" (fitur Bagian CO) terkonfirmasi ada di bundle produksi via `curl`. `firestore.rules` ikut ter-upload tanpa error compile. Semua checkbox "Deploy ke produksi" dari Bagian CC sampai CO di atas ditandai selesai berdasarkan satu deploy ini -- tes manual di masing-masing Bagian tetap perlu dilakukan terpisah.
